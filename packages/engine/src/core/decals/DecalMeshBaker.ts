@@ -268,10 +268,33 @@ function skipReason(receiver: Object3D): string | undefined {
  * the edge), flat normals, and baked decals sort among transparents by decal-centre distance, not
  * by `priority`.
  */
-export function bakeDecalMesh(
+function isIdentityMatrix(m: Float32Array): boolean {
+  return (
+    m[0] === 1 &&
+    m[1] === 0 &&
+    m[2] === 0 &&
+    m[3] === 0 &&
+    m[4] === 0 &&
+    m[5] === 1 &&
+    m[6] === 0 &&
+    m[7] === 0 &&
+    m[8] === 0 &&
+    m[9] === 0 &&
+    m[10] === 1 &&
+    m[11] === 0 &&
+    m[12] === 0 &&
+    m[13] === 0 &&
+    m[14] === 0 &&
+    m[15] === 1
+  );
+}
+
+function bakeDecalMeshInSpace(
   decal: Decal,
   receivers: readonly Object3D[],
-  options: DecalBakeOptions = {},
+  options: DecalBakeOptions,
+  parentWorld?: Matrix4,
+  invParentWorld?: Matrix4,
 ): Object3D | undefined {
   const source = decal.material;
   if (!(source instanceof DecalMaterial)) {
@@ -310,15 +333,50 @@ export function bakeDecalMesh(
   );
   if (!baked) return undefined;
 
-  // Re-centre on the decal's world position so the mesh sorts and culls where the decal is.
+  // Re-centre on the decal's origin so the mesh sorts and culls where the decal is.
   const dm = decal.worldMatrix.data;
-  const ox = dm[12]!;
-  const oy = dm[13]!;
-  const oz = dm[14]!;
-  for (let i = 0; i < baked.positions.length; i += 3) {
-    baked.positions[i] = baked.positions[i]! - ox;
-    baked.positions[i + 1] = baked.positions[i + 1]! - oy;
-    baked.positions[i + 2] = baked.positions[i + 2]! - oz;
+  let ox = dm[12]!;
+  let oy = dm[13]!;
+  let oz = dm[14]!;
+
+  if (parentWorld && invParentWorld) {
+    const inv = invParentWorld.data;
+    const pm = parentWorld.data;
+    const localOrigin = transformPoint(inv, ox, oy, oz);
+    ox = localOrigin[0];
+    oy = localOrigin[1];
+    oz = localOrigin[2];
+    for (let i = 0; i < baked.positions.length; i += 3) {
+      const lp = transformPoint(
+        inv,
+        baked.positions[i]!,
+        baked.positions[i + 1]!,
+        baked.positions[i + 2]!,
+      );
+      baked.positions[i] = lp[0] - ox;
+      baked.positions[i + 1] = lp[1] - oy;
+      baked.positions[i + 2] = lp[2] - oz;
+    }
+    for (let i = 0; i < baked.normals.length; i += 3) {
+      const nx = baked.normals[i]!;
+      const ny = baked.normals[i + 1]!;
+      const nz = baked.normals[i + 2]!;
+      const lnx = pm[0]! * nx + pm[1]! * ny + pm[2]! * nz;
+      const lny = pm[4]! * nx + pm[5]! * ny + pm[6]! * nz;
+      const lnz = pm[8]! * nx + pm[9]! * ny + pm[10]! * nz;
+      const len = Math.hypot(lnx, lny, lnz);
+      if (len > 1e-8) {
+        baked.normals[i] = lnx / len;
+        baked.normals[i + 1] = lny / len;
+        baked.normals[i + 2] = lnz / len;
+      }
+    }
+  } else {
+    for (let i = 0; i < baked.positions.length; i += 3) {
+      baked.positions[i] = baked.positions[i]! - ox;
+      baked.positions[i + 1] = baked.positions[i + 1]! - oy;
+      baked.positions[i + 2] = baked.positions[i + 2]! - oz;
+    }
   }
 
   const mesh = new Object3D(`${decal.name}Baked`);
@@ -334,6 +392,14 @@ export function bakeDecalMesh(
   mesh.castShadow = false;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+export function bakeDecalMesh(
+  decal: Decal,
+  receivers: readonly Object3D[],
+  options: DecalBakeOptions = {},
+): Object3D | undefined {
+  return bakeDecalMeshInSpace(decal, receivers, options);
 }
 
 /**
@@ -360,9 +426,19 @@ export function bakeSceneDecals(root: Object3D, options: SceneDecalBakeOptions =
   });
   decals.sort(compareDecals);
 
+  let parentWorld: Matrix4 | undefined;
+  let invParentWorld: Matrix4 | undefined;
+  if (!isIdentityMatrix(root.worldMatrix.data)) {
+    const inv = new Matrix4();
+    if (Matrix4.invert(root.worldMatrix, inv)) {
+      parentWorld = root.worldMatrix;
+      invParentWorld = inv;
+    }
+  }
+
   const baked: Object3D[] = [];
   for (const decal of decals) {
-    const mesh = bakeDecalMesh(decal, receivers, options);
+    const mesh = bakeDecalMeshInSpace(decal, receivers, options, parentWorld, invParentWorld);
     if (!mesh) continue;
     root.add(mesh);
     baked.push(mesh);

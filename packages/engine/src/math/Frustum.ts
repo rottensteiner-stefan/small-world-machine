@@ -16,8 +16,9 @@ export class Frustum {
   /**
    * Sets the frustum planes from a projection matrix.
    * @param m The matrix to set from (usually View-Projection).
+   * @param zeroToOne True for [0, 1] clip-space depth (WebGPU/Vulkan ZO), false for OpenGL [-1, 1].
    */
-  public setFromMatrix(m: Matrix4): void {
+  public setFromMatrix(m: Matrix4, zeroToOne: boolean = false): void {
     const me: Float32Array = m.data;
     if (16 > me.length) {
       return;
@@ -49,10 +50,17 @@ export class Frustum {
     p[15] = me[15]! - me[13]!;
 
     // Near plane
-    p[16] = me[3]! + me[2]!;
-    p[17] = me[7]! + me[6]!;
-    p[18] = me[11]! + me[10]!;
-    p[19] = me[15]! + me[14]!;
+    if (zeroToOne) {
+      p[16] = me[2]!;
+      p[17] = me[6]!;
+      p[18] = me[10]!;
+      p[19] = me[14]!;
+    } else {
+      p[16] = me[3]! + me[2]!;
+      p[17] = me[7]! + me[6]!;
+      p[18] = me[11]! + me[10]!;
+      p[19] = me[15]! + me[14]!;
+    }
 
     // Far plane
     p[20] = me[3]! - me[2]!;

@@ -1,6 +1,11 @@
 import { MathPool, Matrix4, Vector3D } from "../math/index.js";
 import { BoundingBox } from "../physix/index.js";
-import type { GeometryDataInterface, Geometry, BoundingVolume } from "../interfaces/index.js";
+import type {
+  GeometryDataInterface,
+  Geometry,
+  BoundingVolume,
+  MorphTargetData,
+} from "../interfaces/index.js";
 import { Topology } from "../enums/index.js";
 /**
  * Base class for all geometry types.
@@ -26,6 +31,10 @@ export abstract class AbstractGeometry implements Geometry {
   protected _joints?: Float32Array | Uint16Array | undefined = undefined;
   /** Optional skinning weights (4 weights per vertex). */
   protected _weights?: Float32Array | undefined = undefined;
+  /** Optional morph target displacement arrays. */
+  protected _morphTargets?: MorphTargetData[] | undefined = undefined;
+  /** Optional morph target names. */
+  protected _morphTargetNames?: string[] | undefined = undefined;
   /** Whether the geometry is purely line-based. */
   protected _isLineGeometry: boolean = false;
   /** Cached bounding volume to prevent re-allocation */
@@ -68,6 +77,8 @@ export abstract class AbstractGeometry implements Geometry {
       colors: this._colors,
       joints: this._joints,
       weights: this._weights,
+      ...(this._morphTargets ? { morphTargets: this._morphTargets } : {}),
+      ...(this._morphTargetNames ? { morphTargetNames: this._morphTargetNames } : {}),
       topology: this._isLineGeometry ? Topology.LINE_LIST : Topology.TRIANGLE_LIST,
       getBoundingVolume: () => this.getBoundingVolume(),
     };

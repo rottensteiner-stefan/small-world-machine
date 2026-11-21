@@ -56,7 +56,16 @@ mat3 extractMat3(mat4 m) {
     return mat3(m[0].xyz, m[1].xyz, m[2].xyz);
 }
 
+mat3 cofactor3(mat3 m) {
+    return mat3(
+        cross(m[1], m[2]),
+        cross(m[2], m[0]),
+        cross(m[0], m[1])
+    );
+}
+
 void main() {
+    float skinSign = 1.0;
 #ifdef USE_INSTANCE_FIELD
     mat4 modelMat = buildInstanceFieldMatrix(a_instancePos, a_instanceYaw, a_instanceScale);
 #else
@@ -71,15 +80,25 @@ void main() {
 #endif
 #ifdef USE_SKINNING
     // GPU skinning, mirroring the web_gl2 / web_gpu vertex stages: linear blend of the four
-    // bound joint matrices, applied to the bind-pose local attributes before the model matrix.
-    mat4 skinMat =
-        a_weights.x * u_boneMatrices[int(a_joints.x)] +
-        a_weights.y * u_boneMatrices[int(a_joints.y)] +
-        a_weights.z * u_boneMatrices[int(a_joints.z)] +
-        a_weights.w * u_boneMatrices[int(a_joints.w)];
-    vec4 localPos = skinMat * vec4(a_position, 1.0);
-    vec3 localNormal = mat3(skinMat) * a_normal;
-    vec3 localTangent = mat3(skinMat) * a_tangent.xyz;
+    // bound joint matrices, with zero-sum fallback (AN05) and cofactor3 normal transform (AN06).
+    vec4 localPos = vec4(a_position, 1.0);
+    vec3 localNormal = a_normal;
+    vec3 localTangent = a_tangent.xyz;
+    float weightSum = a_weights.x + a_weights.y + a_weights.z + a_weights.w;
+    if (weightSum > 1e-4) {
+        mat4 skinMat =
+            (a_weights.x * u_boneMatrices[int(a_joints.x)] +
+            a_weights.y * u_boneMatrices[int(a_joints.y)] +
+            a_weights.z * u_boneMatrices[int(a_joints.z)] +
+            a_weights.w * u_boneMatrices[int(a_joints.w)]) * (1.0 / weightSum);
+        localPos = skinMat * vec4(a_position, 1.0);
+        mat3 skinMat3 = extractMat3(skinMat);
+        mat3 skinCof = cofactor3(skinMat3);
+        float skinDet = dot(skinMat3[0], skinCof[0]);
+        skinSign = skinDet < 0.0 ? -1.0 : 1.0;
+        localNormal = (skinCof * a_normal) * skinSign;
+        localTangent = skinMat3 * a_tangent.xyz;
+    }
 #else
     vec4 localPos = vec4(a_position, 1.0);
     vec3 localNormal = a_normal;
@@ -88,7 +107,13 @@ void main() {
     vec4 wp = modelMat * localPos;
     v_worldPos = wp.xyz;
     mat3 m3 = extractMat3(modelMat);
-    v_normal = normalize(m3 * localNormal);
+    mat3 mCof = cofactor3(m3);
+    float modelDet = dot(m3[0], mCof[0]);
+    float modelSign = modelDet < 0.0 ? -1.0 : 1.0;
+    vec3 worldN = (mCof * localNormal) * modelSign;
+    v_normal = (dot(localNormal, localNormal) < 0.0001 || dot(worldN, worldN) < 1e-20)
+        ? vec3(0.0, 1.0, 0.0)
+        : normalize(worldN);
     vec2 uvScaled = a_uv * u_texRepeat;
     float uvCos = 1.0;
     float uvSin = 0.0;
@@ -101,7 +126,7 @@ void main() {
     vec3 tangent = localTangent;
     // Bitangent handedness w = ±1, folded into B in the vertex stage. Defaults to +1
     // when the tangent is zero/absent (degenerate or disabled attribute).
-    float bitangentSign = length(tangent) < 0.0001 ? 1.0 : a_tangent.w;
+    float bitangentSign = length(tangent) < 0.0001 ? 1.0 : (a_tangent.w * skinSign * modelSign);
     if (length(tangent) < 0.0001) {
         if (abs(v_normal.y) < 0.999) {
             tangent = cross(v_normal, vec3(0.0, 1.0, 0.0));

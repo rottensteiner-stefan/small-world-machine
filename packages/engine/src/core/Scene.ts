@@ -297,15 +297,14 @@ export class Scene {
     }
     // 2. Update matrices
     this.root.updateMatrixWorld();
-    // 3. Compute skinning matrices. Must run after the full matrix pass above: a
-    // SkinnedMesh's joints live elsewhere in the tree (siblings/cousins, not
-    // descendants), so their worldMatrix isn't guaranteed to be current yet
-    // during step 2's single top-down traversal.
+    // 3. Compute per-mesh skinning matrices and pose-aware bounds (AN03 / AN04). Must run after
+    // the full matrix pass above: a SkinnedMesh's joints live elsewhere in the tree (siblings/
+    // cousins, not descendants), so their worldMatrix isn't guaranteed to be current during step 2.
     const skinned = this._skinnedMeshes;
     for (let i = 0; i < skinned.length; i++) {
       const mesh = skinned[i]!;
       if (mesh.skeleton) {
-        mesh.skeleton.update(mesh.worldMatrix);
+        mesh.updateSkinning();
       }
     }
     if (undefined !== this.dynamicOctree) {

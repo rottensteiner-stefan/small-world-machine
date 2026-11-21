@@ -104,11 +104,11 @@ export class DecalPool {
     const decal = slot.decal;
     const [w, h, depth] = options.size ?? this._size;
 
-    if (decal.parent !== this._root) this._root.add(decal);
+    const targetParent = options.attachTo ?? this._root;
     decal.position.copyFrom(point);
     decal.rotation.copyFrom(decalEulerFromNormal(normal, options.spin ?? 0));
     decal.scale.set(w, depth, h);
-    if (options.attachTo) this._attach(decal, options.attachTo);
+    this._attach(decal, targetParent);
 
     slot.age = 0;
     slot.lifetime = options.lifetime ?? this._lifetime;
@@ -170,6 +170,28 @@ export class DecalPool {
   /** Re-parents `decal` under `receiver` without moving it in the world. */
   private _attach(decal: Decal, receiver: Object3D): void {
     receiver.updateMatrixWorld();
+    const rm = receiver.worldMatrix.data;
+    const isIdentity =
+      rm[0] === 1 &&
+      rm[1] === 0 &&
+      rm[2] === 0 &&
+      rm[3] === 0 &&
+      rm[4] === 0 &&
+      rm[5] === 1 &&
+      rm[6] === 0 &&
+      rm[7] === 0 &&
+      rm[8] === 0 &&
+      rm[9] === 0 &&
+      rm[10] === 1 &&
+      rm[11] === 0 &&
+      rm[12] === 0 &&
+      rm[13] === 0 &&
+      rm[14] === 0 &&
+      rm[15] === 1;
+    if (isIdentity) {
+      if (decal.parent !== receiver) receiver.add(decal);
+      return;
+    }
     const local = MathPool.acquireMatrix();
     const inverse = MathPool.acquireMatrix();
     const world = MathPool.acquireMatrix();
@@ -183,7 +205,7 @@ export class DecalPool {
       decal.scale.copyFrom(scale);
       MathPool.releaseVector(position);
       MathPool.releaseVector(scale);
-      receiver.add(decal);
+      if (decal.parent !== receiver) receiver.add(decal);
     }
     MathPool.releaseMatrix(world);
     MathPool.releaseMatrix(local);

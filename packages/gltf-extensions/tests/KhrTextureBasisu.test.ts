@@ -6,7 +6,7 @@ import {
   Texture,
   CompressedTextureFormat,
 } from "@small-world-machine/engine";
-import { khrTextureBasisu } from "../src/basisu/KhrTextureBasisu.js";
+import { createKhrTextureBasisuPlugin, khrTextureBasisu } from "../src/basisu/KhrTextureBasisu.js";
 import { BasisTranscoder } from "../src/basisu/BasisTranscoder.js";
 
 const vendorDir = fileURLToPath(new URL("../vendor/basis/", import.meta.url));
@@ -105,7 +105,7 @@ describe("KHR_texture_basisu", () => {
     expect(texture.image).toBeUndefined();
   });
 
-  it("falls back to an uncompressed RGBA8 texture when rgba8 is requested", async () => {
+  it("falls back to an uncompressed RGBA8 RawMipChain preserving all KTX2 mip levels (AS03)", async () => {
     const wasmBinary = asArrayBuffer(readFileSync(vendorDir + "basis_transcoder.wasm"));
     BasisTranscoder.setConfig({ wasmBinary });
     BasisTranscoder.setTranscodeHandler(null);
@@ -113,7 +113,37 @@ describe("KHR_texture_basisu", () => {
     const ktx2 = asArrayBuffer(readFileSync(fixtureDir + "2d_etc1s.ktx2"));
     const texture = await BasisTranscoder.transcode(ktx2, "image/ktx2", { format: "rgba8" });
 
-    // RGBA8 output is not block-compressed -- no compressed mip chain is attached.
+    // RGBA8 output is not block-compressed -- full RGBA8 mip pyramid lives on rawMipChain.
     expect(texture.compressedImage).toBeUndefined();
+    expect(texture.isLoaded).toBe(true);
+    expect(texture.rawMipChain).toBeDefined();
+    expect(texture.rawMipChain!.width).toBe(40);
+    expect(texture.rawMipChain!.height).toBe(40);
+    expect(texture.rawMipChain!.mipData).toHaveLength(6);
+    expect(texture.rawMipChain!.mipData[0]!.length).toBe(40 * 40 * 4);
+    expect(texture.rawMipChain!.mipData[1]!.length).toBe(20 * 20 * 4);
+    expect(texture.rawMipChain!.mipData[5]!.length).toBe(1 * 1 * 4);
+  });
+
+  it("isolates per-instance BasisU plugins without leaking global static state (AS07)", async () => {
+    const texA = Texture.empty();
+    const texB = Texture.empty();
+    const pluginA = createKhrTextureBasisuPlugin({ customHandler: () => texA });
+    const pluginB = createKhrTextureBasisuPlugin({ customHandler: () => texB });
+
+    const payload = new Uint8Array([1, 2, 3, 4]).buffer;
+    const textureDef = { extensions: { KHR_texture_basisu: { source: 0 } } };
+    const readCtx = {
+      json: {
+        bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 4 }],
+        images: [{ bufferView: 0, mimeType: "image/ktx2" }],
+      },
+      state: new Map(),
+    };
+
+    const resA = await pluginA.resolveTexture?.(textureDef, readCtx, "", [payload], {} as never);
+    const resB = await pluginB.resolveTexture?.(textureDef, readCtx, "", [payload], {} as never);
+    expect(resA).toBe(texA);
+    expect(resB).toBe(texB);
   });
 });

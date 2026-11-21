@@ -119,7 +119,16 @@ void main() {
     float edgeFade = clamp(min(toEdge.x, min(toEdge.y, toEdge.z)) / max(u_decalFade.x, 0.0001), 0.0, 1.0);
 
     vec3 tangentSeed = normalize(u_model[0].xyz);
-    vec3 tangent = normalize(tangentSeed - baseNormal * dot(tangentSeed, baseNormal));
+    vec3 tangentProj = tangentSeed - baseNormal * dot(tangentSeed, baseNormal);
+    if (dot(tangentProj, tangentProj) < 1e-4) {
+        vec3 fallbackZ = normalize(u_model[2].xyz);
+        tangentProj = fallbackZ - baseNormal * dot(fallbackZ, baseNormal);
+    }
+    if (dot(tangentProj, tangentProj) < 1e-4) {
+        vec3 fallbackY = normalize(u_model[1].xyz);
+        tangentProj = fallbackY - baseNormal * dot(fallbackY, baseNormal);
+    }
+    vec3 tangent = normalize(tangentProj);
     g_wp = surfaceWorld;
     g_n = baseNormal;
     g_uv = boxPos.xz + vec2(0.5);
@@ -153,6 +162,9 @@ void main() {
 #else
     [LIGHT_CALC_PBR]
 #endif
+    if (fragColor.a < max(u_extraParams.y, 0.002)) {
+        discard;
+    }
 
     [FOG_CALC]
 }

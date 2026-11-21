@@ -186,53 +186,66 @@ export class WebGL2ShadowManager {
     // DirectionalLight (CSM Atlas) runs BEFORE spot/point so field shadow view slots `1..C` match EVSM.
     if (lights.dLight && lights.dLight.castShadow && lights.dLight.numCascades > 0) {
       const light = lights.dLight;
-      const res = light.shadowResolution;
-      const cols = Math.ceil(Math.sqrt(light.numCascades));
-      const rows = Math.ceil(light.numCascades / cols);
-      const atlasWidth = cols * res;
-      const atlasHeight = rows * res;
+      const numCascades = Math.min(light.numCascades, light.cascadeCameras.length);
+      if (numCascades > 0) {
+        const res = light.shadowResolution;
+        const cols = Math.ceil(Math.sqrt(numCascades));
+        const rows = Math.ceil(numCascades / cols);
+        const atlasWidth = cols * res;
+        const atlasHeight = rows * res;
 
-      let fbo = this._shadowMaps.get(light);
-      if (!fbo) {
-        fbo = new WebGL2DepthFrameBuffer(gl, atlasWidth, atlasHeight);
-        this._shadowMaps.set(light, fbo);
-      } else {
-        fbo.resize(atlasWidth, atlasHeight);
+        let fbo = this._shadowMaps.get(light);
+        if (!fbo) {
+          fbo = new WebGL2DepthFrameBuffer(gl, atlasWidth, atlasHeight);
+          this._shadowMaps.set(light, fbo);
+        } else {
+          fbo.resize(atlasWidth, atlasHeight);
+        }
+        this._shadowMapsUsed.add(light);
+
+        fbo.bind();
+        gl.depthMask(true);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.CULL_FACE);
+        gl.cullFace(gl.FRONT);
+        gl.enable(gl.DEPTH_TEST);
+        gl.disable(gl.BLEND);
+
+        for (let i = 0; i < numCascades; i++) {
+          const cascadeCam = light.cascadeCameras[i];
+          if (!cascadeCam) continue;
+
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          gl.viewport(col * res, row * res, res, res);
+
+          host.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
+          host.renderShadowScene(
+            MaterialType.DEPTH,
+            DepthMaterial.LINE_QUADS_SHADER_ID,
+            2 / res,
+            sortedGroups,
+          );
+          host.drawFieldShadowView(MaterialType.DEPTH, cascadeCam.viewProjectionMatrix, "shadow");
+        }
+
+        if (host.quality.shadowMode === ShadowMode.EVSM) {
+          this._renderEvsmMoments(
+            host,
+            light,
+            fbo,
+            numCascades,
+            cols,
+            res,
+            atlasWidth,
+            atlasHeight,
+            sortedGroups,
+          );
+        }
+
+        gl.cullFace(gl.BACK);
+        fbo.unbind();
       }
-      this._shadowMapsUsed.add(light);
-
-      fbo.bind();
-      gl.depthMask(true);
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-      gl.enable(gl.CULL_FACE);
-      gl.cullFace(gl.FRONT);
-      gl.enable(gl.DEPTH_TEST);
-      gl.disable(gl.BLEND);
-
-      for (let i = 0; i < light.numCascades; i++) {
-        const cascadeCam = light.cascadeCameras[i];
-        if (!cascadeCam) continue;
-
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        gl.viewport(col * res, row * res, res, res);
-
-        host.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, emptyLights);
-        host.renderShadowScene(
-          MaterialType.DEPTH,
-          DepthMaterial.LINE_QUADS_SHADER_ID,
-          2 / res,
-          sortedGroups,
-        );
-        host.drawFieldShadowView(MaterialType.DEPTH, cascadeCam.viewProjectionMatrix, "shadow");
-      }
-
-      if (host.quality.shadowMode === ShadowMode.EVSM) {
-        this._renderEvsmMoments(host, light, fbo, cols, res, atlasWidth, atlasHeight, sortedGroups);
-      }
-
-      gl.cullFace(gl.BACK);
-      fbo.unbind();
     }
 
     for (let i = 0; i < spotSlots; i++) {
@@ -373,6 +386,7 @@ export class WebGL2ShadowManager {
       lights.dLight.numCascades > 0
     ) {
       const light = lights.dLight;
+      const numCascades = Math.min(light.numCascades, light.cascadeCameras.length);
       const mapLoc = cache.uniforms.get("u_dirShadowMap");
       const mapRawLoc = cache.uniforms.get("u_dirShadowMapRaw");
       const splitsLoc = cache.uniforms.get("u_cascadeSplits");
@@ -380,7 +394,7 @@ export class WebGL2ShadowManager {
 
       const fbo = this._shadowMaps.get(light);
       this._bindEvsmShadowUniforms(gl, cache, !!fbo, quality.shadowMode, maxUnits);
-      if (fbo && fbo.texture) {
+      if (fbo && fbo.texture && numCascades > 0) {
         const texUnit = 12;
         if (!this._ensureShadowMapUnit(texUnit, maxUnits, "directional shadow map")) return;
         gl.activeTexture(gl.TEXTURE0 + texUnit);
@@ -391,7 +405,7 @@ export class WebGL2ShadowManager {
         gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
         if (mapRawLoc) gl.uniform1i(mapRawLoc, WebGL2ShadowManager.RAW_DEPTH_UNIT);
 
-        for (let i = 0; i < light.numCascades; i++) {
+        for (let i = 0; i < numCascades; i++) {
           const matLoc = cache.uniforms.get(`u_cascadeMatrices[${i}]`);
           if (matLoc && light.cascadeCameras[i]) {
             gl.uniformMatrix4fv(matLoc, false, light.cascadeCameras[i]!.viewProjectionMatrix);
@@ -410,7 +424,7 @@ export class WebGL2ShadowManager {
           this._scratchFloat4[0] = light.shadowBias;
           this._scratchFloat4[1] = light.shadowNormalBias;
           this._scratchFloat4[2] = 1.0;
-          this._scratchFloat4[3] = light.numCascades;
+          this._scratchFloat4[3] = numCascades;
           gl.uniform4fv(infoLoc, this._scratchFloat4);
         }
 
@@ -634,6 +648,7 @@ export class WebGL2ShadowManager {
     host: WebGL2ShadowHost,
     light: DirectionalLight,
     depthFbo: WebGL2DepthFrameBuffer,
+    numCascades: number,
     cols: number,
     res: number,
     atlasWidth: number,
@@ -662,7 +677,7 @@ export class WebGL2ShadowManager {
     gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
 
-    for (let i = 0; i < light.numCascades; i++) {
+    for (let i = 0; i < numCascades; i++) {
       const cascadeCam = light.cascadeCameras[i];
       if (!cascadeCam) continue;
       const col = i % cols;

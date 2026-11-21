@@ -15,10 +15,19 @@ import {
 } from "../../core/textures/index.js";
 import { resolveManifestFlags, type RenderManifest } from "../shaders/index.js";
 import { splitByInstancing, type InstancingSplit } from "../AutoInstancing.js";
-import type { InstancedMesh, Object3D, RenderBatch, Scene } from "../../core/index.js";
+import type { InstancedMesh, Object3D, RenderBatch, RenderList, Scene } from "../../core/index.js";
 import { DeviceLimit, isInstancedMesh } from "../../core/index.js";
-import { isSkinnedMesh, MAX_SKINNED_BONES } from "../../core/animation/index.js";
-import type { EngineOptions, LightDataInterface } from "../../interfaces/index.js";
+import {
+  isSkinnedMesh,
+  MAX_SKINNED_BONES,
+  MorphTargetBlender,
+  type MorphBlendTarget,
+} from "../../core/animation/index.js";
+import type {
+  EngineOptions,
+  GeometryDataInterface,
+  LightDataInterface,
+} from "../../interfaces/index.js";
 import {
   WebGLProgramCache,
   type WebGLProgramCacheEntry,
@@ -38,6 +47,16 @@ import {
 } from "../../enums/index.js";
 import type { ToneMappingElement } from "../post/elements/ToneMappingElement.js";
 import type { Vector3D } from "../../math/index.js";
+
+interface WebGL1MorphEntry {
+  geo: GeometryDataInterface;
+  vbo: WebGLBuffer;
+  nbo: WebGLBuffer | undefined;
+  tanbo: WebGLBuffer | undefined;
+  cpuOut: MorphBlendTarget;
+  cachedWeights: Float32Array;
+  hasComputedOnce: boolean;
+}
 
 /**
  * WebGL 1.0 implementation of the renderer.
@@ -88,6 +107,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   private _programCache!: WebGLProgramCache;
   private _textures!: WebGLTextureManager;
   private _geometry!: WebGLBufferManager;
+  private readonly _morphEntries: Map<Object3D, WebGL1MorphEntry> = new Map();
 
   private _opaqueTexture?: WebGLTexture | undefined;
 
@@ -566,7 +586,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
 
     // Skinned meshes need the `USE_SKINNING` program variant (a_joints/a_weights attributes and
     // the u_boneMatrices array) -- same trigger rule as WebGL2Renderer.
-    if ((isSkinnedMesh(firstObj) && firstObj.skeleton) || firstObj.geometry?.joints !== undefined) {
+    if (isSkinnedMesh(firstObj) && firstObj.skeleton) {
       if (!flags.includes(ShaderFlag.SKINNING)) {
         flags.push(ShaderFlag.SKINNING);
       }
@@ -808,7 +828,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         this._uploadModelMatrix(o.worldMatrix.data, manifest.state, vMat, u);
 
         if (isSkinnedMesh(o) && o.skeleton) {
-          const skel = o.skeleton;
+          const boneMatrices = o.boneMatrices;
           const boneLoc =
             u.get("u_boneMatrices[0]") ??
             this.gl.getUniformLocation(cache.prog, "u_boneMatrices") ??
@@ -818,13 +838,14 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
             // declared size would write over following uniforms. Mirror of WebGL2Renderer.
             const maxFloats = MAX_SKINNED_BONES * 16;
             const boneData =
-              skel.boneMatrices.length > maxFloats
-                ? skel.boneMatrices.subarray(0, maxFloats)
-                : skel.boneMatrices;
+              boneMatrices.length > maxFloats ? boneMatrices.subarray(0, maxFloats) : boneMatrices;
             this.gl.uniformMatrix4fv(boneLoc, false, boneData);
           }
         }
 
+        const morphEntry = this._morphEntries.get(o);
+        const hasMorph =
+          morphEntry !== undefined && morphEntry.hasComputedOnce && morphEntry.geo === o.geometry;
         mesh.bind(
           cache.attributes.get("a_position")!,
           cache.attributes.get("a_normal")!,
@@ -833,6 +854,9 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
           cache.attributes.get("a_joints") ?? -1,
           cache.attributes.get("a_weights") ?? -1,
           cache.attributes.get("a_color")!,
+          hasMorph ? morphEntry.vbo : undefined,
+          hasMorph ? morphEntry.nbo : undefined,
+          hasMorph ? morphEntry.tanbo : undefined,
         );
         mesh.draw(drawMode, batch.wireframeMode);
       }
@@ -973,6 +997,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     this._renderTargetCubeFbos.clear();
     this._renderTargetCubeDepthBuffers.clear();
     this._instanceBuffers.resetOnContextRestored();
+    this._morphEntries.clear();
     this._hdrFbo = undefined;
     this._hdrTexture = undefined;
     this._hdrRenderBuffer = undefined;
@@ -1380,10 +1405,130 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
   }
 
   /** @inheritdoc */
+  protected override _prepareFrameRenderResources(
+    _scene: Scene,
+    renderList: RenderList,
+    _lights: LightDataInterface,
+  ): void {
+    const gl = this.gl;
+    const batches = renderList.opaqueBatches;
+    for (let i = 0; i < batches.length; i++) {
+      const objs = batches[i]!.objects;
+      for (let j = 0; j < objs.length; j++) {
+        this._updateMorphEntry(gl, objs[j]!);
+      }
+    }
+    const transparent = renderList.transparent;
+    for (let i = 0; i < transparent.length; i++) {
+      this._updateMorphEntry(gl, transparent[i]!);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  }
+
+  private _updateMorphEntry(gl: WebGLRenderingContext, obj: Object3D): void {
+    const geo = obj.geometry;
+    if (!geo || !geo.morphTargets || geo.morphTargets.length === 0 || isInstancedMesh(obj)) {
+      if (this._morphEntries.has(obj)) this._releaseMorphEntry(gl, obj);
+      return;
+    }
+
+    const vertexCount = Math.floor(geo.vertices.length / 3);
+    if (vertexCount === 0) return;
+
+    const existing = this._morphEntries.get(obj);
+    const influences = obj.morphTargetInfluences;
+    const hasActive = MorphTargetBlender.hasActiveWeights(influences);
+
+    if (!existing && !hasActive) return;
+
+    let entry = existing;
+    if (!entry || entry.geo !== geo) {
+      if (entry) this._releaseMorphEntry(gl, obj);
+      if (!hasActive) return;
+
+      const hasNormals = (geo.normals?.length ?? 0) >= vertexCount * 3;
+      const hasTangents = (geo.tangents?.length ?? 0) >= vertexCount * 4;
+
+      const vbo = gl.createBuffer()!;
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, vertexCount * 12, gl.DYNAMIC_DRAW);
+
+      let nbo: WebGLBuffer | undefined;
+      if (hasNormals) {
+        nbo = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
+        gl.bufferData(gl.ARRAY_BUFFER, vertexCount * 12, gl.DYNAMIC_DRAW);
+      }
+
+      let tanbo: WebGLBuffer | undefined;
+      if (hasTangents) {
+        tanbo = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, tanbo);
+        gl.bufferData(gl.ARRAY_BUFFER, vertexCount * 16, gl.DYNAMIC_DRAW);
+      }
+
+      const targetCount = geo.morphTargets.length;
+      const cachedWeights = new Float32Array(targetCount);
+      cachedWeights.fill(NaN);
+
+      entry = {
+        geo,
+        vbo,
+        nbo,
+        tanbo,
+        cpuOut: {
+          positions: new Float32Array(vertexCount * 3),
+          normals: hasNormals ? new Float32Array(vertexCount * 3) : undefined,
+          tangents: hasTangents ? new Float32Array(vertexCount * 4) : undefined,
+        },
+        cachedWeights,
+        hasComputedOnce: false,
+      };
+      this._morphEntries.set(obj, entry);
+    }
+
+    const targetCount = geo.morphTargets.length;
+    if (
+      entry.hasComputedOnce &&
+      !MorphTargetBlender.weightsDiffer(influences, entry.cachedWeights, targetCount)
+    ) {
+      return;
+    }
+
+    for (let t = 0; t < targetCount; t++) {
+      entry.cachedWeights[t] = influences && t < influences.length ? influences[t]! : 0;
+    }
+
+    MorphTargetBlender.blend(geo, entry.cachedWeights, entry.cpuOut);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, entry.vbo);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, entry.cpuOut.positions);
+    if (entry.nbo && entry.cpuOut.normals) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, entry.nbo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, entry.cpuOut.normals);
+    }
+    if (entry.tanbo && entry.cpuOut.tangents) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, entry.tanbo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, entry.cpuOut.tangents);
+    }
+    entry.hasComputedOnce = true;
+  }
+
+  private _releaseMorphEntry(gl: WebGLRenderingContext, obj: Object3D): void {
+    const entry = this._morphEntries.get(obj);
+    if (!entry) return;
+    this._morphEntries.delete(obj);
+    gl.deleteBuffer(entry.vbo);
+    if (entry.nbo) gl.deleteBuffer(entry.nbo);
+    if (entry.tanbo) gl.deleteBuffer(entry.tanbo);
+  }
+
+  /** @inheritdoc */
   protected override releaseObjectResources(obj: Object3D): void {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);
     this._textures.releaseObjectTextures(obj);
+    this._releaseMorphEntry(this.gl, obj);
     if (isInstancedMesh(obj)) this._instanceBuffers.release(this.gl, obj);
   }
 
@@ -1393,6 +1538,12 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     const gl = this.gl;
     if (gl) {
       this._instanceBuffers.destroy(gl);
+      for (const entry of this._morphEntries.values()) {
+        gl.deleteBuffer(entry.vbo);
+        if (entry.nbo) gl.deleteBuffer(entry.nbo);
+        if (entry.tanbo) gl.deleteBuffer(entry.tanbo);
+      }
+      this._morphEntries.clear();
       this._programCache?.dispose();
       this._textures?.dispose();
       this._geometry?.dispose();
@@ -1408,6 +1559,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
       this._postEffects?.destroy();
     }
 
+    this._morphEntries.clear();
     this._renderTargetCubeFbos.clear();
     this._renderTargetCubeDepthBuffers.clear();
     this._renderTargetFbos.clear();

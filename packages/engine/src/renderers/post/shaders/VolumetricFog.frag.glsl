@@ -86,7 +86,7 @@ float spotFogShadow(int s, vec3 pos) {
     vec4 clip = u_spotShadowMatrix[s] * vec4(pos, 1.0);
     if (clip.w <= 0.0) return 1.0;
     vec3 proj = clip.xyz / clip.w * 0.5 + 0.5;
-    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 || proj.z > 1.0) return 1.0;
+    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 || proj.z < 0.0 || proj.z > 1.0) return 1.0;
     float depthRef = proj.z - u_spotShadowInfo[s].x;
     vec2 texel = 0.5 / vec2(textureSize(u_spotShadowMap, 0).xy);
     float lit = 0.0;
@@ -165,7 +165,7 @@ float sampleShadow(vec3 pos) {
 
     vec4 lightSpacePos = u_cascadeMatrices[cascadeIndex] * vec4(pos, 1.0);
     vec3 proj = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
-    if (proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+    if (proj.z < 0.0 || proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
         return 1.0;
     }
 

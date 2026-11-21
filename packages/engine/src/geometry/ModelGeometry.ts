@@ -1,4 +1,5 @@
 import { AbstractGeometry } from "./AbstractGeometry.js";
+import type { MorphTargetData } from "../interfaces/index.js";
 import { Topology } from "../enums/index.js";
 import { BoundingBox } from "../physix/index.js";
 import { Vector3D } from "../math/index.js";
@@ -30,6 +31,10 @@ export interface ModelGeometryOptions {
    * bounds are in the dequantized domain while the buffer is still scaled.
    */
   headerBounds?: { min: [number, number, number]; max: [number, number, number] } | undefined;
+  /** Optional morph target displacement arrays (glTF `primitive.targets`). */
+  morphTargets?: MorphTargetData[] | undefined;
+  /** Optional morph target names (glTF `mesh.extras.targetNames`). */
+  morphTargetNames?: string[] | undefined;
   /**
    * How `indices` are to be read: `TRIANGLE_LIST` (default) or `LINE_LIST` (index pairs, drawn as
    * line segments; normals default to up and no tangents are derived). Any other topology throws:
@@ -83,6 +88,12 @@ export class ModelGeometry extends AbstractGeometry {
         options.tangents instanceof Float32Array
           ? options.tangents
           : new Float32Array(options.tangents);
+    }
+    if (options?.morphTargets && options.morphTargets.length > 0) {
+      this._morphTargets = options.morphTargets;
+    }
+    if (options?.morphTargetNames && options.morphTargetNames.length > 0) {
+      this._morphTargetNames = options.morphTargetNames;
     }
     if (options?.wireframeIndices) {
       const wf = options.wireframeIndices;

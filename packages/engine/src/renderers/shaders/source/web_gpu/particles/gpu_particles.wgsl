@@ -177,11 +177,13 @@ fn decodeCollisionNormal(e: vec2f) -> vec3f {
     return normalize(vec3f(xy, n.z));
 }
 
-// Reflects `velocity` off `normal` with restitution, then separates the particle from the
-// surface by its own radius so the next integration step cannot re-enter the surface.
+// Reflects `velocity` off `normal` with restitution when moving into the surface, then separates
+// the particle from the surface by its own radius so the next step cannot re-enter the surface.
 fn resolveCollision(p: ptr<function, vec4f>, v: ptr<function, vec4f>, normal: vec3f) {
-    let inv = 2.0 * dot(normal, (*v).xyz);
-    (*v).xyz = ((*v).xyz - inv * normal) * params.u1.w;
+    let vn = dot(normal, (*v).xyz);
+    if (vn < 0.0) {
+        (*v).xyz = ((*v).xyz - 2.0 * vn * normal) * params.u1.w;
+    }
     (*p).xyz += normal * ((*p).w + 0.01);
 }
 
@@ -213,22 +215,18 @@ fn collisionProbe(p: ptr<function, vec4f>, v: ptr<function, vec4f>) {
 
     let toCam = global.viewPos.xyz - (*p).xyz;
     let dist = length(toCam);
-    if (dist < params.u1.z) {
-        // Already inside the collision slab -- reflect off the documented up fallback.
-        resolveCollision(p, v, vec3f(0.0, 1.0, 0.0));
-        return;
-    }
     if (dist < 0.0001) {
         return;
     }
-
-    // The world-space slab maps to a per-particle depth interval between pz and pzNear; the
-    // surface is within `collisionThickness` iff its depth lies inside it.
-    let pNear = (*p).xyz + (toCam / dist) * params.u1.z;
-    let clipNear = global.vp * vec4f(pNear, 1.0);
-    let pzNear = clipNear.z / clipNear.w;
-    if (sceneZ < pzNear) {
-        return;
+    if (dist >= params.u1.z) {
+        // The world-space slab maps to a per-particle depth interval between pz and pzNear; the
+        // surface is within `collisionThickness` iff its depth lies inside it.
+        let pNear = (*p).xyz + (toCam / dist) * params.u1.z;
+        let clipNear = global.vp * vec4f(pNear, 1.0);
+        let pzNear = clipNear.z / clipNear.w;
+        if (sceneZ < pzNear) {
+            return;
+        }
     }
 
     let nrg = textureLoad(normalTex, px, 0).xy; // texel load 2/2

@@ -62,6 +62,8 @@ export class Object3D implements Collidable {
 
   public geometry: GeometryDataInterface | undefined = undefined;
   public material: AbstractMaterial | undefined = undefined;
+  /** Optional per-target morph blend weights (`length === geometry.morphTargets.length`). */
+  public morphTargetInfluences: Float32Array | number[] | undefined = undefined;
   private _bounds: BoundingVolume | undefined = undefined;
   /** Optional custom GPU position buffer (non-standard geometry sources). */
   public positionBuffer: unknown = undefined;
@@ -548,20 +550,27 @@ export class Object3D implements Collidable {
   /**
    * Returns an independent copy of this object's subtree -- own `uuid`, own transform, own
    * material (via `AbstractMaterial.clone()`), own behaviors (via `Behavior.clone()`, re-attached
-   * so `onAttach()` runs against the new instance), and a recursive clone of every child. Used by
-   * Maker's Duplicate command.
+   * so `onAttach()` runs against the new instance), independent `morphTargetInfluences` (preserving
+   * intra-subtree sharing across multi-primitive glTF meshes), rebound `SkinnedMesh` skeletons
+   * targeting the cloned `Bone` nodes, and a recursive clone of every child.
    *
-   * `geometry` and any texture references stay shared by reference -- immutable data, same as
-   * every other "place another instance" workflow in the engine. `parent`/`bounds` reset (the
-   * caller reparents and bounds recompute lazily); `rigidBody` is deliberately dropped rather
-   * than shared, since two objects driven by the same live physics body would move together.
-   *
-   * Known gap: skinned meshes aren't specially handled -- a cloned `SkinnedMesh`'s `skeleton`
-   * would still reference the *original* subtree's bones, not the freshly cloned ones alongside
-   * it. Not a concern for Maker's realistic Duplicate targets (props, lights, prefab instances);
-   * character rigs go through the Prefab/glTF pipeline instead.
+   * `geometry` and any texture references stay shared by reference. `parent`/`bounds` reset;
+   * `rigidBody` is deliberately dropped rather than shared.
    */
   public clone(): Object3D {
+    const cloneMap = new Map<Object3D, Object3D>();
+    const influencesMap = new Map<Float32Array | number[], Float32Array | number[]>();
+    const skeletonMap = new Map<object, object>();
+    const copy = this._cloneWithMaps(cloneMap, influencesMap);
+    copy._rebindSubtreeAfterClone(cloneMap, skeletonMap);
+    copy.updateMatrixWorld(true);
+    return copy;
+  }
+
+  private _cloneWithMaps(
+    cloneMap: Map<Object3D, Object3D>,
+    influencesMap: Map<Float32Array | number[], Float32Array | number[]>,
+  ): Object3D {
     const copy = shallowCloneWithValueTypes(this);
     copy.id = Object3D._getNextId();
     copy._parent = undefined;
@@ -576,8 +585,22 @@ export class Object3D implements Collidable {
     copy.material = this.material?.clone();
     copy.userData = { ...this.userData };
 
+    if (this.morphTargetInfluences !== undefined) {
+      let clonedInfluences = influencesMap.get(this.morphTargetInfluences);
+      if (!clonedInfluences) {
+        clonedInfluences =
+          this.morphTargetInfluences instanceof Float32Array
+            ? new Float32Array(this.morphTargetInfluences)
+            : [...this.morphTargetInfluences];
+        influencesMap.set(this.morphTargetInfluences, clonedInfluences);
+      }
+      copy.morphTargetInfluences = clonedInfluences;
+    }
+
+    cloneMap.set(this, copy);
+
     copy._children = this._children.map((child) => {
-      const childCopy = child.clone();
+      const childCopy = child._cloneWithMaps(cloneMap, influencesMap);
       childCopy._parent = copy;
       return childCopy;
     });
@@ -592,7 +615,28 @@ export class Object3D implements Collidable {
     if (pickingCopy) copy._pickingBehavior = pickingCopy;
     else delete copy._pickingBehavior;
 
-    copy.updateMatrixWorld();
     return copy;
+  }
+
+  private _rebindSubtreeAfterClone(
+    cloneMap: Map<Object3D, Object3D>,
+    skeletonMap: Map<object, object>,
+  ): void {
+    this._rebindAfterClone(cloneMap, skeletonMap);
+    const children = this._children;
+    for (let i = 0; i < children.length; i++) {
+      children[i]!._rebindSubtreeAfterClone(cloneMap, skeletonMap);
+    }
+  }
+
+  /**
+   * Overridden by subclasses (e.g. `SkinnedMesh`) to remap internal node/skeleton references
+   * to the freshly cloned counterparts after `clone()`.
+   */
+  protected _rebindAfterClone(
+    _cloneMap: Map<Object3D, Object3D>,
+    _skeletonMap: Map<object, object>,
+  ): void {
+    // Default: plain Object3D has no external node references to remap.
   }
 }

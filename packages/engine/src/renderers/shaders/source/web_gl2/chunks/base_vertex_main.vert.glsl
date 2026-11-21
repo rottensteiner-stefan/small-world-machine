@@ -9,19 +9,25 @@ mat3 cofactor3(mat3 m) {
 void main() {
   float skinSign = 1.0;
 #ifdef USE_SKINNING
-  mat4 skinMat =
-      a_weights.x * u_boneMatrices[int(a_joints.x)] +
-      a_weights.y * u_boneMatrices[int(a_joints.y)] +
-      a_weights.z * u_boneMatrices[int(a_joints.z)] +
-      a_weights.w * u_boneMatrices[int(a_joints.w)];
+  vec4 localPos = vec4(a_position, 1.0);
+  vec3 localNormal = a_normal;
+  vec3 localTangent = a_tangent.xyz;
+  float weightSum = a_weights.x + a_weights.y + a_weights.z + a_weights.w;
+  if (weightSum > 1e-4) {
+    mat4 skinMat =
+        (a_weights.x * u_boneMatrices[int(a_joints.x)] +
+        a_weights.y * u_boneMatrices[int(a_joints.y)] +
+        a_weights.z * u_boneMatrices[int(a_joints.z)] +
+        a_weights.w * u_boneMatrices[int(a_joints.w)]) * (1.0 / weightSum);
 
-  vec4 localPos = skinMat * vec4(a_position, 1.0);
-  mat3 skinMat3 = mat3(skinMat);
-  mat3 skinCof = cofactor3(skinMat3);
-  float skinDet = dot(skinMat3[0], skinCof[0]);
-  skinSign = skinDet < 0.0 ? -1.0 : 1.0;
-  vec3 localNormal = (skinCof * a_normal) * skinSign;
-  vec3 localTangent = skinMat3 * a_tangent.xyz;
+    localPos = skinMat * vec4(a_position, 1.0);
+    mat3 skinMat3 = mat3(skinMat);
+    mat3 skinCof = cofactor3(skinMat3);
+    float skinDet = dot(skinMat3[0], skinCof[0]);
+    skinSign = skinDet < 0.0 ? -1.0 : 1.0;
+    localNormal = (skinCof * a_normal) * skinSign;
+    localTangent = skinMat3 * a_tangent.xyz;
+  }
 #else
   vec4 localPos = vec4(a_position, 1.0);
   vec3 localNormal = a_normal;

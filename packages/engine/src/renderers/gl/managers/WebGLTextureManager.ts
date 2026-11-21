@@ -78,7 +78,7 @@ export class WebGLTextureManager {
     if (tex instanceof RenderTarget) {
       return this._texCache.get(tex) || this._defaultTexture;
     }
-    if (!tex.image && !tex.compressedImage) return this._defaultTexture;
+    if (!tex.image && !tex.compressedImage && !tex.rawMipChain) return this._defaultTexture;
     return undefined;
   }
 
@@ -90,9 +90,9 @@ export class WebGLTextureManager {
     if (tex instanceof RenderTarget) {
       return this._texCache.get(tex) || this._defaultTexture;
     }
-    // Compressed textures are fully loaded via `compressedImage` -- never route
+    // Compressed and raw mip-chain textures are loaded without `.image` -- never route
     // them through the (image-less) default texture fast path.
-    if (!tex.image && !tex.compressedImage) return this._defaultTexture;
+    if (!tex.image && !tex.compressedImage && !tex.rawMipChain) return this._defaultTexture;
     return undefined;
   }
 
@@ -163,16 +163,17 @@ export class WebGLTextureManager {
     // the full pyramid down to 1x1; an incomplete chain falls back to LINEAR/NEAREST so the
     // texture stays complete instead of sampling black.
     const isCompressed = tex.compressedImage !== undefined;
+    const rawMipCount = tex.rawMipChain?.mipData.length ?? 0;
+    const hasExplicitMips = isCompressed || rawMipCount > 1;
+    const explicitMipCount = isCompressed ? tex.compressedImage!.mipData.length : rawMipCount;
     const expectedMipLevels = Math.floor(Math.log2(Math.max(1, src.width, src.height))) + 1;
-    const hasCompleteCompressedMips =
-      isCompressed &&
-      tex.compressedImage!.mipData.length > 1 &&
-      tex.compressedImage!.mipData.length >= expectedMipLevels;
+    const hasCompleteExplicitMips =
+      hasExplicitMips && explicitMipCount > 1 && explicitMipCount >= expectedMipLevels;
     const useMipmaps =
       quality?.mipmapping &&
       isPOT &&
-      (isCompressed ? hasCompleteCompressedMips : tex.generateMipmaps);
-    if (useMipmaps && !isCompressed) this._gl.generateMipmap(this._gl.TEXTURE_2D);
+      (hasExplicitMips ? hasCompleteExplicitMips : tex.generateMipmaps);
+    if (useMipmaps && !hasExplicitMips) this._gl.generateMipmap(this._gl.TEXTURE_2D);
     this._gl.texParameteri(
       this._gl.TEXTURE_2D,
       this._gl.TEXTURE_MAG_FILTER,
@@ -320,6 +321,81 @@ export class WebGLTextureManager {
     // enforced in `_setSamplerParams100` by disabling mip filtering when the pyramid is partial.
   }
 
+  /** Uploads an uncompressed RGBA8 mip chain (`tex.rawMipChain`) in WebGL2. */
+  private _uploadRawMipChain(
+    tex: Texture,
+    glTex: WebGLTexture,
+    quality: QualityConfig | undefined,
+  ): void {
+    const chain = tex.rawMipChain!;
+    this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
+    const hasAuthoredMips = chain.mipData.length > 1;
+    if (hasAuthoredMips) {
+      const levels = quality?.mipmapping === false ? 1 : chain.mipData.length;
+      for (let level = 0; level < levels; level++) {
+        const levelWidth = Math.max(1, chain.width >> level);
+        const levelHeight = Math.max(1, chain.height >> level);
+        this._gl.texImage2D(
+          this._gl.TEXTURE_2D,
+          level,
+          this._gl.RGBA,
+          levelWidth,
+          levelHeight,
+          0,
+          this._gl.RGBA,
+          this._gl.UNSIGNED_BYTE,
+          chain.mipData[level]!,
+        );
+      }
+      this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl2.TEXTURE_MAX_LEVEL, levels - 1);
+      this._setSamplerParams(this._gl.TEXTURE_2D, tex, levels > 1, quality);
+    } else {
+      this._gl.texImage2D(
+        this._gl.TEXTURE_2D,
+        0,
+        this._gl.RGBA,
+        chain.width,
+        chain.height,
+        0,
+        this._gl.RGBA,
+        this._gl.UNSIGNED_BYTE,
+        chain.mipData[0]!,
+      );
+      const useMipmaps = Boolean(quality?.mipmapping && tex.generateMipmaps);
+      if (useMipmaps) this._gl.generateMipmap(this._gl.TEXTURE_2D);
+      this._setSamplerParams(this._gl.TEXTURE_2D, tex, useMipmaps, quality);
+    }
+  }
+
+  /** Uploads an uncompressed RGBA8 mip chain (`tex.rawMipChain`) in WebGL1 with NPOT protection. */
+  private _uploadRawMipChain100(
+    tex: Texture,
+    glTex: WebGLTexture,
+    quality: QualityConfig | undefined,
+  ): void {
+    const chain = tex.rawMipChain!;
+    const isPOT =
+      0 === (chain.width & (chain.width - 1)) && 0 === (chain.height & (chain.height - 1));
+    this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
+    const levels = isPOT && quality?.mipmapping !== false ? chain.mipData.length : 1;
+    for (let level = 0; level < levels; level++) {
+      const levelWidth = Math.max(1, chain.width >> level);
+      const levelHeight = Math.max(1, chain.height >> level);
+      this._gl.texImage2D(
+        this._gl.TEXTURE_2D,
+        level,
+        this._gl.RGBA,
+        levelWidth,
+        levelHeight,
+        0,
+        this._gl.RGBA,
+        this._gl.UNSIGNED_BYTE,
+        chain.mipData[level]!,
+      );
+    }
+    this._setSamplerParams100(tex, quality, { width: chain.width, height: chain.height });
+  }
+
   /** Resolves a `CompressedTextureFormat` to its GL block-compressed internal format for this
    * context, requesting the owning extension on demand. Throws if the device does not expose the
    * required extension (callers with fallbacks should pre-check `supportsCompressedFormat`). */
@@ -387,6 +463,8 @@ export class WebGLTextureManager {
           width: tex.compressedImage.width,
           height: tex.compressedImage.height,
         });
+      } else if (tex.rawMipChain) {
+        this._uploadRawMipChain100(tex, glTex, quality);
       } else {
         // Guaranteed defined here: `_fastPath100()` already returned early for a
         // texture with no `.image` (TS can't carry that narrowing across the method call).
@@ -404,19 +482,23 @@ export class WebGLTextureManager {
       }
       this._texCache.set(tex, glTex);
     } else if (tex.needsUpdate && !tex.compressedImage) {
-      // Guaranteed defined here: `_fastPath100()` already returned early for a
-      // texture with no `.image` (TS can't carry that narrowing across the method call).
-      const img = tex.image!;
-      this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
-      this._gl.texImage2D(
-        this._gl.TEXTURE_2D,
-        0,
-        this._gl.RGBA,
-        this._gl.RGBA,
-        this._gl.UNSIGNED_BYTE,
-        img,
-      );
-      this._setSamplerParams100(tex, quality);
+      if (tex.rawMipChain) {
+        this._uploadRawMipChain100(tex, glTex, quality);
+      } else {
+        // Guaranteed defined here: `_fastPath100()` already returned early for a
+        // texture with no `.image` (TS can't carry that narrowing across the method call).
+        const img = tex.image!;
+        this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
+        this._gl.texImage2D(
+          this._gl.TEXTURE_2D,
+          0,
+          this._gl.RGBA,
+          this._gl.RGBA,
+          this._gl.UNSIGNED_BYTE,
+          img,
+        );
+        this._setSamplerParams100(tex, quality);
+      }
       tex.needsUpdate = false;
     }
     return glTex;
@@ -447,6 +529,8 @@ export class WebGLTextureManager {
           tex.compressedImage !== undefined &&
           tex.compressedImage.mipData.length > 1;
         this._setSamplerParams(this._gl.TEXTURE_2D, tex, Boolean(useCompressedMips), quality);
+      } else if (tex.rawMipChain) {
+        this._uploadRawMipChain(tex, glTex, quality);
       } else {
         this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
         this._gl.texImage2D(
@@ -470,6 +554,8 @@ export class WebGLTextureManager {
     } else if (tex.needsUpdate && !tex.compressedImage) {
       if (isTextureArray(tex)) {
         this._uploadTextureArray(tex, glTex, quality);
+      } else if (tex.rawMipChain) {
+        this._uploadRawMipChain(tex, glTex, quality);
       } else {
         this._gl.bindTexture(this._gl.TEXTURE_2D, glTex);
         this._gl.texImage2D(

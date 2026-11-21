@@ -1,6 +1,7 @@
 import { Object3D } from "../Object3D.js";
 import type { Scene } from "../Scene.js";
-import { MAX_SKINNED_BONES, type Skeleton } from "./Skeleton.js";
+import type { Bone } from "./Bone.js";
+import { MAX_SKINNED_BONES, Skeleton } from "./Skeleton.js";
 import { Matrix4, MathPool } from "../../math/index.js";
 import { BoundingBox } from "../../physix/index.js";
 
@@ -12,6 +13,15 @@ export class SkinnedMesh extends Object3D {
   public skeleton?: Skeleton;
   /** The initial bind matrix of the mesh. */
   public bindMatrix: Matrix4 = new Matrix4();
+  /**
+   * Per-mesh flattened bone matrices (`bones.length * 16`), isolated from other `SkinnedMesh`es
+   * that share the same `Skeleton` instance (AN03).
+   */
+  public boneMatrices: Float32Array = new Float32Array(16);
+
+  private _lastBoundsBoneMatrices: Float32Array | undefined = undefined;
+  private _lastBoundsWorldMatrix: Float32Array = new Float32Array(16);
+  private _hasBoundsSnapshot: boolean = false;
 
   constructor(name?: string) {
     super(name);
@@ -28,13 +38,114 @@ export class SkinnedMesh extends Object3D {
   }
 
   /**
-   * Binds a skeleton to this mesh.
+   * Binds a skeleton to this mesh and sizes its per-mesh `boneMatrices` buffer.
    */
   public bind(skeleton: Skeleton, bindMatrix?: Matrix4): void {
     this.skeleton = skeleton;
+    const requiredFloats = Math.max(1, skeleton.bones.length) * 16;
+    if (this.boneMatrices.length !== requiredFloats) {
+      this.boneMatrices = new Float32Array(requiredFloats);
+    }
+    this._hasBoundsSnapshot = false;
     if (bindMatrix) {
       this.bindMatrix.data.set(bindMatrix.data);
     }
+  }
+
+  /**
+   * Computes this mesh's isolated `boneMatrices` from its skeleton and refreshes pose-aware bounds
+   * whenever the bone pose or world matrix changed since the last bounds update (AN03 / AN04).
+   * Zero-allocation in steady state.
+   */
+  public updateSkinning(): void {
+    if (!this.skeleton) return;
+    const requiredFloats = Math.max(1, this.skeleton.bones.length) * 16;
+    if (this.boneMatrices.length !== requiredFloats) {
+      this.boneMatrices = new Float32Array(requiredFloats);
+      this._hasBoundsSnapshot = false;
+    }
+    this.skeleton.update(this.worldMatrix, this.boneMatrices);
+
+    if (!this.isCollidable || !this.geometry) return;
+
+    const bm = this.boneMatrices;
+    const wm = this.worldMatrix.data;
+    let dirty = !this.bounds || !this._hasBoundsSnapshot;
+    if (!dirty) {
+      const prevBm = this._lastBoundsBoneMatrices;
+      const prevWm = this._lastBoundsWorldMatrix;
+      if (!prevBm || prevBm.length !== bm.length) {
+        dirty = true;
+      } else {
+        for (let i = 0; i < 16; i++) {
+          if (wm[i] !== prevWm[i]) {
+            dirty = true;
+            break;
+          }
+        }
+        if (!dirty) {
+          for (let i = 0; i < bm.length; i++) {
+            if (bm[i] !== prevBm[i]) {
+              dirty = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (dirty) {
+      this.computeBounds();
+      if (!this._lastBoundsBoneMatrices || this._lastBoundsBoneMatrices.length !== bm.length) {
+        this._lastBoundsBoneMatrices = new Float32Array(bm.length);
+      }
+      this._lastBoundsBoneMatrices.set(bm);
+      this._lastBoundsWorldMatrix.set(wm);
+      this._hasBoundsSnapshot = true;
+    }
+  }
+
+  /** @inheritdoc */
+  protected override _rebindAfterClone(
+    cloneMap: Map<Object3D, Object3D>,
+    skeletonMap: Map<object, object>,
+  ): void {
+    this._lastBoundsBoneMatrices = undefined;
+    this._lastBoundsWorldMatrix = new Float32Array(16);
+    this._hasBoundsSnapshot = false;
+    this.boneMatrices = new Float32Array(16);
+
+    const origSkeleton = this.skeleton;
+    if (!origSkeleton) return;
+
+    let targetSkeleton = skeletonMap.get(origSkeleton) as Skeleton | undefined;
+    if (!targetSkeleton) {
+      let anyRebound = false;
+      const reboundBones: Bone[] = new Array(origSkeleton.bones.length);
+      for (let i = 0; i < origSkeleton.bones.length; i++) {
+        const origBone = origSkeleton.bones[i]!;
+        const clonedBone = cloneMap.get(origBone) as Bone | undefined;
+        if (clonedBone) {
+          reboundBones[i] = clonedBone;
+          anyRebound = true;
+        } else {
+          reboundBones[i] = origBone;
+        }
+      }
+      if (anyRebound) {
+        const clonedInverses = origSkeleton.boneInverses.map((inv) => {
+          const copy = new Matrix4();
+          copy.data.set(inv.data);
+          return copy;
+        });
+        targetSkeleton = new Skeleton(reboundBones, clonedInverses);
+      } else {
+        targetSkeleton = origSkeleton;
+      }
+      skeletonMap.set(origSkeleton, targetSkeleton);
+    }
+
+    this.bind(targetSkeleton, this.bindMatrix);
   }
 
   /**

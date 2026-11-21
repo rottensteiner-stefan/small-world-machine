@@ -24,6 +24,13 @@ export interface DracoDecoderConfig {
   wasmBinary?: ArrayBuffer | undefined;
 }
 
+export interface DracoDecodeOptions {
+  /** Per-call alternate `draco_decoder.wasm` bytes (overrides static config for multi-engine isolation). */
+  wasmBinary?: ArrayBuffer | undefined;
+  /** Per-call custom decoding handler (overrides static handler for multi-engine isolation). */
+  customHandler?: DracoDecodeHandler | undefined;
+}
+
 /**
  * DracoDecoder manages Draco decompression for glTF primitives. Real Draco bitstreams are decoded
  * with the vendored WebAssembly decoder (`DracoWasmDecoder`, main thread); applications can
@@ -80,9 +87,11 @@ export class DracoDecoder {
   public static async decode(
     buffer: ArrayBuffer,
     attributeIds: DracoAttributeMapping,
+    options?: DracoDecodeOptions,
   ): Promise<GeometryDataInterface> {
-    if (this._customHandler) {
-      return this._customHandler(buffer, attributeIds);
+    const customHandler = options?.customHandler ?? this._customHandler;
+    if (customHandler) {
+      return customHandler(buffer, attributeIds);
     }
 
     const view = new DataView(buffer);
@@ -99,9 +108,8 @@ export class DracoDecoder {
         // Lazy: DracoWasmDecoder imports this module (createGeometryData), and the wasm glue is
         // only worth loading once a real bitstream shows up.
         const { DracoWasmDecoder } = await import("./DracoWasmDecoder.js");
-        const wasmConfig = this._config.wasmBinary
-          ? { wasmBinary: this._config.wasmBinary }
-          : undefined;
+        const wasmBinary = options?.wasmBinary ?? this._config.wasmBinary;
+        const wasmConfig = wasmBinary ? { wasmBinary } : undefined;
         return DracoWasmDecoder.decode(buffer, attributeIds, wasmConfig);
       }
 

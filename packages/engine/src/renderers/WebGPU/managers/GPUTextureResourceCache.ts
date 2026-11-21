@@ -157,6 +157,10 @@ export class GPUTextureResourceCache {
       const entry = this._getOrCreateCompressedEntry(tex, quality);
       return entry.view;
     }
+    if (tex.rawMipChain) {
+      const entry = this._getOrCreateRawMipEntry(tex, quality);
+      return entry.view;
+    }
     if (!tex.image) return this._fallback.whiteTextureView;
     let entry = this._textureViewCache.get(tex);
     if (!entry) {
@@ -399,6 +403,80 @@ export class GPUTextureResourceCache {
   }
 
   /**
+   * Resolves and caches a raw RGBA8 mip-chain texture (`Texture.rawMipChain`), uploading every
+   * supplied mip level directly via `queue.writeTexture` (or generating mips when only level 0 is
+   * provided and `generateMipmaps` is enabled).
+   */
+  private _getOrCreateRawMipEntry(
+    tex: Texture,
+    quality: QualityConfig | undefined,
+  ): {
+    texture: GPUTexture;
+    view: GPUTextureView;
+    mipLevelCount: number;
+    width: number;
+    height: number;
+  } {
+    const chain = tex.rawMipChain!;
+    const existing = this._textureViewCache.get(tex);
+    if (existing && !tex.needsUpdate) return existing;
+
+    const maxMipLevels = this.computeMipLevelCount(chain.width, chain.height);
+    const hasAuthoredMips = chain.mipData.length > 1;
+    const mipLevelCount = hasAuthoredMips
+      ? quality?.mipmapping === false
+        ? 1
+        : Math.min(chain.mipData.length, maxMipLevels)
+      : quality?.mipmapping && tex.generateMipmaps
+        ? maxMipLevels
+        : 1;
+
+    if (existing) {
+      existing.texture.destroy?.();
+    }
+
+    const usage =
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.COPY_DST |
+      (!hasAuthoredMips && mipLevelCount > 1 ? GPUTextureUsage.RENDER_ATTACHMENT : 0);
+
+    const texture = this._device.createTexture({
+      size: [chain.width, chain.height],
+      format: "rgba8unorm",
+      mipLevelCount,
+      usage,
+    });
+
+    const uploadCount = hasAuthoredMips ? mipLevelCount : 1;
+    for (let level = 0; level < uploadCount; level++) {
+      const levelWidth = Math.max(1, chain.width >> level);
+      const levelHeight = Math.max(1, chain.height >> level);
+      this._device.queue.writeTexture(
+        { texture, mipLevel: level },
+        chain.mipData[level]!,
+        { offset: 0, bytesPerRow: levelWidth * 4, rowsPerImage: levelHeight },
+        [levelWidth, levelHeight],
+      );
+    }
+
+    if (!hasAuthoredMips && mipLevelCount > 1) {
+      this.generateMipmaps(texture, mipLevelCount);
+    }
+
+    const view = texture.createView();
+    const entry = {
+      texture,
+      view,
+      mipLevelCount,
+      width: chain.width,
+      height: chain.height,
+    };
+    this._textureViewCache.set(tex, entry);
+    tex.needsUpdate = false;
+    return entry;
+  }
+
+  /**
    * Texel-block stride for `queue.writeTexture` on block-compressed formats. For these formats
    * the source is a flat array of 4x4 texel blocks; `bytesPerRow` is the byte stride between
    * successive *block rows* (columns across × bytes-per-block) and `rowsPerImage` is the number
@@ -469,7 +547,7 @@ export class GPUTextureResourceCache {
     quality: QualityConfig | undefined,
   ): GPUTextureView {
     if (quality?.disableTextures) return this._fallback.flatNormalTextureView;
-    if (!tex || !tex.isLoaded || (!tex.image && !tex.compressedImage)) {
+    if (!tex || !tex.isLoaded || (!tex.image && !tex.compressedImage && !tex.rawMipChain)) {
       return this._fallback.flatNormalTextureView;
     }
     // The quality config carries `mipmapping`: without it every normal map was uploaded with a

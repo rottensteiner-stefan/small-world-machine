@@ -72,7 +72,8 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
         vec2f(0.0),
         vec2f(1.0)
     );
-    let rectPx = (uvMax - uvMin) * global.resolution.xy;
+    let baseDims = vec2f(textureDimensions(hzbTex, 0u));
+    let rectPx = (uvMax - uvMin) * baseDims;
     let extentPx = max(max(rectPx.x, rectPx.y), 1.0);
 
     // Mip whose texel is at least as large as the rect: the rect then touches at most 2x2 texels,
@@ -83,7 +84,6 @@ fn testVisibility(@builtin(global_invocation_id) id: vec3u) {
     // mip-L texel t to mip-0 texels [t*2^L, (t+1)*2^L)). Directly computing uv * mipDims drifts
     // by up to one full texel on NPOT bases (1080p: mip 9 is 2 px wide); deriving from BASE dims
     // and shifting right is exact.
-    let baseDims = vec2f(textureDimensions(hzbTex, 0u));
     let mipDimsI = vec2i(textureDimensions(hzbTex, mip));
     let maxCoord = mipDimsI - vec2i(1);
     let shift = vec2u(mip);

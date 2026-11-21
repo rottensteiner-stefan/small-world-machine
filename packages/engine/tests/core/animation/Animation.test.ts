@@ -11,6 +11,8 @@ import {
 import { Object3D } from "../../../src/core/Object3D.js";
 import { Scene } from "../../../src/core/Scene.js";
 import { Matrix4 } from "../../../src/math/Matrix4.js";
+import { ModelGeometry } from "../../../src/geometry/index.js";
+import type { BoundingBox } from "../../../src/physix/index.js";
 
 describe("Skeletal Animation System", () => {
   it("should create bones and compute skeleton matrices", () => {
@@ -115,7 +117,7 @@ describe("Skeletal Animation System", () => {
 
     // If skinning were computed inside updateMatrixWorld() during the single
     // top-down pass, this would still read Hips' pre-update (identity) matrix.
-    expect(skeleton.boneMatrices[13]).toBeCloseTo(5);
+    expect(skinnedMesh.boneMatrices[13]).toBeCloseTo(5);
   });
 
   it("should bind a track's mixamorigN: target name to a node with a differently-numbered mixamorig suffix", () => {
@@ -227,12 +229,7 @@ describe("Skeletal Animation System", () => {
     // k0: in=(99, 99, 99), v0=(1, 2, 3), b0=(4, 0, -2)
     // k1: a1=(2, 4, 0), v1=(5, 6, 7), out=(88, 88, 88)
     const transValues = new Float32Array([
-      99, 99, 99,
-      1, 2, 3,
-      4, 0, -2,
-      2, 4, 0,
-      5, 6, 7,
-      88, 88, 88,
+      99, 99, 99, 1, 2, 3, 4, 0, -2, 2, 4, 0, 5, 6, 7, 88, 88, 88,
     ]);
     const transTrack = new KeyframeTrack("Bone", "translation", times, transValues, "CUBICSPLINE");
 
@@ -266,12 +263,30 @@ describe("Skeletal Animation System", () => {
     // k1: a1=(0,1,0,0), v1=(0,0.70710678,0,0.70710678), out=(5,6,7,8)
     const s2 = Math.SQRT1_2;
     const rotValues = new Float32Array([
-      1, 2, 3, 4,
-      0, 0, 0, 1,
-      0, 1, 0, 0,
-      0, 1, 0, 0,
-      0, s2, 0, s2,
-      5, 6, 7, 8,
+      1,
+      2,
+      3,
+      4,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      s2,
+      0,
+      s2,
+      5,
+      6,
+      7,
+      8,
     ]);
     const rotTrack = new KeyframeTrack("Bone", "rotation", times, rotValues, "CUBICSPLINE");
 
@@ -344,5 +359,161 @@ describe("Skeletal Animation System", () => {
 
     expect(nodeA.position.x).toBeCloseTo(0);
     expect(nodeB.position.x).toBeCloseTo(5);
+  });
+
+  it("handles duplicate keyframe timestamps without NaN (AN01) and resets empty tracks to identity (AN11)", () => {
+    const dupTrack = new KeyframeTrack(
+      "Bone",
+      "translation",
+      new Float32Array([0, 0.5, 0.5, 1.0]),
+      new Float32Array([0, 0, 0, 5, 0, 0, 10, 0, 0, 20, 0, 0]),
+      "LINEAR",
+    );
+    const v = dupTrack.sampleVector(0.5);
+    expect(Number.isFinite(v.x)).toBe(true);
+    expect(Number.isFinite(v.y)).toBe(true);
+    expect(Number.isFinite(v.z)).toBe(true);
+
+    const emptyQuatTrack = new KeyframeTrack(
+      "Bone",
+      "rotation",
+      new Float32Array(0),
+      new Float32Array(0),
+    );
+    const q = emptyQuatTrack.sampleQuaternion(0.5);
+    expect([q.x, q.y, q.z, q.w]).toEqual([0, 0, 0, 1]);
+
+    const emptyScaleTrack = new KeyframeTrack(
+      "Bone",
+      "scale",
+      new Float32Array(0),
+      new Float32Array(0),
+    );
+    const s = emptyScaleTrack.sampleVector(0.5);
+    expect([s.x, s.y, s.z]).toEqual([1, 1, 1]);
+  });
+
+  it("isolates per-SkinnedMesh boneMatrices when sharing one Skeleton (AN03) and pads shorter boneInverses (AN10)", () => {
+    const b0 = new Bone("B0");
+    const b1 = new Bone("B1");
+    b0.position.set(0, 2, 0);
+    b1.position.set(0, 4, 0);
+    const skeleton = new Skeleton([b0, b1], [new Matrix4()]);
+    expect(skeleton.boneInverses).toHaveLength(2);
+
+    const meshA = new SkinnedMesh("MeshA");
+    const meshB = new SkinnedMesh("MeshB");
+    meshA.position.set(10, 0, 0);
+    meshB.position.set(-10, 0, 0);
+    meshA.bind(skeleton);
+    meshB.bind(skeleton);
+
+    const scene = new Scene();
+    scene.add(b0, b1, meshA, meshB);
+    scene.update(0);
+
+    // invMeshWorld * boneWorld: meshA at +10 sees bone at x=-10; meshB at -10 sees bone at x=+10.
+    expect(meshA.boneMatrices[12]).toBeCloseTo(-10, 5);
+    expect(meshB.boneMatrices[12]).toBeCloseTo(10, 5);
+    expect(meshA.boneMatrices[13]).toBeCloseTo(2, 5);
+    expect(meshB.boneMatrices[13]).toBeCloseTo(2, 5);
+  });
+
+  it("refreshes SkinnedMesh bounds in Scene.update() after bone movement without dynamicOctree (AN04)", () => {
+    const bone = new Bone("RootBone");
+    const skeleton = new Skeleton([bone]);
+    const mesh = new SkinnedMesh("AnimChar");
+    mesh.geometry = new ModelGeometry(
+      new Float32Array([-1, -1, -1, 1, 1, 1, 0, 1, 0]),
+      new Float32Array([0, 0, 1, 1, 0, 1]),
+      new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0]),
+      new Uint16Array([0, 1, 2]),
+    ).getGeometryData();
+    mesh.bind(skeleton);
+
+    const scene = new Scene();
+    scene.add(bone, mesh);
+    scene.update(0);
+    expect((mesh.bounds as BoundingBox).max.x).toBeCloseTo(1, 4);
+
+    bone.position.set(50, 0, 0);
+    scene.update(0.016);
+    expect((mesh.bounds as BoundingBox).min.x).toBeCloseTo(49, 4);
+    expect((mesh.bounds as BoundingBox).max.x).toBeCloseTo(51, 4);
+  });
+
+  it("terminates non-looping zero-duration clips and keeps looping ones at t=0 (AN07)", () => {
+    const root = new Object3D("Root");
+    const node = new Object3D("Target");
+    root.add(node);
+    const track = new KeyframeTrack(
+      "Target",
+      "translation",
+      new Float32Array([0]),
+      new Float32Array([7, 0, 0]),
+    );
+    const clip = new AnimationClip("Pose", 0, [track]);
+    const mixer = new AnimationMixer(root);
+    const action = mixer.clipAction(clip);
+    action.setLoop(false).play();
+    mixer.update(0.5);
+    expect(action.time).toBe(0);
+    expect(action.isPlaying).toBe(false);
+    expect(node.position.x).toBeCloseTo(7, 5);
+
+    action.setLoop(true).play();
+    mixer.update(2.0);
+    expect(action.time).toBe(0);
+    expect(action.isPlaying).toBe(true);
+  });
+
+  it("blends partially weighted single action against rest pose when totalWeight < 1 (AN08)", () => {
+    const root = new Object3D("Hero");
+    const arm = new Bone("Arm");
+    arm.position.set(0, 0, 0);
+    root.add(arm);
+
+    const track = new KeyframeTrack(
+      "Arm",
+      "translation",
+      new Float32Array([0, 1]),
+      new Float32Array([20, 0, 0, 20, 0, 0]),
+    );
+    const clip = new AnimationClip("Reach", 1, [track]);
+    const mixer = new AnimationMixer(root);
+    const action = mixer.clipAction(clip);
+    action.weight = 0.25;
+    action.play();
+
+    mixer.update(0.5);
+    expect(arm.position.x).toBeCloseTo(5, 5);
+  });
+
+  it("rebinds cloned SkinnedMeshes to cloned Bone nodes during Object3D.clone() (AN13)", () => {
+    const rig = new Object3D("Rig");
+    const rootBone = new Bone("Hips");
+    const skeleton = new Skeleton([rootBone]);
+    const mesh = new SkinnedMesh("Body");
+    mesh.bind(skeleton);
+    rig.add(rootBone, mesh);
+
+    const clonedRig = rig.clone();
+    const clonedBone = clonedRig.getObjectByName("Hips") as Bone;
+    const clonedMesh = clonedRig.getObjectByName("Body") as SkinnedMesh;
+
+    expect(clonedBone).not.toBe(rootBone);
+    expect(clonedMesh.skeleton).toBeDefined();
+    expect(clonedMesh.skeleton).not.toBe(skeleton);
+    expect(clonedMesh.skeleton!.bones[0]).toBe(clonedBone);
+    expect(clonedMesh.boneMatrices).not.toBe(mesh.boneMatrices);
+
+    // Moving cloned bone affects only clonedMesh, not original mesh.
+    clonedBone.position.set(0, 12, 0);
+    rig.updateMatrixWorld(true);
+    clonedRig.updateMatrixWorld(true);
+    mesh.updateSkinning();
+    clonedMesh.updateSkinning();
+    expect(mesh.boneMatrices[13]).toBeCloseTo(0, 5);
+    expect(clonedMesh.boneMatrices[13]).toBeCloseTo(12, 5);
   });
 });

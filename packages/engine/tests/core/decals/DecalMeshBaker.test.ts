@@ -289,6 +289,35 @@ describe("bakeSceneDecals", () => {
     expect(decal.isVisible).toBe(false);
   });
 
+  it("transforms baked meshes into local space when root has a non-identity transform", () => {
+    const root = new Object3D("TransformedRoot");
+    root.setPosition(10, 3, -4).setRotation(0, Math.PI / 2, 0);
+    const floor = floorMesh();
+    const decal = makeDecal();
+    root.add(floor, decal);
+
+    const baked = bakeSceneDecals(root);
+    expect(baked).toHaveLength(1);
+    const mesh = baked[0]!;
+    root.updateMatrixWorld(true);
+
+    // Baked mesh world position must match the decal's world position (not double-transformed by root).
+    expect(mesh.worldMatrix.data[12]).toBeCloseTo(decal.worldMatrix.data[12]!, 4);
+    expect(mesh.worldMatrix.data[13]).toBeCloseTo(decal.worldMatrix.data[13]!, 4);
+    expect(mesh.worldMatrix.data[14]).toBeCloseTo(decal.worldMatrix.data[14]!, 4);
+
+    // Every baked vertex transformed by mesh.worldMatrix must lie on the floor's world plane y = 3 + 0.002.
+    const m = mesh.worldMatrix.data;
+    const verts = mesh.geometry!.vertices;
+    for (let i = 0; i < verts.length; i += 3) {
+      const vx = verts[i]!;
+      const vy = verts[i + 1]!;
+      const vz = verts[i + 2]!;
+      const wy = m[1]! * vx + m[5]! * vy + m[9]! * vz + m[13]!;
+      expect(wy).toBeCloseTo(3.002, 4);
+    }
+  });
+
   it("keeps the box when hideBakedDecals is false and ignores decals that hit nothing", () => {
     const root = new Object3D("Root");
     const decal = makeDecal();

@@ -48,22 +48,28 @@ export class AnimationAction {
   public update(deltaTime: number): void {
     if (!this.isPlaying || this.weight <= 0) return;
 
+    if (this.clip.duration <= 0) {
+      this.time = 0;
+      if (!this.loop) {
+        this.isPlaying = false;
+      }
+      return;
+    }
+
     this.time += deltaTime * this.timeScale;
 
-    if (this.clip.duration > 0) {
-      if (this.loop) {
-        this.time = this.time % this.clip.duration;
-        if (this.time < 0) {
-          this.time += this.clip.duration;
-        }
-      } else {
-        if (this.time > this.clip.duration) {
-          this.time = this.clip.duration;
-          this.isPlaying = false;
-        } else if (this.time < 0) {
-          this.time = 0;
-          this.isPlaying = false;
-        }
+    if (this.loop) {
+      this.time = this.time % this.clip.duration;
+      if (this.time < 0) {
+        this.time += this.clip.duration;
+      }
+    } else {
+      if (this.time > this.clip.duration) {
+        this.time = this.clip.duration;
+        this.isPlaying = false;
+      } else if (this.time < 0) {
+        this.time = 0;
+        this.isPlaying = false;
       }
     }
   }

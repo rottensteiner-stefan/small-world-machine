@@ -47,8 +47,10 @@ interface RowMap {
   srcBys: number[];
   srcJs: number[];
   allMapped: boolean;
-  /** Source block index of output row 0 (the dominant content block). */
+  /** Dominant source block index (source block contributing the most rows to this output block). */
   dominant: number;
+  /** Source row inside `dominant` for each output row (never mixes foreign-block selectors with dominant endpoints). */
+  dominantJs: number[];
 }
 
 function rowMapFor(by: number, height: number): RowMap {
@@ -65,7 +67,46 @@ function rowMapFor(by: number, height: number): RowMap {
       allMapped = false;
     }
   }
-  return { srcBys, srcJs, allMapped, dominant: srcBys[0]! };
+
+  // Pick the source block that contributes the majority of mapped rows (ties break to row 0).
+  const firstBlock = srcBys[0]!;
+  let firstCount = 0;
+  let otherBlock = -1;
+  let otherCount = 0;
+  for (let r = 0; r < 4; r++) {
+    const sb = srcBys[r]!;
+    if (sb === -1) continue;
+    if (sb === firstBlock) {
+      firstCount++;
+    } else {
+      otherBlock = sb;
+      otherCount++;
+    }
+  }
+  const dominant = otherCount > firstCount ? otherBlock : firstBlock;
+
+  // Map every output row to its exact source row when it belongs to `dominant`, otherwise clamp
+  // to the nearest row inside `dominant` so selectors are never decoded against foreign endpoints.
+  const dominantJs = [0, 0, 0, 0];
+  for (let r = 0; r < 4; r++) {
+    if (srcBys[r] === dominant) {
+      dominantJs[r] = srcJs[r]!;
+      continue;
+    }
+    let bestDist = 8;
+    let bestJ = 0;
+    for (let k = 0; k < 4; k++) {
+      if (srcBys[k] !== dominant) continue;
+      const dist = Math.abs(k - r);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestJ = srcJs[k]!;
+      }
+    }
+    dominantJs[r] = bestJ;
+  }
+
+  return { srcBys, srcJs, allMapped, dominant, dominantJs };
 }
 
 /** Block index in the plane buffer for column `bx` / block row `by`. */
@@ -97,18 +138,15 @@ function mirrorBc1Plane(data: Uint8Array, width: number, height: number): Uint8A
       const map = rowMapFor(by, height);
       const dst = blockIndexOf(bx, by, blocksX) * BC1_BLOCK_BYTES;
       const src = blockIndexOf(bx, map.dominant, blocksX) * BC1_BLOCK_BYTES;
-      // Color words always come from the dominant block.
+      // Color words always come from the dominant block; every selector row comes from the same
+      // block via `dominantJs` so selectors are never mismatched against foreign endpoints.
       out[dst] = data[src]!;
       out[dst + 1] = data[src + 1]!;
       out[dst + 2] = data[src + 2]!;
       out[dst + 3] = data[src + 3]!;
       for (let r = 0; r < 4; r++) {
-        const sbY = map.srcBys[r]!;
-        if (sbY === -1) continue;
-        const rowByte = isSingleSource(map)
-          ? data[src + 4 + (3 - r)]!
-          : data[blockIndexOf(bx, sbY, blocksX) * BC1_BLOCK_BYTES + 4 + map.srcJs[r]!]!;
-        out[dst + 4 + r] = rowByte;
+        if (map.srcBys[r] === -1) continue;
+        out[dst + 4 + r] = data[src + 4 + map.dominantJs[r]!]!;
       }
     }
   }
@@ -137,7 +175,8 @@ function mirrorBc3Plane(data: Uint8Array, width: number, height: number): Uint8A
       const map = rowMapFor(by, height);
       const dst = blockIndexOf(bx, by, blocksX) * BLOCK4;
       const src = blockIndexOf(bx, map.dominant, blocksX) * BLOCK4;
-      // Alpha endpoints + color words from the dominant block.
+      // Alpha endpoints + color words come from the dominant block; every row's color and alpha
+      // selectors are sourced from `src` via `dominantJs` to avoid cross-block endpoint mixing.
       out[dst] = data[src]!;
       out[dst + 1] = data[src + 1]!;
       out[dst + 8] = data[src + 8]!;
@@ -145,16 +184,11 @@ function mirrorBc3Plane(data: Uint8Array, width: number, height: number): Uint8A
       out[dst + 10] = data[src + 10]!;
       out[dst + 11] = data[src + 11]!;
       for (let r = 0; r < 4; r++) {
-        const sbY = map.srcBys[r]!;
-        if (sbY === -1) continue;
-        const sbOff = blockIndexOf(bx, sbY, blocksX) * BLOCK4;
-        const colorRow = data[sbOff + 12 + map.srcJs[r]!]!;
-        out[dst + 12 + r] = colorRow;
+        if (map.srcBys[r] === -1) continue;
+        const j = map.dominantJs[r]!;
+        out[dst + 12 + r] = data[src + 12 + j]!;
         for (let x = 0; x < 4; x++) {
-          const j = isSingleSource(map) ? 3 - r : map.srcJs[r]!;
-          // Non-aligned rows may pull alpha selectors from another block.
-          const alphaFrom = isSingleSource(map) ? sbOff : blockIndexOf(bx, sbY, blocksX) * BLOCK4;
-          writeDxt5Alpha(out, dst, x, r, readDxt5Alpha(data, alphaFrom, x, j));
+          writeDxt5Alpha(out, dst, x, r, readDxt5Alpha(data, src, x, j));
         }
       }
     }
@@ -261,15 +295,15 @@ function writeEtcSelector(
   etcPutBits(data, off, bi + 16, 1, (value >> 1) & 1);
 }
 
-/** 3-bit EAC alpha selector of texel (x, y), col-major, MSB-first in bytes 2..7. */
-function readEacAlpha(data: Uint8Array, x: number, y: number): number {
+/** 3-bit EAC alpha selector of texel (x, y), col-major, MSB-first in bytes 2..7 of the block at `off`. */
+function readEacAlpha(data: Uint8Array, off: number, x: number, y: number): number {
   const t = x * 4 + y;
-  return etcGetBits(data, EAC_ALPHA, 45 - 3 * t, 3);
+  return etcGetBits(data, off, 45 - 3 * t, 3);
 }
 
-function writeEacAlpha(data: Uint8Array, x: number, y: number, value: number): void {
+function writeEacAlpha(data: Uint8Array, off: number, x: number, y: number, value: number): void {
   const t = x * 4 + y;
-  etcPutBits(data, EAC_ALPHA, 45 - 3 * t, 3, value);
+  etcPutBits(data, off, 45 - 3 * t, 3, value);
 }
 
 function mirrorEtc2Plane(data: Uint8Array, width: number, height: number): Uint8Array {
@@ -295,13 +329,11 @@ function mirrorEtc2Plane(data: Uint8Array, width: number, height: number): Uint8
       }
 
       for (let r = 0; r < 4; r++) {
-        const sbY = map.srcBys[r]!;
-        if (sbY === -1) continue;
-        const j = single ? 3 - r : map.srcJs[r]!;
-        const sbOff = blockIndexOf(bx, sbY, blocksX) * ET2;
+        if (map.srcBys[r] === -1) continue;
+        const j = map.dominantJs[r]!;
         for (let x = 0; x < 4; x++) {
-          writeEacAlpha(out, x, r, readEacAlpha(data, x, j));
-          writeEtcSelector(out, dst + ETC_RGB, x, r, readEtcSelector(data, sbOff + ETC_RGB, x, j));
+          writeEacAlpha(out, dst + EAC_ALPHA, x, r, readEacAlpha(data, src + EAC_ALPHA, x, j));
+          writeEtcSelector(out, dst + ETC_RGB, x, r, readEtcSelector(data, src + ETC_RGB, x, j));
         }
       }
     }

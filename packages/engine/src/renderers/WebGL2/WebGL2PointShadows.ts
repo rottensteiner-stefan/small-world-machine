@@ -89,7 +89,7 @@ export class WebGL2PointShadows {
     this._cameraFrustum.setFromMatrix(cameraViewProj);
     // The normalised near plane's normal is the view direction of a perspective camera.
     const planes = this._cameraFrustum.planes;
-    this._forward.set(planes[16]!, planes[17]!, planes[18]!);
+    this._forward.set(planes[16]!, planes[17]!, planes[18]!).normalize();
 
     const candidates = this._uboCandidates(pLights);
     const chosen = selectShadowedPointLights(

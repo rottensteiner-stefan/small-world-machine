@@ -135,7 +135,8 @@ describe("C2 ParticleTrailRenderer (Dave D4 — TRAIL-GEOMETRY-VALID)", () => {
     a.update(0.016, new Vector3D(0, 0, 0), new Vector3D(0, 0, 0.5));
     a.update(0.016, new Vector3D(0, 0, 1), new Vector3D(0, 0, 0.5));
     expect(a.liveSamples).toBe(2);
-    for (let f = 0; f < 50; f++) a.update(0.016, new Vector3D(0, 0, 1 + f * 0.1), new Vector3D(0, 0, 0.5));
+    for (let f = 0; f < 50; f++)
+      a.update(0.016, new Vector3D(0, 0, 1 + f * 0.1), new Vector3D(0, 0, 0.5));
     expect(isFiniteMatrix(a)).toBe(true);
     for (let i = 0; i < a.mesh.instanceCount; i++) {
       const off = i * 16;
@@ -147,7 +148,8 @@ describe("C2 ParticleTrailRenderer (Dave D4 — TRAIL-GEOMETRY-VALID)", () => {
     b.update(0.016, new Vector3D(0, 0, 0), new Vector3D(0, 0, -10));
     b.update(0.016, new Vector3D(0, 0, 1), new Vector3D(0, 0, -10));
     expect(b.liveSamples).toBe(2);
-    for (let f = 0; f < 50; f++) b.update(0.016, new Vector3D(0, 0, 1 + f * 0.1), new Vector3D(0, 0, -10));
+    for (let f = 0; f < 50; f++)
+      b.update(0.016, new Vector3D(0, 0, 1 + f * 0.1), new Vector3D(0, 0, -10));
     expect(isFiniteMatrix(b)).toBe(true);
 
     // upLocked mode with a vertical trail: cross(dir||+Y, upAxis) == 0 -> fallback, finite.
@@ -156,8 +158,37 @@ describe("C2 ParticleTrailRenderer (Dave D4 — TRAIL-GEOMETRY-VALID)", () => {
     c.update(0.016, new Vector3D(0, 0, 0), new Vector3D(5, 0, 5));
     c.update(0.016, new Vector3D(0, 1, 0), new Vector3D(5, 0, 5));
     expect(c.liveSamples).toBe(2);
-    for (let f = 0; f < 50; f++) c.update(0.016, new Vector3D(0, 1 + f * 0.1, 0), new Vector3D(5, 0, 5));
+    for (let f = 0; f < 50; f++)
+      c.update(0.016, new Vector3D(0, 1 + f * 0.1, 0), new Vector3D(5, 0, 5));
     expect(isFiniteMatrix(c)).toBe(true);
+  });
+
+  it("produces an orthogonal right-handed Z normal column for out-of-XY 3D trail segments", () => {
+    const trail = makeTrail(8);
+    const cam = new Vector3D(10, 5, 0);
+    // Segment along +Z (out of the XY plane).
+    trail.update(0.016, new Vector3D(0, 0, 0), cam);
+    trail.update(0.016, new Vector3D(0, 0, 2), cam);
+    expect(trail.mesh.instanceCount).toBe(1);
+
+    const m = trail.mesh.instanceMatrices;
+    const rx = m[0]!,
+      ry = m[1]!,
+      rz = m[2]!;
+    const ux = m[4]!,
+      uy = m[5]!,
+      uz = m[6]!;
+    const nx = m[8]!,
+      ny = m[9]!,
+      nz = m[10]!;
+
+    // Z column must be orthogonal to both X (right) and Y (segment dir) and non-zero.
+    expect(Math.hypot(nx, ny, nz)).toBeGreaterThan(1e-4);
+    expect(nx * rx + ny * ry + nz * rz).toBeCloseTo(0, 5);
+    expect(nx * ux + ny * uy + nz * uz).toBeCloseTo(0, 5);
+    // Determinant of the upper 3x3 must be positive (right-handed basis).
+    const det = rx * (uy * nz - uz * ny) - ux * (ry * nz - rz * ny) + nx * (ry * uz - rz * uy);
+    expect(det).toBeGreaterThan(0);
   });
 
   it("instanceData alpha stays in [0,1] (tail fade envelope never overshoots)", () => {

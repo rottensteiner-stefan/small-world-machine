@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { ShadowMode } from "../../src/enums/index.js";
+import { WebGL2ShadowManager } from "../../src/renderers/WebGL2/managers/WebGL2ShadowManager.js";
+import type { WebGLProgramCacheEntry } from "../../src/renderers/gl/managers/WebGLProgramCache.js";
 
 // Repo root derived from this file, so the test passes from any vitest cwd.
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
@@ -100,4 +103,71 @@ describe("EVSM WebGL2 shader branches sit next to the default PCSS path", () => 
       );
     });
   }
+
+  it("guards every GLSL directional/post shadow sampler against proj.z < 0.0 (CS03)", () => {
+    expect(dirShadow).toContain("proj.z < 0.0 || proj.z > 1.0");
+    const shafts = readChunk("packages/engine/src/renderers/post/shaders/LightShafts.frag.glsl");
+    expect(shafts).toContain("proj.z < 0.0 || proj.z > 1.0");
+    const fog = readChunk("packages/engine/src/renderers/post/shaders/VolumetricFog.frag.glsl");
+    expect(fog).toContain("proj.z < 0.0 || proj.z > 1.0");
+    expect(header).toContain("projCoords.z < 0.0 || projCoords.z > 1.0");
+    expect(header).toContain("projCoords.z >= 0.0 && projCoords.z <= 1.0");
+  });
+});
+
+describe("WebGL2ShadowManager EVSM fallback without EXT_color_buffer_float (T08)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("warns once and falls back to PCSS (u_evsmParams.x = 0) when EXT_color_buffer_float is absent", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const writtenEvsmParams: number[][] = [];
+    const paramsLoc = {} as WebGLUniformLocation;
+
+    const fakeGl = {
+      TEXTURE0: 0x84c0,
+      TEXTURE_2D: 0x0de1,
+      getExtension: (name: string): null => {
+        expect(name).toBe("EXT_color_buffer_float");
+        return null;
+      },
+      getUniformLocation: (_prog: WebGLProgram, name: string): WebGLUniformLocation | null =>
+        name === "u_evsmParams" ? paramsLoc : null,
+      uniform4fv: (loc: WebGLUniformLocation | null, data: Float32Array): void => {
+        if (loc === paramsLoc) writtenEvsmParams.push(Array.from(data));
+      },
+      uniform1i: (): void => undefined,
+      activeTexture: (): void => undefined,
+      bindTexture: (): void => undefined,
+    } as unknown as WebGL2RenderingContext;
+
+    const cache = {
+      prog: {} as WebGLProgram,
+      uniforms: new Map<string, WebGLUniformLocation | undefined>([["u_evsmParams", paramsLoc]]),
+      samplerUnits: new Map<string, number>(),
+    } as unknown as WebGLProgramCacheEntry;
+
+    const manager = new WebGL2ShadowManager();
+    manager.bindDirectionalShadowMaps(
+      fakeGl,
+      cache,
+      undefined,
+      false,
+      { shadowMode: ShadowMode.EVSM },
+      16,
+    );
+    manager.bindDirectionalShadowMaps(
+      fakeGl,
+      cache,
+      undefined,
+      false,
+      { shadowMode: ShadowMode.EVSM },
+      16,
+    );
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("EXT_color_buffer_float"));
+    expect(writtenEvsmParams).toHaveLength(2);
+    expect(writtenEvsmParams[0]![0]).toBe(0);
+    expect(writtenEvsmParams[1]![0]).toBe(0);
+  });
 });

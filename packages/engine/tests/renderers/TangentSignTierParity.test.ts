@@ -31,13 +31,17 @@ describe("EP-1 bitangent w-sign tier parity", () => {
     );
   });
 
-  it("web_gl1 folds degenerate tangents to +1 and valid ones to w", () => {
+  it("web_gl1 folds degenerate tangents to +1 and valid ones to w * skinSign * modelSign", () => {
     const gl1 = read(GL1);
-    expect(gl1).toContain("float bitangentSign = length(tangent) < 0.0001 ? 1.0 : a_tangent.w;");
+    expect(gl1).toContain(
+      "float bitangentSign = length(tangent) < 0.0001 ? 1.0 : (a_tangent.w * skinSign * modelSign);",
+    );
   });
 
   it("ComputeToysImporter wgsl shares the corrected contract (select swapped)", () => {
     const src = read(COMPUTE_TOYS);
-    expect(src).toContain("let tangentSign = select(a_tangent.w, 1.0, dot(a_tangent.xyz, a_tangent.xyz) < 0.0001);");
+    expect(src).toContain(
+      "let tangentSign = select(a_tangent.w, 1.0, dot(a_tangent.xyz, a_tangent.xyz) < 0.0001);",
+    );
   });
 });

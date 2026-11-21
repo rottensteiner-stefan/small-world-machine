@@ -1,6 +1,16 @@
 import type { BoundingVolume } from "./BoundingVolume.js";
 import type { Topology } from "../enums/index.js";
 
+/** Per-vertex displacement deltas for one morph target (glTF 2.0 `primitive.targets`). */
+export interface MorphTargetData {
+  /** Position deltas (3 floats per vertex: dx, dy, dz). */
+  positions?: Float32Array | undefined;
+  /** Normal deltas (3 floats per vertex: dnx, dny, dnz). */
+  normals?: Float32Array | undefined;
+  /** Tangent xyz deltas (3 floats per vertex: dtx, dty, dtz, per glTF 2.0 spec). */
+  tangents?: Float32Array | undefined;
+}
+
 export interface GeometryDataInterface {
   /** Vertex position data (x, y, z). Mandatory. */
   vertices: Float32Array;
@@ -31,6 +41,10 @@ export interface GeometryDataInterface {
   joints?: Float32Array | Uint16Array | undefined;
   /** Optional skinning bone weight data (4 weights per vertex). */
   weights?: Float32Array | undefined;
+  /** Optional morph target displacement arrays (glTF `primitive.targets`). */
+  morphTargets?: MorphTargetData[] | undefined;
+  /** Optional human-readable names for morph targets (glTF `mesh.extras.targetNames`). */
+  morphTargetNames?: string[] | undefined;
   /** The topology of the geometry (e.g., TRIANGLE_LIST or LINE_LIST). */
   topology?: Topology;
   /**

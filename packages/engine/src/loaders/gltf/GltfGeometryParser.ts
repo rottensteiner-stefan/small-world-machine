@@ -1,6 +1,6 @@
 import type { GltfJson } from "./types.js";
 import { GltfBinaryParser } from "./GltfBinaryParser.js";
-import type { GeometryDataInterface } from "../../interfaces/index.js";
+import type { GeometryDataInterface, MorphTargetData } from "../../interfaces/index.js";
 import { ModelGeometry } from "../../geometry/index.js";
 import { Topology } from "../../enums/index.js";
 import { getGltfExtensions } from "./GltfExtensionRegistry.js";
@@ -21,23 +21,19 @@ export class GltfGeometryParser {
   ): Promise<GeometryDataInterface | null> {
     const readCtx: GltfReadContext = ctx ?? { json, state: new Map() };
 
-    if (
-      primitive.targets &&
-      primitive.targets.length > 0 &&
-      !readCtx.state.get("warnedMorphTargets")
-    ) {
-      readCtx.state.set("warnedMorphTargets", true);
-      console.warn(
-        "[GltfGeometryParser] glTF morph targets (`primitive.targets`) are not supported and will be ignored.",
-      );
-    }
+    const morphTargets = this._parseMorphTargets(primitive, json, buffers);
 
     // 1. Check if any active extension decodes this geometry (e.g. KHR_draco_mesh_compression)
     const extensions = readCtx.extensions ?? getGltfExtensions();
     for (const plugin of extensions) {
       if (plugin.decodeGeometry) {
         const decoded = await plugin.decodeGeometry(primitive, readCtx, buffers);
-        if (decoded) return decoded;
+        if (decoded) {
+          if (morphTargets && !decoded.morphTargets) {
+            decoded.morphTargets = morphTargets;
+          }
+          return decoded;
+        }
       }
     }
 
@@ -136,7 +132,23 @@ export class GltfGeometryParser {
 
     let finalWeights: Float32Array | undefined;
     if (weights) {
-      finalWeights = weights instanceof Float32Array ? weights : new Float32Array(weights);
+      finalWeights =
+        weights instanceof Float32Array ? new Float32Array(weights) : new Float32Array(weights);
+      // Normalize non-zero skinning weight tuples so vertex weights sum to 1 (glTF 2.0 / AN05).
+      for (let i = 0; i + 3 < finalWeights.length; i += 4) {
+        const w0 = finalWeights[i]!;
+        const w1 = finalWeights[i + 1]!;
+        const w2 = finalWeights[i + 2]!;
+        const w3 = finalWeights[i + 3]!;
+        const sum = w0 + w1 + w2 + w3;
+        if (sum > 1e-6 && Math.abs(sum - 1.0) > 1e-4) {
+          const inv = 1.0 / sum;
+          finalWeights[i] = w0 * inv;
+          finalWeights[i + 1] = w1 * inv;
+          finalWeights[i + 2] = w2 * inv;
+          finalWeights[i + 3] = w3 * inv;
+        }
+      }
     }
 
     const posArray = positions instanceof Float32Array ? positions : new Float32Array(positions);
@@ -179,8 +191,46 @@ export class GltfGeometryParser {
       ...(tanArray ? { tangents: tanArray } : {}),
       ...(headerBounds ? { headerBounds } : {}),
       ...(finalJoints || finalWeights ? { joints: finalJoints, weights: finalWeights } : {}),
+      ...(morphTargets ? { morphTargets } : {}),
       ...(isLines ? { topology: Topology.LINE_LIST } : {}),
     }).getGeometryData();
+  }
+
+  private static _parseMorphTargets(
+    primitive: GltfPrimitiveDef,
+    json: GltfJson,
+    buffers: ArrayBuffer[],
+  ): MorphTargetData[] | undefined {
+    if (!primitive.targets || primitive.targets.length === 0 || !json.accessors) {
+      return undefined;
+    }
+    const targets: MorphTargetData[] = [];
+    for (const target of primitive.targets) {
+      const posRaw =
+        target["POSITION"] !== undefined
+          ? GltfBinaryParser.getBufferData(json.accessors[target["POSITION"]], json, buffers)
+          : undefined;
+      const normRaw =
+        target["NORMAL"] !== undefined
+          ? GltfBinaryParser.getBufferData(json.accessors[target["NORMAL"]], json, buffers)
+          : undefined;
+      const tanRaw =
+        target["TANGENT"] !== undefined
+          ? GltfBinaryParser.getBufferData(json.accessors[target["TANGENT"]], json, buffers)
+          : undefined;
+      targets.push({
+        ...(posRaw
+          ? { positions: posRaw instanceof Float32Array ? posRaw : new Float32Array(posRaw) }
+          : {}),
+        ...(normRaw
+          ? { normals: normRaw instanceof Float32Array ? normRaw : new Float32Array(normRaw) }
+          : {}),
+        ...(tanRaw
+          ? { tangents: tanRaw instanceof Float32Array ? tanRaw : new Float32Array(tanRaw) }
+          : {}),
+      });
+    }
+    return targets;
   }
 
   /**

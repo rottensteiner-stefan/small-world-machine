@@ -263,9 +263,24 @@ export class GltfLoader extends AbstractLoader<Object3D> {
         if (nodeDef.mesh !== undefined && json.meshes && json.meshes[nodeDef.mesh]) {
           const meshDef = json.meshes[nodeDef.mesh];
           if (meshDef) {
+            const targetNames = Array.isArray(meshDef.extras?.targetNames)
+              ? meshDef.extras.targetNames.map((n) => String(n))
+              : undefined;
+            const authoredWeights = nodeDef.weights ?? meshDef.weights;
+            const attachedMeshes: Object3D[] = [];
+            let maxTargetCount = authoredWeights ? authoredWeights.length : 0;
+
             for (const primitive of meshDef.primitives) {
               const geo = await GltfGeometryParser.parseGeometry(primitive, json, buffers, readCtx);
               if (geo) {
+                if (geo.morphTargets && geo.morphTargets.length > 0) {
+                  if (geo.morphTargets.length > maxTargetCount) {
+                    maxTargetCount = geo.morphTargets.length;
+                  }
+                  if (targetNames && !geo.morphTargetNames) {
+                    geo.morphTargetNames = targetNames;
+                  }
+                }
                 const isSkinned =
                   nodeDef.skin !== undefined && skeletons[nodeDef.skin] !== undefined;
                 const meshObj = isSkinned
@@ -297,6 +312,23 @@ export class GltfLoader extends AbstractLoader<Object3D> {
                   (meshObj as SkinnedMesh).bind(skeletons[nodeDef.skin!]!);
                 }
                 obj.add(meshObj);
+                attachedMeshes.push(meshObj);
+              }
+            }
+
+            if (maxTargetCount > 0) {
+              const sharedWeights = new Float32Array(maxTargetCount);
+              if (authoredWeights) {
+                const copyLen = Math.min(maxTargetCount, authoredWeights.length);
+                for (let w = 0; w < copyLen; w++) {
+                  sharedWeights[w] = authoredWeights[w]!;
+                }
+              }
+              // Share one Float32Array between the glTF node (animated by `"weights"` tracks)
+              // and every primitive child mesh so multi-primitive meshes stay in lockstep.
+              obj.morphTargetInfluences = sharedWeights;
+              for (const meshObj of attachedMeshes) {
+                meshObj.morphTargetInfluences = sharedWeights;
               }
             }
           }

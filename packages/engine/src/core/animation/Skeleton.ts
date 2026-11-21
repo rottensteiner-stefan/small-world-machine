@@ -35,11 +35,9 @@ export class Skeleton {
     this.bones = [...bones];
     this.boneInverses = boneInverses ? [...boneInverses] : [];
 
-    // Ensure we have inverse bind matrices for all bones
-    if (this.boneInverses.length === 0) {
-      for (let i = 0; i < this.bones.length; i++) {
-        this.boneInverses.push(this.bones[i]?.inverseBindMatrix ?? new Matrix4());
-      }
+    // Ensure we have inverse bind matrices for all bones, padding shorter arrays (AN10).
+    for (let i = this.boneInverses.length; i < this.bones.length; i++) {
+      this.boneInverses.push(this.bones[i]?.inverseBindMatrix ?? new Matrix4());
     }
 
     this.boneMatrices = new Float32Array(Math.max(1, this.bones.length) * 16);
@@ -48,8 +46,10 @@ export class Skeleton {
   /**
    * Computes the final bone transformation matrices relative to the skinned mesh's world matrix.
    * @param meshWorldMatrix The world matrix of the SkinnedMesh.
+   * @param outMatrices Optional destination buffer (e.g. `SkinnedMesh.boneMatrices`) to keep
+   *   meshes sharing one `Skeleton` isolated from one another (AN03). Defaults to `this.boneMatrices`.
    */
-  public update(meshWorldMatrix?: Matrix4): void {
+  public update(meshWorldMatrix?: Matrix4, outMatrices?: Float32Array): void {
     const invMeshWorld = this._invMeshWorld;
     if (meshWorldMatrix) {
       invMeshWorld.data.set(meshWorldMatrix.data);
@@ -67,7 +67,7 @@ export class Skeleton {
     const bones = this.bones;
     const boneCount = bones.length;
     const boneInverses = this.boneInverses;
-    const boneMatrices = this.boneMatrices;
+    const boneMatrices = outMatrices ?? this.boneMatrices;
 
     for (let i = 0; i < boneCount; i++) {
       const bone = bones[i];

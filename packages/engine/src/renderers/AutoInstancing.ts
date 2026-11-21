@@ -6,11 +6,13 @@ import type { GeometryDataInterface } from "../interfaces/index.js";
 /** Shortest run of same-geometry objects worth one instanced draw instead of per-object draws. */
 export const AUTO_INSTANCING_MIN_RUN = 4;
 
-/** Whether `o` differs from its neighbours only in its world matrix (no skinning, own instances). */
+/** Whether `o` differs from its neighbours only in its world matrix (no skinning, morph targets, or own instances). */
 function isRunCandidate(o: Object3D, requireCastShadow: boolean): boolean {
   return (
     o.geometry !== undefined &&
     !o.geometry.joints &&
+    !(o.geometry.morphTargets && o.geometry.morphTargets.length > 0) &&
+    !o.morphTargetInfluences &&
     !isSkinnedMesh(o) &&
     !isInstancedMesh(o) &&
     (!requireCastShadow || o.castShadow)

@@ -280,6 +280,9 @@ export class ParticleTrailRenderer {
       const ux = this._up.x * length;
       const uy = this._up.y * length;
       const uz = this._up.z * length;
+      const nx = (this._right.y * this._up.z - this._right.z * this._up.y) * segWidth;
+      const ny = (this._right.z * this._up.x - this._right.x * this._up.z) * segWidth;
+      const nz = (this._right.x * this._up.y - this._right.y * this._up.x) * segWidth;
 
       matrices[off] = wx;
       matrices[off + 1] = wy;
@@ -289,9 +292,9 @@ export class ParticleTrailRenderer {
       matrices[off + 5] = uy;
       matrices[off + 6] = uz;
       matrices[off + 7] = 0;
-      matrices[off + 8] = 0;
-      matrices[off + 9] = 0;
-      matrices[off + 10] = segWidth;
+      matrices[off + 8] = nx;
+      matrices[off + 9] = ny;
+      matrices[off + 10] = nz;
       matrices[off + 11] = 0;
       matrices[off + 12] = this._mid.x;
       matrices[off + 13] = this._mid.y;

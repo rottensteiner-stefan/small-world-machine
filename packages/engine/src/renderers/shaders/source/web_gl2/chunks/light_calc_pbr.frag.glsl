@@ -200,7 +200,7 @@ vec3 Lo = vec3(0.0);
         projCoords = projCoords * 0.5 + 0.5;
 
         float shadowA = 1.0;
-        if (projCoords.z <= 1.0 && projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0) {
+        if (projCoords.z >= 0.0 && projCoords.z <= 1.0 && projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0) {
             float col = mod(float(cascadeIndex), cols);
             float row = floor(float(cascadeIndex) / cols);
             vec2 cellMin = vec2(col, row) / cols;
@@ -226,7 +226,7 @@ vec3 Lo = vec3(0.0);
             projCoordsB = projCoordsB * 0.5 + 0.5;
 
             shadowB = 1.0;
-            if (projCoordsB.z <= 1.0 && projCoordsB.x >= 0.0 && projCoordsB.x <= 1.0 && projCoordsB.y >= 0.0 && projCoordsB.y <= 1.0) {
+            if (projCoordsB.z >= 0.0 && projCoordsB.z <= 1.0 && projCoordsB.x >= 0.0 && projCoordsB.x <= 1.0 && projCoordsB.y >= 0.0 && projCoordsB.y <= 1.0) {
                 float colB = mod(float(nextCascade), cols);
                 float rowB = floor(float(nextCascade) / cols);
                 vec2 atlasUVB = (projCoordsB.xy + vec2(colB, rowB)) / cols;

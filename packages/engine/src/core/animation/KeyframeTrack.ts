@@ -2,7 +2,7 @@ import type { Object3D } from "../Object3D.js";
 import { Vector3D } from "../../math/Vector3D.js";
 import { Quaternion } from "../../math/Quaternion.js";
 
-export type TrackType = "translation" | "rotation" | "scale";
+export type TrackType = "translation" | "rotation" | "scale" | "weights";
 export type InterpolationType = "LINEAR" | "STEP" | "CUBICSPLINE";
 
 /**
@@ -51,7 +51,11 @@ export class KeyframeTrack {
       return this._tempQuatA;
     }
     if (this.interpolation === "CUBICSPLINE") {
-      return this._sampleCubicSplineQuaternion(this._segment.i0, this._segment.i1, this._segment.alpha);
+      return this._sampleCubicSplineQuaternion(
+        this._segment.i0,
+        this._segment.i1,
+        this._segment.alpha,
+      );
     }
     this._readQuaternion(this._segment.i0, this._tempQuatA);
     this._readQuaternion(this._segment.i1, this._tempQuatB);
@@ -76,6 +80,84 @@ export class KeyframeTrack {
     this._readVector(this._segment.i0, this._tempVecA);
     this._readVector(this._segment.i1, this._tempVecB);
     return this._tempVecA.lerp(this._tempVecB, this._segment.alpha);
+  }
+
+  /**
+   * Number of morph target weights encoded per keyframe for `property === "weights"` tracks.
+   * Returns 0 for non-weights or empty tracks.
+   */
+  public getWeightCount(): number {
+    if (this.property !== "weights" || this.times.length === 0) return 0;
+    const divisor =
+      this.interpolation === "CUBICSPLINE" ? this.times.length * 3 : this.times.length;
+    return Math.floor(this.values.length / divisor);
+  }
+
+  /**
+   * Evaluates a morph-target `"weights"` track at `time` and writes the resulting weights into
+   * `out` with zero allocation. Returns the number of weights written.
+   */
+  public evaluateWeights(time: number, out: Float32Array | number[]): number {
+    const targetCount = this.getWeightCount();
+    if (targetCount === 0) return 0;
+    const count = Math.min(targetCount, out.length);
+    if (count === 0) return 0;
+
+    this._findSegment(time, this._segment);
+    const { i0, i1, alpha } = this._segment;
+    const values = this.values;
+
+    if (alpha === null) {
+      const offset =
+        this.interpolation === "CUBICSPLINE" ? (i0 * 3 + 1) * targetCount : i0 * targetCount;
+      if (offset + count > values.length) {
+        for (let k = 0; k < count; k++) out[k] = 0;
+        return count;
+      }
+      for (let k = 0; k < count; k++) {
+        out[k] = values[offset + k]!;
+      }
+      return count;
+    }
+
+    if (this.interpolation === "CUBICSPLINE") {
+      const v0Off = (i0 * 3 + 1) * targetCount;
+      const b0Off = (i0 * 3 + 2) * targetCount;
+      const a1Off = (i1 * 3 + 0) * targetCount;
+      const v1Off = (i1 * 3 + 1) * targetCount;
+      if (v1Off + count > values.length || b0Off + count > values.length) {
+        for (let k = 0; k < count; k++) out[k] = 0;
+        return count;
+      }
+      const dt = this.times[i1]! - this.times[i0]!;
+      const s = alpha;
+      const s2 = s * s;
+      const s3 = s2 * s;
+      const c0 = 2 * s3 - 3 * s2 + 1;
+      const c1 = dt * (s3 - 2 * s2 + s);
+      const c2 = -2 * s3 + 3 * s2;
+      const c3 = dt * (s3 - s2);
+      for (let k = 0; k < count; k++) {
+        out[k] =
+          c0 * values[v0Off + k]! +
+          c1 * values[b0Off + k]! +
+          c2 * values[v1Off + k]! +
+          c3 * values[a1Off + k]!;
+      }
+      return count;
+    }
+
+    const off0 = i0 * targetCount;
+    const off1 = i1 * targetCount;
+    if (off1 + count > values.length) {
+      for (let k = 0; k < count; k++) out[k] = 0;
+      return count;
+    }
+    const invA = 1 - alpha;
+    for (let k = 0; k < count; k++) {
+      out[k] = values[off0 + k]! * invA + values[off1 + k]! * alpha;
+    }
+    return count;
   }
 
   /**
@@ -147,15 +229,19 @@ export class KeyframeTrack {
 
     const t0 = times[i0]!;
     const t1 = times[i1]!;
+    const dt = t1 - t0;
     out.i0 = i0;
     out.i1 = i1;
-    out.alpha = (time - t0) / (t1 - t0);
+    out.alpha = dt > 1e-6 ? (time - t0) / dt : 0.0;
   }
 
   private _readQuaternion(index: number, out: Quaternion): void {
     const stride = 4;
     const offset = this.interpolation === "CUBICSPLINE" ? (index * 3 + 1) * stride : index * stride;
-    if (offset + stride > this.values.length) return;
+    if (this.times.length === 0 || offset + stride > this.values.length) {
+      out.set(0, 0, 0, 1);
+      return;
+    }
     out.set(
       this.values[offset + 0]!,
       this.values[offset + 1]!,
@@ -167,7 +253,14 @@ export class KeyframeTrack {
   private _readVector(index: number, out: Vector3D): void {
     const stride = 3;
     const offset = this.interpolation === "CUBICSPLINE" ? (index * 3 + 1) * stride : index * stride;
-    if (offset + stride > this.values.length) return;
+    if (this.times.length === 0 || offset + stride > this.values.length) {
+      if (this.property === "scale") {
+        out.set(1, 1, 1);
+      } else {
+        out.set(0, 0, 0);
+      }
+      return;
+    }
     out.set(this.values[offset + 0]!, this.values[offset + 1]!, this.values[offset + 2]!);
   }
 

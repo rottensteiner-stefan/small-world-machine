@@ -305,4 +305,55 @@ describe("Texture GPU re-upload on needsUpdate", () => {
     ).toBe(true);
     expect(vi.mocked(gl.generateMipmap)).not.toHaveBeenCalled();
   });
+
+  it("uploads Texture.fromRawMipChain across WebGPU, WebGL2, and WebGL1 with NPOT guard (AS03)", () => {
+    const rawMip = Texture.fromRawMipChain({
+      width: 4,
+      height: 4,
+      mipData: [new Uint8Array(4 * 4 * 4), new Uint8Array(2 * 2 * 4), new Uint8Array(1 * 1 * 4)],
+    });
+
+    // WebGPU uploads all 3 mip levels directly via writeTexture and accepts rawMipChain normal maps.
+    const device = makeMockDevice();
+    const fallback = new GPUFallbackResources(device);
+    const gpuTextures = new GPUTextureResourceCache(device, fallback);
+    vi.mocked(device.queue.writeTexture).mockClear();
+    const view = gpuTextures.getNormalTextureView(rawMip, { mipmapping: true } as never);
+    expect(view).not.toBe(fallback.flatNormalTextureView);
+    expect(vi.mocked(device.queue.writeTexture)).toHaveBeenCalledTimes(3);
+
+    // WebGL2 uploads all 3 mip levels and sets TEXTURE_MAX_LEVEL = 2.
+    const gl2 = makeMockGl();
+    const gl2Textures = new WebGLTextureManager(gl2, new Map(), {} as never, {} as never, {
+      dialect: "glsl300",
+    });
+    gl2Textures.getWebGLTexture(rawMip, { mipmapping: true } as never);
+    expect(vi.mocked(gl2.texImage2D)).toHaveBeenCalledTimes(3);
+    expect(
+      vi
+        .mocked(gl2.texParameteri)
+        .mock.calls.some(([, pname, param]) => pname === gl2.TEXTURE_MAX_LEVEL && param === 2),
+    ).toBe(true);
+
+    // WebGL1 NPOT rawMipChain uploads only level 0 and clamps wrap/min filter without mipmaps.
+    const npotRaw = Texture.fromRawMipChain({
+      width: 6,
+      height: 6,
+      mipData: [new Uint8Array(6 * 6 * 4), new Uint8Array(3 * 3 * 4)],
+    });
+    const gl1 = makeMockGl();
+    const gl1Textures = new WebGLTextureManager(gl1, new Map(), {} as never, {} as never, {
+      dialect: "glsl100",
+    });
+    gl1Textures.getWebGLTexture(npotRaw, { mipmapping: true } as never);
+    expect(vi.mocked(gl1.texImage2D)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(gl1.generateMipmap)).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(gl1.texParameteri)
+        .mock.calls.some(
+          ([, pname, param]) => pname === gl1.TEXTURE_WRAP_S && param === gl1.CLAMP_TO_EDGE,
+        ),
+    ).toBe(true);
+  });
 });

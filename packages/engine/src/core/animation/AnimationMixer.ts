@@ -18,6 +18,9 @@ interface VecBlendState {
   x: number;
   y: number;
   z: number;
+  restX: number;
+  restY: number;
+  restZ: number;
   w: number;
   si: number;
 }
@@ -25,7 +28,18 @@ interface VecBlendState {
 interface QuatBlendState {
   target: Object3D;
   q: Quaternion;
+  restQ: Quaternion;
   total: number;
+  si: number;
+}
+
+interface WeightsBlendState {
+  target: Object3D;
+  acc: Float32Array;
+  rest: Float32Array;
+  sampleBuf: Float32Array;
+  count: number;
+  w: number;
   si: number;
 }
 
@@ -49,6 +63,8 @@ export class AnimationMixer {
   private _vecStateList: VecBlendState[] = [];
   private _quatStateMap: Map<Object3D, QuatBlendState> = new Map();
   private _quatStateList: QuatBlendState[] = [];
+  private _weightsStateMap: Map<Object3D, WeightsBlendState> = new Map();
+  private _weightsStateList: WeightsBlendState[] = [];
 
   constructor(root: Object3D) {
     this.root = root;
@@ -129,7 +145,13 @@ export class AnimationMixer {
           const sampled = track.sampleQuaternion(action.time);
           let st = this._quatStateMap.get(target);
           if (!st) {
-            st = { target, q: new Quaternion(), total: 0, si: 0 };
+            const restQ = new Quaternion();
+            if (target.quaternion) {
+              restQ.copyFrom(target.quaternion);
+            } else {
+              restQ.setFromEuler(target.rotation);
+            }
+            st = { target, q: new Quaternion(), restQ, total: 0, si: 0 };
             this._quatStateMap.set(target, st);
             this._quatStateList.push(st);
           }
@@ -143,6 +165,47 @@ export class AnimationMixer {
             st.total += action.weight;
             st.q.slerp(sampled, action.weight / st.total);
           }
+        } else if ("weights" === track.property) {
+          const weightCount = track.getWeightCount();
+          if (weightCount === 0) continue;
+          let st = this._weightsStateMap.get(target);
+          if (!st) {
+            if (!target.morphTargetInfluences) {
+              target.morphTargetInfluences = new Float32Array(weightCount);
+            }
+            const rest = new Float32Array(weightCount);
+            const existing = target.morphTargetInfluences;
+            const copyLen = Math.min(weightCount, existing.length);
+            for (let k = 0; k < copyLen; k++) rest[k] = existing[k]!;
+            st = {
+              target,
+              acc: new Float32Array(weightCount),
+              rest,
+              sampleBuf: new Float32Array(weightCount),
+              count: weightCount,
+              w: 0,
+              si: 0,
+            };
+            this._weightsStateMap.set(target, st);
+            this._weightsStateList.push(st);
+          }
+          const n = track.evaluateWeights(action.time, st.sampleBuf);
+          const actionW = action.weight;
+          if (st.si !== frameIndex) {
+            for (let k = 0; k < n; k++) {
+              st.acc[k] = st.sampleBuf[k]! * actionW;
+            }
+            for (let k = n; k < st.count; k++) {
+              st.acc[k] = st.rest[k]! * actionW;
+            }
+            st.w = actionW;
+            st.si = frameIndex;
+          } else {
+            for (let k = 0; k < n; k++) {
+              st.acc[k] = st.acc[k]! + st.sampleBuf[k]! * actionW;
+            }
+            st.w += actionW;
+          }
         } else {
           const sampled = track.sampleVector(action.time);
           const property = track.property as VecProperty;
@@ -153,7 +216,19 @@ export class AnimationMixer {
           }
           let st = byTarget[property];
           if (!st) {
-            st = { target, property, x: 0, y: 0, z: 0, w: 0, si: 0 };
+            const restSrc = "translation" === property ? target.position : target.scale;
+            st = {
+              target,
+              property,
+              x: 0,
+              y: 0,
+              z: 0,
+              restX: restSrc.x,
+              restY: restSrc.y,
+              restZ: restSrc.z,
+              w: 0,
+              si: 0,
+            };
             byTarget[property] = st;
             this._vecStateList.push(st);
           }
@@ -180,7 +255,20 @@ export class AnimationMixer {
       if (st.si !== frameIndex || st.w <= 0) continue;
       const dest = "translation" === st.property ? st.target.position : st.target.scale;
       const invW = 1 / st.w;
-      dest.set(st.x * invW, st.y * invW, st.z * invW);
+      const ax = st.x * invW;
+      const ay = st.y * invW;
+      const az = st.z * invW;
+      if (st.w < 1.0) {
+        const blend = st.w;
+        const invBlend = 1.0 - blend;
+        dest.set(
+          st.restX * invBlend + ax * blend,
+          st.restY * invBlend + ay * blend,
+          st.restZ * invBlend + az * blend,
+        );
+      } else {
+        dest.set(ax, ay, az);
+      }
     }
 
     const quatList = this._quatStateList;
@@ -188,7 +276,34 @@ export class AnimationMixer {
     for (let i = 0; i < quatCount; i++) {
       const st = quatList[i]!;
       if (st.si !== frameIndex) continue;
-      st.target.quaternion = (st.target.quaternion || new Quaternion()).copyFrom(st.q);
+      const destQ = st.target.quaternion || (st.target.quaternion = new Quaternion());
+      if (st.total < 1.0) {
+        destQ.copyFrom(st.restQ).slerp(st.q, st.total);
+      } else {
+        destQ.copyFrom(st.q);
+      }
+    }
+
+    const weightsList = this._weightsStateList;
+    const weightsCount = weightsList.length;
+    for (let i = 0; i < weightsCount; i++) {
+      const st = weightsList[i]!;
+      if (st.si !== frameIndex || st.w <= 0) continue;
+      const dest = st.target.morphTargetInfluences;
+      if (!dest) continue;
+      const count = Math.min(st.count, dest.length);
+      const invW = 1 / st.w;
+      if (st.w < 1.0) {
+        const blend = st.w;
+        const invBlend = 1.0 - blend;
+        for (let k = 0; k < count; k++) {
+          dest[k] = st.rest[k]! * invBlend + st.acc[k]! * invW * blend;
+        }
+      } else {
+        for (let k = 0; k < count; k++) {
+          dest[k] = st.acc[k]! * invW;
+        }
+      }
     }
   }
 

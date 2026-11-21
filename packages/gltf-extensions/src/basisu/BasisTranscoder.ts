@@ -11,6 +11,10 @@ export interface BasisTranscodeOptions {
   mipmaps?: boolean;
   /** Optional active renderer capabilities for tier-accurate auto format selection. */
   capabilities?: BlockFormatCapabilities;
+  /** Per-call alternate `.wasm` bytes (overrides static config for multi-engine isolation). */
+  wasmBinary?: ArrayBuffer | undefined;
+  /** Per-call custom transcode handler (overrides static handler for multi-engine isolation). */
+  customHandler?: BasisTranscodeHandler | undefined;
 }
 
 export type BasisTranscodeHandler = (
@@ -76,8 +80,9 @@ export class BasisTranscoder {
     mimeType: string = "image/ktx2",
     options?: BasisTranscodeOptions,
   ): Promise<Texture> {
-    if (this._customHandler) {
-      return this._customHandler(buffer, mimeType, options);
+    const customHandler = options?.customHandler ?? this._customHandler;
+    if (customHandler) {
+      return customHandler(buffer, mimeType, options);
     }
 
     if (this._isKtx2(buffer)) {
@@ -85,7 +90,7 @@ export class BasisTranscoder {
         options?.format,
         options?.capabilities ?? this._config.capabilities,
       );
-      const wasmBinary = this._config.wasmBinary;
+      const wasmBinary = options?.wasmBinary ?? this._config.wasmBinary;
       const result = await BasisWasmTranscoder.transcode(new Uint8Array(buffer), {
         format: requestedFormat,
         ...(wasmBinary ? { wasmBinary } : {}),
@@ -160,54 +165,59 @@ export class BasisTranscoder {
       });
     }
 
-    // Uncompressed RGBA8 fallback: wrap in a canvas-backed Texture.
-    return this._planeToTexture(plane.width, plane.height, plane.data, _options);
+    // Uncompressed RGBA8 fallback: preserve all KTX2 mip levels 0..N via Texture.fromRawMipChain
+    // (lossless, zero DOM canvas dependency, works across WebGPU/WebGL2/WebGL1/headless tests).
+    return this._rgbaChainToTexture(result.images, _options);
   }
 
   private static _isKtx2(buffer: ArrayBuffer): boolean {
     return hasKtx2Identifier(new Uint8Array(buffer));
   }
 
+  /** Vertically flips an RGBA8 plane in place to match `Texture.fromUrl`'s decode orientation (K02). */
+  private static _flipRgbaPlaneInPlace(width: number, height: number, rgba: Uint8Array): void {
+    const stride = width * 4;
+    for (let top = 0, bottom = height - 1; top < bottom; top++, bottom--) {
+      const topStart = top * stride;
+      const bottomStart = bottom * stride;
+      for (let i = 0; i < stride; i++) {
+        const tmp = rgba[topStart + i]!;
+        rgba[topStart + i] = rgba[bottomStart + i]!;
+        rgba[bottomStart + i] = tmp;
+      }
+    }
+  }
+
   /**
-   * Wraps one decoded RGBA8 plane in a Texture. Requires a 2D canvas context
-   * (available in any browser); in canvasless environments (e.g. some unit tests)
-   * this falls back to an empty texture placeholder.
+   * Preserves all decoded RGBA8 mip levels (`0..N`) from the KTX2 payload in a `Texture.rawMipChain`,
+   * applying the K02 vertical decode flip to every level before handing the bytes to the renderer.
    */
-  private static _planeToTexture(
-    width: number,
-    height: number,
-    rgba: Uint8Array,
+  private static _rgbaChainToTexture(
+    images: BasisDecodeResult["images"],
     options?: BasisTranscodeOptions,
   ): Texture {
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        // K02: vertically flip the decoded plane so KTX2-RGBA8 fallback content shares the
-        // pipeline decode orientation (`Texture.fromUrl` default `flipY: true` -- the asset
-        // pipeline decode-flips every image). Without this, KTX2 content came out vertically
-        // inverted against PNG/JPEG assets. In-place row swap: the plane is freshly decoded and
-        // owned by this call (no allocation).
-        const stride = width * 4;
-        for (let top = 0, bottom = height - 1; top < bottom; top++, bottom--) {
-          const topStart = top * stride;
-          const bottomStart = bottom * stride;
-          for (let i = 0; i < stride; i++) {
-            const tmp = rgba[topStart + i]!;
-            rgba[topStart + i] = rgba[bottomStart + i]!;
-            rgba[bottomStart + i] = tmp;
-          }
-        }
-        const imageData = ctx.createImageData(width, height);
-        imageData.data.set(rgba);
-        ctx.putImageData(imageData, 0, 0);
-        return Texture.fromCanvas(canvas, { generateMipmaps: options?.mipmaps ?? true });
-      }
-    } catch {
-      // No DOM/canvas available (unit tests / SSR).
+    const base = images.find((image) => image.mipLevel === 0);
+    if (!base) {
+      throw new Error("[BasisTranscoder] KTX2 file contained no usable base RGBA8 plane");
     }
-    return Texture.empty({ generateMipmaps: options?.mipmaps ?? true });
+
+    const levelCount =
+      options?.mipmaps === false ? 1 : Math.max(...images.map((image) => image.mipLevel)) + 1;
+    const mipData: Uint8Array[] = [];
+    for (let level = 0; level < levelCount; level++) {
+      const img = images.find((candidate) => candidate.mipLevel === level);
+      if (!img) break;
+      this._flipRgbaPlaneInPlace(img.width, img.height, img.data);
+      mipData.push(img.data);
+    }
+
+    return Texture.fromRawMipChain(
+      {
+        width: base.width,
+        height: base.height,
+        mipData,
+      },
+      options?.mipmaps === undefined ? undefined : { generateMipmaps: options.mipmaps },
+    );
   }
 }

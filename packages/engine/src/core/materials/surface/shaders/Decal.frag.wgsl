@@ -1,10 +1,10 @@
 // Unprojects one pixel's opaque depth into the decal's unit box. xyz = box position, w = raw depth.
-fn decalUnproject(px: vec2i, clipToBox: mat4x4f) -> vec4f {
+fn decalUnproject(px: vec2i, clipToBox: mat4x4f, dims: vec2f) -> vec4f {
     let depth = textureLoad(u_opaqueDepthMap, px, 0);
     // The matrix is built from the GL (non zero-to-one) view-projection, hence the [-1, 1] depth remap.
     let ndc = vec4f(
-        (f32(px.x) + 0.5) / global.resolution.x * 2.0 - 1.0,
-        1.0 - (f32(px.y) + 0.5) / global.resolution.y * 2.0,
+        (f32(px.x) + 0.5) / dims.x * 2.0 - 1.0,
+        1.0 - (f32(px.y) + 0.5) / dims.y * 2.0,
         depth * 2.0 - 1.0,
         1.0
     );
@@ -26,9 +26,10 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
 
     let clipToBox = mat4x4f(obj.matParam0, obj.matParam1, obj.matParam2, obj.matParam3);
     let dims = vec2i(textureDimensions(u_opaqueDepthMap));
+    let fdims = vec2f(dims);
     let last = dims - vec2i(1, 1);
     let px = vec2i(frag.pos.xy);
-    let centre = decalUnproject(px, clipToBox);
+    let centre = decalUnproject(px, clipToBox, fdims);
     let boxPos = centre.xyz;
     let inside = centre.w < 1.0 && all(abs(boxPos) <= vec3f(0.5));
     if (!inside) {
@@ -39,13 +40,13 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
     // reading across depth discontinuities (plain dpdx/dpdy would, and so would implicit mips).
     let stepX = decalNeighbourDelta(
         centre,
-        decalUnproject(min(px + vec2i(1, 0), last), clipToBox),
-        decalUnproject(max(px - vec2i(1, 0), vec2i(0, 0)), clipToBox)
+        decalUnproject(min(px + vec2i(1, 0), last), clipToBox, fdims),
+        decalUnproject(max(px - vec2i(1, 0), vec2i(0, 0)), clipToBox, fdims)
     );
     let stepY = decalNeighbourDelta(
         centre,
-        decalUnproject(min(px + vec2i(0, 1), last), clipToBox),
-        decalUnproject(max(px - vec2i(0, 1), vec2i(0, 0)), clipToBox)
+        decalUnproject(min(px + vec2i(0, 1), last), clipToBox, fdims),
+        decalUnproject(max(px - vec2i(0, 1), vec2i(0, 0)), clipToBox, fdims)
     );
     g_uvGradX = stepX.xz * obj.matParam4.w; // w = exp2(mipBias)
     g_uvGradY = stepY.xz * obj.matParam4.w;
@@ -77,7 +78,16 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
     let edgeFade = clamp(min(toEdge.x, min(toEdge.y, toEdge.z)) / max(obj.matParam4.x, 0.0001), 0.0, 1.0);
 
     let tangentSeed = normalize(obj.model[0].xyz);
-    let tangent = normalize(tangentSeed - baseNormal * dot(tangentSeed, baseNormal));
+    var tangentProj = tangentSeed - baseNormal * dot(tangentSeed, baseNormal);
+    if (dot(tangentProj, tangentProj) < 1e-4) {
+        let fallbackZ = normalize(obj.model[2].xyz);
+        tangentProj = fallbackZ - baseNormal * dot(fallbackZ, baseNormal);
+    }
+    if (dot(tangentProj, tangentProj) < 1e-4) {
+        let fallbackY = normalize(obj.model[1].xyz);
+        tangentProj = fallbackY - baseNormal * dot(fallbackY, baseNormal);
+    }
+    let tangent = normalize(tangentProj);
     i.wp = surfaceWorld;
     i.n = baseNormal;
     i.t = tangent;
@@ -113,7 +123,7 @@ fn decalNeighbourDelta(centre: vec4f, forward: vec4f, backward: vec4f) -> vec3f 
     [WGSL_FOG_CALC]
 
     let alpha = diffuseTex.a * obj.color.a * angleFade * edgeFade;
-    if (alpha < 0.002) {
+    if (alpha < max(obj.extraParams.y, 0.002)) {
         discard;
     }
     return vec4f(color, alpha);

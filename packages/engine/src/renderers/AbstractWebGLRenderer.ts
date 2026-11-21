@@ -1,7 +1,7 @@
 import { AbstractRenderer } from "./AbstractRenderer.js";
 import { compileProgram } from "./compileProgram.js";
 import type { Color } from "../core/colors/index.js";
-import type { Scene } from "../core/Scene.js";
+import type { Scene, RenderList } from "../core/Scene.js";
 import type { Object3D } from "../core/Object3D.js";
 import { Matrix4, Vector3D } from "../math/index.js";
 import type { LightDataInterface } from "../interfaces/index.js";
@@ -304,6 +304,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     const renderList = scene.getVisibleObjectsSorted(vp, camPos);
     this._registerRenderListProviders(renderList);
     if (renderList.decals.length > 0 && !this.isOffscreenRenderTarget) this.requestNormalBuffer();
+    this._prepareFrameRenderResources(scene, renderList, extractedLights);
 
     for (const pass of this._passes) {
       pass.execute(
@@ -321,6 +322,15 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     }
     this._onPostRender();
   }
+
+  /**
+   * Hook invoked before passes run each frame (used e.g. for pre-pass morph target blending).
+   */
+  protected _prepareFrameRenderResources(
+    _scene: Scene,
+    _renderList: RenderList,
+    _lights: LightDataInterface,
+  ): void {}
 
   /**
    * Hook invoked at the very end of `render()`, after all passes executed.

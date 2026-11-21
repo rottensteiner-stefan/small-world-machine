@@ -1,6 +1,6 @@
 export { CubeTexture } from "./CubeTexture.js";
 export { Texture } from "./Texture.js";
-export type { TextureOptions, CompressedImage } from "./Texture.js";
+export type { TextureOptions, CompressedImage, RawMipChain } from "./Texture.js";
 export * from "./TextureArray.js";
 export * from "./VolumetricTexture.js";
 export * from "./RenderTarget.js";

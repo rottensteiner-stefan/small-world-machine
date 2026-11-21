@@ -30,7 +30,7 @@ import {
 } from "../shaders/index.js";
 import { MAX_SKINNED_BONES, isSkinnedMesh } from "../../core/animation/index.js";
 import type { Color } from "../../core/colors/index.js";
-import type { InstancedMesh, Object3D, RenderBatch, Scene } from "../../core/index.js";
+import type { InstancedMesh, Object3D, RenderBatch, RenderList, Scene } from "../../core/index.js";
 import {
   DeviceLimit,
   computeClipToBox,
@@ -59,6 +59,7 @@ import {
   writeWebGL2GlobalUBO,
 } from "./managers/WebGL2GlobalUniformWriter.js";
 import { WebGL2InstanceManager } from "./managers/WebGL2InstanceManager.js";
+import { WebGL2MorphTargetManager } from "./managers/WebGL2MorphTargetManager.js";
 import { WebGL2OpaqueCapture } from "./managers/WebGL2OpaqueCapture.js";
 import { WebGL2RenderTargetManager } from "./managers/WebGL2RenderTargetManager.js";
 import { WebGL2ShadowManager, type WebGL2ShadowHost } from "./managers/WebGL2ShadowManager.js";
@@ -79,6 +80,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
   private _geometry!: WebGLBufferManager;
 
   private readonly _instances: WebGL2InstanceManager = new WebGL2InstanceManager();
+  private readonly _morphTargets: WebGL2MorphTargetManager = new WebGL2MorphTargetManager();
   private readonly _opaqueCapture: WebGL2OpaqueCapture = new WebGL2OpaqueCapture();
   private readonly _renderTargets: WebGL2RenderTargetManager = new WebGL2RenderTargetManager();
   private readonly _clusters: WebGL2ClusterManager = new WebGL2ClusterManager();
@@ -210,6 +212,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._renderTargets.resetOnContextRestored();
     this._shadows.resetOnContextRestored();
     this._instances.resetOnContextRestored();
+    this._morphTargets.resetOnContextRestored();
     this._opaqueCapture.resetOnContextRestored();
     this._clusters.resetOnContextRestored();
 
@@ -223,6 +226,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this.context.shaderRegistry,
       );
     }
+  }
+
+  /** @inheritdoc */
+  protected override _prepareFrameRenderResources(
+    scene: Scene,
+    renderList: RenderList,
+    lights: LightDataInterface,
+  ): void {
+    this._morphTargets.prepareFrame(this.gl, this._geometry, renderList, scene, lights);
   }
 
   /** Stages the clustered light culling grid metadata into the global UBO. */
@@ -618,7 +630,22 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           continue;
         }
 
-        if (mesh.vaoCapable) {
+        const morphed = this._morphTargets.getMorphedBuffers(o);
+        if (morphed) {
+          this.gl.bindVertexArray(null);
+          mesh.bind(
+            cache.attributes.get("a_position")!,
+            cache.attributes.get("a_normal")!,
+            cache.attributes.get("a_uv")!,
+            cache.attributes.get("a_tangent")!,
+            -1,
+            -1,
+            cache.attributes.get("a_color")!,
+            morphed.vbo,
+            morphed.nbo,
+            morphed.tanbo,
+          );
+        } else if (mesh.vaoCapable) {
           mesh.bindVAO();
         } else {
           mesh.bind(
@@ -1115,10 +1142,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     }
     shaderFlags.length = flagCount;
 
-    if (
-      firstObject &&
-      ((isSkinnedMesh(firstObject) && firstObject.skeleton) || firstObject.geometry?.joints)
-    ) {
+    if (firstObject && isSkinnedMesh(firstObject) && firstObject.skeleton) {
       if (!shaderFlags.includes(ShaderFlag.SKINNING)) {
         shaderFlags.push(ShaderFlag.SKINNING);
       }
@@ -1404,7 +1428,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     if (state?.isDecal) this._setDecalUniforms(u, o);
 
     if (isSkinnedMesh(o) && o.skeleton) {
-      const skel = o.skeleton;
+      const boneMatrices = o.boneMatrices;
       const boneLoc =
         cache.uniforms.get("u_boneMatrices[0]") ??
         this.gl.getUniformLocation(cache.prog, "u_boneMatrices");
@@ -1413,17 +1437,30 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         // would either error or overwrite whatever uniform happens to follow it in the program.
         const maxFloats = MAX_SKINNED_BONES * 16;
         const boneData =
-          skel.boneMatrices.length > maxFloats
-            ? skel.boneMatrices.subarray(0, maxFloats)
-            : skel.boneMatrices;
+          boneMatrices.length > maxFloats ? boneMatrices.subarray(0, maxFloats) : boneMatrices;
         this.gl.uniformMatrix4fv(boneLoc, false, boneData);
       }
     }
 
     // Bind and Draw Geometry
     const mesh = this._geometry.getOrCreateMesh(o, o.geometry!);
+    const morphed = this._morphTargets.getMorphedBuffers(o);
 
-    if (mesh.vaoCapable) {
+    if (morphed) {
+      this.gl.bindVertexArray(null);
+      mesh.bind(
+        cache.attributes.get("a_position")!,
+        cache.attributes.get("a_normal")!,
+        cache.attributes.get("a_uv")!,
+        cache.attributes.get("a_tangent")!,
+        cache.attributes.get("a_joints") ?? -1,
+        cache.attributes.get("a_weights") ?? -1,
+        cache.attributes.get("a_color") ?? -1,
+        morphed.vbo,
+        morphed.nbo,
+        morphed.tanbo,
+      );
+    } else if (mesh.vaoCapable) {
       mesh.bindVAO();
     } else {
       mesh.bind(
@@ -1507,6 +1544,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
     this._geometry.releaseGeometryFor(obj);
     this._programCache.releaseObjectProgram(obj);
     this._textures.releaseObjectTextures(obj);
+    this._morphTargets.releaseObject(this.gl, obj);
     if (isInstancedMesh(obj)) this._instances.releaseInstanceBuffers(this.gl, obj);
   }
 
@@ -1526,6 +1564,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       for (const tex of this._texCache.values()) gl.deleteTexture(tex);
       this._shadows?.destroy(gl);
       this._instances?.destroy(gl);
+      this._morphTargets?.destroy(gl);
       this._renderTargets?.destroy();
       this._opaqueCapture?.destroy(gl);
       this._clusters?.destroy(gl);

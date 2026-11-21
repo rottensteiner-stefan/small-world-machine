@@ -35,15 +35,25 @@ describe("smoke per-particle noise seed is lifetime-stable", () => {
   it("emitter keeps a constant per-particle seed in rgb over the whole lifetime and varies it across puffs", () => {
     const emitter = new FireSmokeEmitter({ seed: 3, rate: 20, capacity: 64, lifeRange: [2, 2] });
     const arrays = emitter.system.arrays;
+    const slotGen = new Int32Array(arrays.aliveFlags.length);
+    const lastLife = new Float32Array(arrays.aliveFlags.length).fill(-1);
     const seedAtFirstSight = new Map<number, number>();
     const alphaAtFirstSight = new Map<number, number>();
     for (let f = 0; f < 150; f++) {
       emitter.update(1 / 60, ORIGIN, CAMERA);
       for (let i = 0; i < arrays.aliveFlags.length; i++) {
-        if (arrays.aliveFlags[i] !== 1) continue;
-        const key = i * 100000 + Math.round(arrays.maxLives[i]! * 1e4); // slot reuse => new puff
+        if (arrays.aliveFlags[i] !== 1) {
+          lastLife[i] = -1;
+          continue;
+        }
+        const life = arrays.lives[i]!;
+        if (lastLife[i]! < 0 || life < lastLife[i]!) {
+          slotGen[i] = slotGen[i]! + 1;
+        }
+        lastLife[i] = life;
+        const key = i * 100000 + slotGen[i]!; // slot reuse => new puff
         const seed = arrays.colors[i * 4]!;
-        if (!seedAtFirstSight.has(key) && arrays.lives[i]! < 0.05) {
+        if (!seedAtFirstSight.has(key) && life < 0.05) {
           seedAtFirstSight.set(key, seed);
           alphaAtFirstSight.set(key, arrays.alphas[i]!);
         } else if (seedAtFirstSight.has(key)) {

@@ -22,20 +22,23 @@ fn cofactor3(m: mat3x3f) -> mat3x3f {
     var skinSign = 1.0;
     
     if (obj.isSkinned > 0.5) {
-        let bOffset = u32(obj.boneOffset);
-        let b0 = boneMatrices[bOffset + u32(joints.x)];
-        let b1 = boneMatrices[bOffset + u32(joints.y)];
-        let b2 = boneMatrices[bOffset + u32(joints.z)];
-        let b3 = boneMatrices[bOffset + u32(joints.w)];
-        
-        let skinMat = weights.x * b0 + weights.y * b1 + weights.z * b2 + weights.w * b3;
-        localPos = skinMat * vec4f(pos, 1.0);
-        let skinMat3 = mat3x3f(skinMat[0].xyz, skinMat[1].xyz, skinMat[2].xyz);
-        let skinCof = cofactor3(skinMat3);
-        let skinDet = dot(skinMat3[0], skinCof[0]);
-        skinSign = select(1.0, -1.0, skinDet < 0.0);
-        localNormal = (skinCof * normal) * skinSign;
-        localTangent = skinMat3 * tangent.xyz;
+        let weightSum = weights.x + weights.y + weights.z + weights.w;
+        if (weightSum > 1e-4) {
+            let bOffset = u32(obj.boneOffset);
+            let b0 = boneMatrices[bOffset + u32(joints.x)];
+            let b1 = boneMatrices[bOffset + u32(joints.y)];
+            let b2 = boneMatrices[bOffset + u32(joints.z)];
+            let b3 = boneMatrices[bOffset + u32(joints.w)];
+
+            let skinMat = (weights.x * b0 + weights.y * b1 + weights.z * b2 + weights.w * b3) * (1.0 / weightSum);
+            localPos = skinMat * vec4f(pos, 1.0);
+            let skinMat3 = mat3x3f(skinMat[0].xyz, skinMat[1].xyz, skinMat[2].xyz);
+            let skinCof = cofactor3(skinMat3);
+            let skinDet = dot(skinMat3[0], skinCof[0]);
+            skinSign = select(1.0, -1.0, skinDet < 0.0);
+            localNormal = (skinCof * normal) * skinSign;
+            localTangent = skinMat3 * tangent.xyz;
+        }
     }
     
     let worldPos = obj.model * localPos;

@@ -119,6 +119,31 @@ describe("DirectionalLight per-cascade normal-offset bias (P3-E10 / DP-13, CsmC0
     }
   });
 
+  it("uses full shadowResolution per cascade (matching WebGPU array and WebGL2 atlas tile size)", () => {
+    const cam = makeCam();
+    const one = new DirectionalLight({
+      direction: new Vector3D(-0.45, -0.75, -0.45).normalize(),
+      numCascades: 1,
+      castShadow: true,
+      shadowResolution: 1024,
+    });
+    const four = new DirectionalLight({
+      direction: new Vector3D(-0.45, -0.75, -0.45).normalize(),
+      numCascades: 4,
+      castShadow: true,
+      shadowResolution: 1024,
+    });
+    one.updateCascades(cam);
+    four.updateCascades(cam);
+    // Ratio of bias to cascade ortho width must be identical for 1 vs 4 cascades at the same resolution
+    // (previously 4 cascades divided resolution by atlasCols=2, doubling texelSize and normal bias).
+    const ortho1 = one.cascadeCameras[0]!.projection as OrthographicProjection;
+    const ortho4 = four.cascadeCameras[0]!.projection as OrthographicProjection;
+    const ratio1 = one.cascadeNormalBiases[0]! / (ortho1.right - ortho1.left);
+    const ratio4 = four.cascadeNormalBiases[0]! / (ortho4.right - ortho4.left);
+    expect(ratio4).toBeCloseTo(ratio1, 6);
+  });
+
   // Fail-safe: lanes stay zero (no offset, no NaN) before a shadow-casting light ever runs
   // updateCascades or when shadows are off, so a partial state can never feed a bad bias into
   // the shader lane.
@@ -138,8 +163,7 @@ describe("DirectionalLight.updateCascades bounding-sphere texel snapping (R1)", 
   ): { u: number; v: number; width: number; height: number } {
     const cam = light.cascadeCameras[cascadeIdx]!;
     const ortho = cam.projection as OrthographicProjection;
-    const atlasCols = Math.ceil(Math.sqrt(light.numCascades));
-    const perCascadeRes = light.shadowResolution / atlasCols;
+    const perCascadeRes = light.shadowResolution;
     const p = worldPoint.clone();
     cam.viewProjectionMatrix4.transformVector(p);
     const u = (p.x * 0.5 + 0.5) * perCascadeRes;
@@ -204,4 +228,3 @@ describe("DirectionalLight.updateCascades bounding-sphere texel snapping (R1)", 
     expect(Math.abs(dvRot - Math.round(dvRot))).toBeLessThan(1e-3);
   });
 });
-

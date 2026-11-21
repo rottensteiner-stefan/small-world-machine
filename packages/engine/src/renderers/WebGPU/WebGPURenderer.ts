@@ -55,6 +55,7 @@ import { HzbOcclusionSystem } from "./managers/HzbOcclusionSystem.js";
 import type { HzbFieldPyramidAccess } from "./managers/HzbOcclusionSystem.js";
 import { OceanFftSystem } from "./managers/OceanFftSystem.js";
 import type { OceanFftUpdateParams } from "./managers/OceanFftSystem.js";
+import { GPUMorphTargetSystem } from "./managers/GPUMorphTargetSystem.js";
 import { PostFxChain } from "./managers/PostFxChain.js";
 import { OpaqueCapture } from "./managers/OpaqueCapture.js";
 import {
@@ -90,7 +91,7 @@ import type {
   InstanceFieldRenderHost,
 } from "./managers/InstanceFieldSystem.js";
 import { GpuTimer } from "./managers/GpuTimer.js";
-import type { SkinnedMesh, Skeleton } from "../../core/animation/index.js";
+import type { SkinnedMesh } from "../../core/animation/index.js";
 import { MAX_SKINNED_BONES } from "../../core/animation/index.js";
 import { INSTANCE_FIELD_BIND_GROUP } from "../../core/InstanceField.js";
 import type { RenderBatch, RenderList } from "../../core/Scene.js";
@@ -834,8 +835,11 @@ export class WebGPURenderer
   private _globalBGL!: GPUBindGroupLayout;
   private _objectBGL!: GPUBindGroupLayout;
   private _boneMatricesBuffer!: GPUBuffer;
+  private _boneMatricesCapacity: number = 2048;
   private _gpuBoneMatricesOffset: number = 0;
-  private _boneSlotMap: Map<Skeleton, number> = new Map();
+  private _boneSlotMap: Map<SkinnedMesh, number> = new Map();
+  private _warnedBoneOverflow: boolean = false;
+  private _morphSystem?: GPUMorphTargetSystem | undefined;
 
   /** @inheritdoc */
   public override setRenderTarget(
@@ -1061,9 +1065,11 @@ export class WebGPURenderer
     this._targetCache = new GPURenderTargetCache(this._device!, this._textures);
     this._geometryCache = new GPUGeometryCache(this._device!);
     this._opaqueCapture = new OpaqueCapture(this._device!, this._fallback);
+    this._morphSystem = new GPUMorphTargetSystem(this._device!);
 
+    this._boneMatricesCapacity = 2048;
     this._boneMatricesBuffer = this._device!.createBuffer({
-      size: 2048 * 64, // 2048 mat4x4f = 131072 bytes
+      size: this._boneMatricesCapacity * 64, // 2048 mat4x4f = 131072 bytes
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
   }
@@ -1445,6 +1451,28 @@ export class WebGPURenderer
     this._geometryCache.releaseGeometryFor(obj);
     this._pipelineCache.releasePipelineFor(obj);
     this._textures.releaseObjectTextures(obj);
+    this._morphSystem?.releaseObject(obj);
+  }
+
+  private _ensureBoneBufferCapacity(scene: Scene): void {
+    const skinned = scene.skinnedMeshes;
+    let needed = 0;
+    for (let i = 0; i < skinned.length; i++) {
+      const skel = skinned[i]!.skeleton;
+      if (skel) needed += Math.min(skel.bones.length, MAX_SKINNED_BONES);
+    }
+    if (needed <= this._boneMatricesCapacity) return;
+
+    let nextCap = this._boneMatricesCapacity;
+    while (nextCap < needed) nextCap *= 2;
+    this._fallback.deferDestroyBuffer(this._boneMatricesBuffer);
+    this._boneMatricesBuffer = this._device!.createBuffer({
+      size: nextCap * 64,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this._boneMatricesCapacity = nextCap;
+    this._globalBindGroup = this._createGlobalBindGroup(scene);
+    this._globalResourcesVersion++;
   }
 
   /**
@@ -1490,7 +1518,30 @@ export class WebGPURenderer
     // The cascaded/spot shadow passes below re-request the same lights: serve them from the memo.
     this.memoizeLightsFor(scene);
     this._globalUniformWriter.update(vp, camPos, lights, scene, near, far, projMatrix);
+    this._ensureBoneBufferCapacity(scene);
     const ce = this._device.createCommandEncoder();
+
+    let hasShadows = false;
+    if (!this._activeRenderTarget) {
+      hasShadows = lights.dLight?.castShadow === true;
+      if (!hasShadows) {
+        for (let i = 0; i < lights.sLights.length; i++) {
+          if (lights.sLights[i]!.castShadow) {
+            hasShadows = true;
+            break;
+          }
+        }
+      }
+      if (!hasShadows) {
+        for (let i = 0; i < lights.pLights.length; i++) {
+          if (lights.pLights[i]!.castShadow) {
+            hasShadows = true;
+            break;
+          }
+        }
+      }
+    }
+    this._morphSystem?.prepareFrame(ce, renderList, scene, hasShadows);
 
     // ADR 0059 P1-2: resolve the probe readback of the PREVIOUS frame, then record the per-field
     // main-view culls (mode A) before any pass records a draw that consumes their segments.
@@ -1914,16 +1965,29 @@ export class WebGPURenderer
         rp.setVertexBuffer(4, this._fallback.dummyJointsBuffer);
         rp.setVertexBuffer(5, this._fallback.dummyWeightsBuffer);
         lastGeo = undefined;
-      } else if (isInstanced || gCache !== lastGeo) {
-        this._fallback.ensureDummyBufferSize(gCache.vertexCount);
-        rp.setVertexBuffer(0, gCache.vb);
-        rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
-        rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
-        rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
-        rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
-        rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
-        if (usesVertexColor) rp.setVertexBuffer(6, gCache.cb || this._fallback.dummyColorBuffer);
-        lastGeo = isInstanced ? undefined : gCache;
+      } else {
+        const morphed = !isInstanced ? this._morphSystem?.getMorphedBuffers(obj) : undefined;
+        if (morphed) {
+          this._fallback.ensureDummyBufferSize(gCache.vertexCount);
+          rp.setVertexBuffer(0, morphed.vb);
+          rp.setVertexBuffer(1, morphed.nb || gCache.nb || this._fallback.dummyNormalBuffer);
+          rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+          rp.setVertexBuffer(3, morphed.tb || gCache.tb || this._fallback.dummyTangentBuffer);
+          rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
+          rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
+          if (usesVertexColor) rp.setVertexBuffer(6, gCache.cb || this._fallback.dummyColorBuffer);
+          lastGeo = undefined;
+        } else if (isInstanced || gCache !== lastGeo) {
+          this._fallback.ensureDummyBufferSize(gCache.vertexCount);
+          rp.setVertexBuffer(0, gCache.vb);
+          rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
+          rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+          rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
+          rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
+          rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
+          if (usesVertexColor) rp.setVertexBuffer(6, gCache.cb || this._fallback.dummyColorBuffer);
+          lastGeo = isInstanced ? undefined : gCache;
+        }
       }
 
       if (isInstanced) {
@@ -2265,30 +2329,35 @@ export class WebGPURenderer
 
   protected _getBoneMatrixOffset(skinnedMesh: SkinnedMesh): number {
     const skel = skinnedMesh.skeleton;
-    if (!skel || !skel.boneMatrices || skel.boneMatrices.length === 0) return 0;
+    const boneMatrices = skinnedMesh.boneMatrices;
+    if (!skel || !boneMatrices || boneMatrices.length === 0) return 0;
 
-    const cached = this._boneSlotMap.get(skel);
+    const cached = this._boneSlotMap.get(skinnedMesh);
     if (cached !== undefined) return cached;
 
     const numMatrices = Math.min(skel.bones.length, MAX_SKINNED_BONES);
-    if (this._gpuBoneMatricesOffset + numMatrices > 2048) {
-      throw new Error(
-        `[WebGPURenderer] Bone matrices buffer capacity exceeded: cannot allocate ${numMatrices} matrices (offset ${this._gpuBoneMatricesOffset}, capacity 2048)`,
-      );
+    if (this._gpuBoneMatricesOffset + numMatrices > this._boneMatricesCapacity) {
+      if (!this._warnedBoneOverflow) {
+        console.warn(
+          `[WebGPURenderer] Bone matrices buffer capacity exceeded (${this._gpuBoneMatricesOffset} + ${numMatrices} > ${this._boneMatricesCapacity}); clamping remaining bones to slot 0.`,
+        );
+        this._warnedBoneOverflow = true;
+      }
+      return 0;
     }
     const offset = this._gpuBoneMatricesOffset;
 
-    const floatsToCopy = Math.min(skel.boneMatrices.length, numMatrices * 16);
+    const floatsToCopy = Math.min(boneMatrices.length, numMatrices * 16);
     this._device!.queue.writeBuffer(
       this._boneMatricesBuffer,
       offset * 64,
-      skel.boneMatrices.buffer,
-      skel.boneMatrices.byteOffset,
+      boneMatrices.buffer,
+      boneMatrices.byteOffset,
       floatsToCopy * 4,
     );
 
     this._gpuBoneMatricesOffset += numMatrices;
-    this._boneSlotMap.set(skel, offset);
+    this._boneSlotMap.set(skinnedMesh, offset);
     return offset;
   }
 
@@ -2587,6 +2656,9 @@ export class WebGPURenderer
     this._oceanFftSystem?.dispose();
     this._oceanFftSystem = undefined;
     this._oceanRepeatSampler = undefined;
+    this._morphSystem?.dispose();
+    this._morphSystem = undefined;
+    this._boneMatricesBuffer?.destroy();
     // Tears down every GPU post-effect pass in the chain's registry, in one sweep (see
     // `PostFxChain` / the `PostEffectPass` contract, ADR 0037).
     this._postFxChain.destroy();

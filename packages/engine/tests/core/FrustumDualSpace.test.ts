@@ -121,4 +121,36 @@ describe("FRUSTUM-DUAL-SPACE (world-frustum cull ⇔ NDC-in[-1,1]³)", () => {
     }
     expect(checked).toBeGreaterThan(30);
   });
+
+  it("extracts the exact near plane for WebGPU zero-to-one [0, 1] projection matrices when zeroToOne=true", () => {
+    const { vp } = buildFrustum();
+    // Apply ZO correction: z' = 0.5 * z + 0.5 * w (row2' = 0.5 * row2 + 0.5 * row3).
+    const zo = new Matrix4();
+    zo.data.set(vp.data);
+    for (let col = 0; col < 4; col++) {
+      zo.data[col * 4 + 2] = 0.5 * vp.data[col * 4 + 2]! + 0.5 * vp.data[col * 4 + 3]!;
+    }
+
+    const zoFrustum = new Frustum();
+    zoFrustum.setFromMatrix(zo, true);
+
+    // Near plane is at z = -0.1: a tiny box at z = -0.05 (between camera and near plane) must be culled,
+    // while a tiny box at z = -0.2 (just past near plane) must be inside.
+    const beforeNear = new BoundingBox(
+      new Vector3D(-0.005, -0.005, -0.055),
+      new Vector3D(0.005, 0.005, -0.045),
+    );
+    const pastNear = new BoundingBox(
+      new Vector3D(-0.005, -0.005, -0.205),
+      new Vector3D(0.005, 0.005, -0.195),
+    );
+    const pastFar = new BoundingBox(
+      new Vector3D(-0.005, -0.005, -101.005),
+      new Vector3D(0.005, 0.005, -100.995),
+    );
+
+    expect(zoFrustum.intersectsBox(beforeNear)).toBe(false);
+    expect(zoFrustum.intersectsBox(pastNear)).toBe(true);
+    expect(zoFrustum.intersectsBox(pastFar)).toBe(false);
+  });
 });

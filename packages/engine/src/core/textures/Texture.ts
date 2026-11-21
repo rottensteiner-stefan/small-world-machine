@@ -53,6 +53,19 @@ export interface CompressedImage {
 }
 
 /**
+ * Uncompressed RGBA8 mip chain payload uploaded directly via `writeTexture` (WebGPU) or
+ * `texImage2D` (WebGL2/WebGL1), preserving authored mip levels `1..N` without a DOM canvas.
+ */
+export interface RawMipChain {
+  /** Full-resolution width of the base level. */
+  width: number;
+  /** Full-resolution height of the base level. */
+  height: number;
+  /** Per-mip-level RGBA8 byte payloads (index 0 = base level). */
+  mipData: Uint8Array[];
+}
+
+/**
  * Represents a 2D texture.
  */
 export class Texture {
@@ -69,6 +82,11 @@ export class Texture {
    * (WebGL2) / compressed texture formats (WebGPU) instead of sampling `image`.
    */
   public compressedImage: CompressedImage | undefined = undefined;
+  /**
+   * Optional uncompressed RGBA8 mip chain. When present, renderers upload every supplied
+   * mip level directly without requiring a 2D DOM canvas.
+   */
+  public rawMipChain: RawMipChain | undefined = undefined;
   /** Whether the texture is fully loaded and ready for use. */
   public isLoaded: boolean = false;
   /** Set to true after mutating `image` in place (e.g. redrawing a canvas) to force a GPU re-upload. */
@@ -149,6 +167,7 @@ export class Texture {
     }
     this.image = undefined;
     this.compressedImage = undefined;
+    this.rawMipChain = undefined;
     this.isLoaded = false;
   }
 
@@ -219,6 +238,22 @@ export class Texture {
   ): Texture {
     const tex = new Texture(undefined, { ...options, generateMipmaps: false });
     tex.compressedImage = compressedImage;
+    tex.isLoaded = true;
+    return tex;
+  }
+
+  /**
+   * Creates a texture backed by an explicit uncompressed RGBA8 mip chain (e.g. from the BasisU
+   * RGBA8 fallback). When more than one level is provided, `generateMipmaps` defaults to `false`
+   * so all authored mip levels are uploaded verbatim.
+   */
+  public static fromRawMipChain(chain: RawMipChain, options?: TextureOptions): Texture {
+    const hasMultipleMips = chain.mipData.length > 1;
+    const tex = new Texture(undefined, {
+      ...options,
+      generateMipmaps: options?.generateMipmaps ?? !hasMultipleMips,
+    });
+    tex.rawMipChain = chain;
     tex.isLoaded = true;
     return tex;
   }

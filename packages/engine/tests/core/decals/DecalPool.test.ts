@@ -156,6 +156,30 @@ describe("DecalPool", () => {
     expect(decal.isVisible).toBe(false);
   });
 
+  it("spawns at the requested world pose even when the pool root has a non-identity transform", () => {
+    const root = new Object3D("TransformedRoot");
+    root
+      .setPosition(10, 2, -5)
+      .setRotation(0, Math.PI / 2, 0)
+      .setScale(2, 2, 2);
+    root.updateMatrixWorld(true);
+    const pool = new DecalPool(root, {
+      capacity: 2,
+      createMaterial: (): DecalMaterial => new DecalMaterial(),
+      size: [1, 1, 0.4],
+    });
+    const worldPoint = new Vector3D(14, 2, -3);
+    const decal = pool.spawn(worldPoint, up);
+    root.updateMatrixWorld(true);
+    expect(decal.worldMatrix.data[12]).toBeCloseTo(14, 4);
+    expect(decal.worldMatrix.data[13]).toBeCloseTo(2, 4);
+    expect(decal.worldMatrix.data[14]).toBeCloseTo(-3, 4);
+    const n = worldUp(decal);
+    expect(n.x).toBeCloseTo(0, 4);
+    expect(n.y).toBeCloseTo(1, 4);
+    expect(n.z).toBeCloseTo(0, 4);
+  });
+
   it("clear() frees everything and dispose() removes the nodes", () => {
     const { root, pool } = makePool(3);
     pool.spawn(at(0), up);

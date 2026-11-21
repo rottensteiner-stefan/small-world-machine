@@ -50,6 +50,8 @@ export interface GltfJson {
   }[];
   meshes?: {
     name?: string;
+    weights?: number[];
+    extras?: { targetNames?: string[]; [key: string]: unknown };
     primitives: {
       attributes: { [key: string]: number };
       indices?: number;
@@ -101,6 +103,7 @@ export interface GltfJson {
     scale?: number[];
     mesh?: number;
     skin?: number;
+    weights?: number[];
     extensions?: {
       KHR_lights_punctual?: { light: number };
       SWM_prefab_instance?: { source: string };

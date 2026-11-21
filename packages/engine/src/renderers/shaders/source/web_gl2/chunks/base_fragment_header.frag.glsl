@@ -84,7 +84,7 @@ float pointShadowFactor(int lightIndex, vec3 lightPos, vec3 worldPos, vec3 geomN
         int face = pointShadowFace(samplePos - lightPos);
         vec4 ls = u_pointShadowMatrix[s * 6 + face] * vec4(samplePos, 1.0);
         vec3 projCoords = ls.xyz / ls.w * 0.5 + 0.5;
-        if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z > 1.0) return 1.0;
+        if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z < 0.0 || projCoords.z > 1.0) return 1.0;
         float layer = float(4 + s * 6 + face);
         float ref = projCoords.z;
         vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);
@@ -272,7 +272,7 @@ float glassDirShadowFactor(vec3 worldPos, float dotNL, vec3 geomN, float viewDis
         vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
 
         float shadowA = 1.0;
-        if (projCoords.z <= 1.0 && projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0) {
+        if (projCoords.z >= 0.0 && projCoords.z <= 1.0 && projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0) {
             float col = mod(float(cascadeIndex), cols);
             float row = floor(float(cascadeIndex) / cols);
             vec2 cellMin = vec2(col, row) / cols;
@@ -291,7 +291,7 @@ float glassDirShadowFactor(vec3 worldPos, float dotNL, vec3 geomN, float viewDis
             vec4 lightSpacePosB = u_cascadeMatrices[nextCascade] * vec4(samplePos, 1.0);
             vec3 projCoordsB = lightSpacePosB.xyz / lightSpacePosB.w * 0.5 + 0.5;
             shadowB = 1.0;
-            if (projCoordsB.z <= 1.0 && projCoordsB.x >= 0.0 && projCoordsB.x <= 1.0 && projCoordsB.y >= 0.0 && projCoordsB.y <= 1.0) {
+            if (projCoordsB.z >= 0.0 && projCoordsB.z <= 1.0 && projCoordsB.x >= 0.0 && projCoordsB.x <= 1.0 && projCoordsB.y >= 0.0 && projCoordsB.y <= 1.0) {
                 float colB = mod(float(nextCascade), cols);
                 float rowB = floor(float(nextCascade) / cols);
                 vec2 cellMinB = vec2(colB, rowB) / cols;
@@ -313,7 +313,7 @@ float glassSpotShadowFactor(int lightIndex) {
     float shadow = 1.0;
     if (lightIndex < 4 && u_spotShadowInfo[lightIndex].z > 0.5) {
         vec3 projCoords = v_spotLightSpacePos[lightIndex].xyz / v_spotLightSpacePos[lightIndex].w * 0.5 + 0.5;
-        if (projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0 && projCoords.z <= 1.0) {
+        if (projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0 && projCoords.z >= 0.0 && projCoords.z <= 1.0) {
             float bias = u_spotShadowInfo[lightIndex].x;
             shadow = 0.0;
             vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);

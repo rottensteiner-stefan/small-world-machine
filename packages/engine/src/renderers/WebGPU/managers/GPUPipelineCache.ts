@@ -507,6 +507,8 @@ function normalizeShaderFlags(flags: readonly string[]): readonly string[] {
  * toggle at runtime, so callers pass the current target format in on every call instead.
  */
 export class GPUPipelineCache {
+  private static readonly _PIPELINE_HIGH_WATERMARK = 512;
+
   private readonly _device: GPUDevice;
   private readonly _deviceCaps: DeviceCaps;
   private readonly _globalBGL: GPUBindGroupLayout;
@@ -531,6 +533,8 @@ export class GPUPipelineCache {
   private _warnedMaterialTextureBudget = new Set<string>();
   /** `shaderId`s already warned about in `_fitFlagsToBudget` (extension-map groups dropped). */
   private _warnedBudgetFit = new Set<string>();
+  /** High-watermark warning guard for unbounded pipeline permutations (L04). */
+  private _warnedPipelineWatermark = false;
 
   constructor(
     device: GPUDevice,
@@ -851,6 +855,15 @@ export class GPUPipelineCache {
         ),
       };
       this._pipelines.set(key, cache);
+      if (
+        !this._warnedPipelineWatermark &&
+        this._pipelines.size > GPUPipelineCache._PIPELINE_HIGH_WATERMARK
+      ) {
+        this._warnedPipelineWatermark = true;
+        console.warn(
+          `[GPUPipelineCache] Cached render pipeline count exceeded ${GPUPipelineCache._PIPELINE_HIGH_WATERMARK} (${this._pipelines.size}). Check for unbounded shader flag permutations or unreleased objects.`,
+        );
+      }
     }
     return cache;
   }
@@ -1028,5 +1041,7 @@ export class GPUPipelineCache {
     this._shaderModules.clear();
     this._materialBGLCache.clear();
     this._warnedMaterialTextureBudget.clear();
+    this._warnedBudgetFit.clear();
+    this._warnedPipelineWatermark = false;
   }
 }

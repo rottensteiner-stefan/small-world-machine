@@ -204,6 +204,32 @@ describe("ETC2 mirror (K02)", () => {
       expect(Buffer.from(m2).equals(Buffer.from(b))).toBe(true);
     }
   });
+
+  it("mirrors EAC alpha independently for every block in a multi-block 8x8 ETC2 plane", () => {
+    const rng = mulberry32(0xe7c26);
+    const plane = new Uint8Array(4 * 16);
+    for (let i = 0; i < 4; i++) {
+      plane.set(buildEtc2(rng, { avoidDeltaNeg4: true, diffBaseMin: 3, diffBaseMax: 28 }), i * 16);
+    }
+    const mirrored = mirrorCompressedPlane(plane, 8, 8, CompressedTextureFormat.ETC2_RGBA8);
+
+    // Every block (bx, by) must decode to the vertical flip of source block (bx, 1 - by),
+    // including its own EAC alpha selectors (regression for block-0 offset bug).
+    for (let by = 0; by < 2; by++) {
+      for (let bx = 0; bx < 2; bx++) {
+        const outOff = (bx + by * 2) * 16;
+        const srcOff = (bx + (1 - by) * 2) * 16;
+        const dm = decodeEtc2(mirrored, outOff);
+        const ds = decodeEtc2(plane, srcOff);
+        expect(
+          samePixels(
+            withEacIndex(dm.texels, dm.eacIndex),
+            flipPixels(withEacIndex(ds.texels, ds.eacIndex)),
+          ),
+        ).toBe(true);
+      }
+    }
+  });
 });
 
 describe("boundary levels (height not a multiple of 4)", () => {
@@ -249,6 +275,26 @@ describe("boundary levels (height not a multiple of 4)", () => {
     // Out-of-range output rows 2,3 are suppressed (keep zeros).
     expect(m[6]!).toBe(0);
     expect(m[7]!).toBe(0);
+  });
+
+  it("never mixes foreign-block selectors with dominant-block endpoints on non-4-aligned heights (AS04)", () => {
+    // 4x5 plane = 2 block rows (by=0 holds rows 0..3, by=1 holds row 4).
+    // Output block by=0 needs input rows 4, 3, 2, 1 -> 3 rows come from block 0, 1 row from block 1.
+    // Dominant block is block 0; output block 0 must take BOTH endpoints and ALL selectors from block 0.
+    const plane = new Uint8Array(2 * 8);
+    // Block 0: endpoints 0x11,0x22,0x33,0x44, rows 0..3 = 0x10, 0x20, 0x30, 0x40
+    plane.set([0x11, 0x22, 0x33, 0x44, 0x10, 0x20, 0x30, 0x40], 0);
+    // Block 1: distinct endpoints and distinct sentinel selector 0xFF
+    plane.set([0xaa, 0xbb, 0xcc, 0xdd, 0xff, 0xfe, 0xfd, 0xfc], 8);
+
+    const m = mirrorCompressedPlane(plane, 4, 5, CompressedTextureFormat.BC1_RGB);
+    // Output block 0 uses block 0's endpoints
+    expect(Array.from(m.slice(0, 4))).toEqual([0x11, 0x22, 0x33, 0x44]);
+    // Output rows 1, 2, 3 map to block 0's rows 3, 2, 1; row 0 clamps to nearest row in block 0 (row 3 = 0x40), never 0xFF.
+    expect(m[4]).toBe(0x40);
+    expect(m[5]).toBe(0x40);
+    expect(m[6]).toBe(0x30);
+    expect(m[7]).toBe(0x20);
   });
 });
 

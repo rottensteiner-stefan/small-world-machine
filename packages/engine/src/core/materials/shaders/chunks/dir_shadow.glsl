@@ -127,7 +127,7 @@ float sampleDirShadow(vec3 worldPos, vec3 N) {
     vec3 samplePos = worldPos + N * u_dirShadowBias[cascadeIndex] * (1.0 - nDotL);
     vec4 lightSpacePos = u_cascadeMatrices[cascadeIndex] * vec4(samplePos, 1.0);
     vec3 proj = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
-    if (proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+    if (proj.z < 0.0 || proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
         return 1.0;
     }
 

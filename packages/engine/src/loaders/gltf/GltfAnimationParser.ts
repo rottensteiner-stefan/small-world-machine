@@ -32,20 +32,28 @@ export class GltfAnimationParser {
         const sampler = animDef.samplers[channel.sampler];
         if (!sampler) continue;
 
-        const timeData = GltfBinaryParser.getBufferData(
+        const timeRaw = GltfBinaryParser.getBufferData(
           json.accessors[sampler.input],
           json,
           buffers,
-        ) as Float32Array | null;
-        const valueData = GltfBinaryParser.getBufferData(
+        );
+        const valueRaw = GltfBinaryParser.getBufferData(
           json.accessors[sampler.output],
           json,
           buffers,
-        ) as Float32Array | null;
+        );
 
-        if (timeData && valueData) {
+        if (timeRaw && valueRaw) {
           const propPath = channel.target.path;
-          if (propPath === "translation" || propPath === "rotation" || propPath === "scale") {
+          if (
+            propPath === "translation" ||
+            propPath === "rotation" ||
+            propPath === "scale" ||
+            propPath === "weights"
+          ) {
+            const timeData = timeRaw instanceof Float32Array ? timeRaw : new Float32Array(timeRaw);
+            const valueData =
+              valueRaw instanceof Float32Array ? valueRaw : new Float32Array(valueRaw);
             const track = new KeyframeTrack(
               targetObj.name,
               propPath as TrackType,

@@ -164,14 +164,18 @@ export class Mesh {
     jointLoc: number = -1,
     weightLoc: number = -1,
     colorLoc: number = -1,
+    vboOverride?: WebGLBuffer,
+    nboOverride?: WebGLBuffer,
+    tanboOverride?: WebGLBuffer,
   ): void {
-    this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.vbo ?? null);
+    this._gl.bindBuffer(this._gl.ARRAY_BUFFER, vboOverride ?? this.vbo ?? null);
     this._gl.vertexAttribPointer(posLoc, 3, this._gl.FLOAT, false, 0, 0);
     this._gl.enableVertexAttribArray(posLoc);
 
     if (0 <= normLoc) {
-      if (this.nbo) {
-        this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.nbo);
+      const nbo = nboOverride ?? this.nbo;
+      if (nbo) {
+        this._gl.bindBuffer(this._gl.ARRAY_BUFFER, nbo);
         this._gl.vertexAttribPointer(normLoc, 3, this._gl.FLOAT, false, 0, 0);
         this._gl.enableVertexAttribArray(normLoc);
       } else {
@@ -190,8 +194,9 @@ export class Mesh {
     }
 
     if (0 <= tanLoc) {
-      if (this.tanbo) {
-        this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.tanbo);
+      const tanbo = tanboOverride ?? this.tanbo;
+      if (tanbo) {
+        this._gl.bindBuffer(this._gl.ARRAY_BUFFER, tanbo);
         // Tangent data is the vec4 contract (tx, ty, tz, w) -- size 4.
         this._gl.vertexAttribPointer(tanLoc, 4, this._gl.FLOAT, false, 0, 0);
         this._gl.enableVertexAttribArray(tanLoc);

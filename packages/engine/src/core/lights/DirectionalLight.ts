@@ -130,8 +130,7 @@ export class DirectionalLight extends AbstractLight {
     }
 
     const isPerspective = proj.type === ProjectionType.PERSPECTIVE;
-    const atlasCols = Math.ceil(Math.sqrt(this.numCascades));
-    const perCascadeRes = this.shadowResolution / atlasCols;
+    const perCascadeRes = this.shadowResolution;
     const shadowBackExtent = 200.0;
 
     let cascadeNear = isPerspective

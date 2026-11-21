@@ -28,6 +28,8 @@ export class ParticleSystem {
 
   private _size = 0;
   private _freeIndices: number[] = [];
+  /** Slot currently being reported to `onParticleDied`; available for re-entrant `emit()` if still dead. */
+  private _dyingIndex = -1;
   /** Per-frame marker, reused across ticks (zero allocation): 1 = survived the life check this frame. */
   private _frameFlags: Uint8Array;
 
@@ -118,14 +120,16 @@ export class ParticleSystem {
    */
   public emit(options: ParticleOptions = {}): number {
     let index: number;
-    if (this._size >= this.capacity) {
-      const free = this._freeIndices;
-      if (free.length <= 0) {
-        return -1;
-      }
+    const free = this._freeIndices;
+    if (free.length > 0) {
       index = free.pop()!;
-    } else {
+    } else if (this._size < this.capacity) {
       index = this._size++;
+    } else if (this._dyingIndex !== -1 && this._aliveFlags[this._dyingIndex] === 0) {
+      index = this._dyingIndex;
+      this._dyingIndex = -1;
+    } else {
+      return -1;
     }
     this._applyOptions(index, options);
     return index;
@@ -260,7 +264,14 @@ export class ParticleSystem {
       arrays.positions[o + 1] = arrays.positions[o + 1]! + arrays.velocities[o + 1]! * dt;
       arrays.positions[o + 2] = arrays.positions[o + 2]! + arrays.velocities[o + 2]! * dt;
       if (arrays.aliveFlags[i] === 0) {
-        this.onParticleDied?.(i);
+        if (this.onParticleDied !== undefined) {
+          this._dyingIndex = i;
+          try {
+            this.onParticleDied(i);
+          } finally {
+            this._dyingIndex = -1;
+          }
+        }
         if (arrays.aliveFlags[i] === 0) {
           free.push(i);
         }

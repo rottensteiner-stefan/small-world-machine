@@ -19,16 +19,16 @@ describe("KTX2 decode orientation (K02)", () => {
     expect(src).not.toContain("fromUrl(url, { flipY: false })");
   });
 
-  it("flips decoded RGBA rows before the canvas wrap in _planeToTexture", () => {
+  it("flips decoded RGBA rows on every mip level before wrapping in RawMipChain (AS03 / K02)", () => {
     const src = readFileSync(SOURCE, "utf-8");
     // In-place top/bottom row swap mirroring `imageOrientation: "flipY"` at decode time.
     expect(src).toContain("for (let top = 0, bottom = height - 1; top < bottom; top++, bottom--)");
     expect(src).toContain("const stride = width * 4;");
-    // The flipped buffer (not the raw plane) is put onto the canvas.
-    const putIdx = src.indexOf("ctx.putImageData");
-    const swapIdx = src.indexOf("top < bottom");
-    expect(putIdx).toBeGreaterThan(-1);
-    expect(swapIdx).toBeGreaterThan(-1);
-    expect(swapIdx).toBeLessThan(putIdx);
+    // Every mip level is flipped before wrapping in Texture.fromRawMipChain.
+    const rawIdx = src.indexOf("return Texture.fromRawMipChain(");
+    const flipCallIdx = src.indexOf("this._flipRgbaPlaneInPlace(");
+    expect(rawIdx).toBeGreaterThan(-1);
+    expect(flipCallIdx).toBeGreaterThan(-1);
+    expect(flipCallIdx).toBeLessThan(rawIdx);
   });
 });
