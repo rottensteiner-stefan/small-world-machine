@@ -34,6 +34,7 @@ import { runLodCommand } from "./lodCommand.js";
 import { runSpeciesCommand } from "./speciesCommand.js";
 import { runMaterialCommand } from "./materialCommand.js";
 import { runSplatterCommand } from "./splatterCommand.js";
+import { runGlbCommand } from "./glbCommand.js";
 
 const require = createRequire(import.meta.url);
 
@@ -82,6 +83,7 @@ Commands:
   ibl       Bake IBL cubemaps + BRDF LUT (headless core + WebGL2 bake)
   lod       Generate *_LOD<n> glTF LOD levels (meshoptimizer, headless core)
   species   Bake a scan tree into field-lane species assets (LODs + albedo + sidecar)
+  glb       Pack a .gltf asset into a binary .glb container (--binary)
 
 Global options:
   -h, --help      Print this help and exit
@@ -271,6 +273,8 @@ export async function runSwm(argv: readonly string[], io?: CliIo): Promise<numbe
       return runLodCommand(rest, activeIo);
     case "species":
       return runSpeciesCommand(rest, activeIo);
+    case "glb":
+      return runGlbCommand(rest, activeIo);
     case "ibl":
       return runIblCommand(rest, activeIo);
     default:

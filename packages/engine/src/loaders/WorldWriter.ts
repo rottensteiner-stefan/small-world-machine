@@ -6,6 +6,7 @@ import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
 import type { GeometryDataInterface } from "../interfaces/index.js";
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";
 import { GltfMaterialParser } from "./gltf/GltfMaterialParser.js";
+import { GlbWriter } from "./GlbWriter.js";
 import type {
   GltfExtensionPlugin,
   GltfWriteContext,
@@ -84,6 +85,27 @@ export class WorldWriter {
     return this._finalize([this._writeNode(obj)]);
   }
 
+  /** Serializes every child of `root` directly into a binary `.glb` container (`Uint8Array`). */
+  public writeGlb(
+    root: Object3D,
+    options?: { exclude?: (child: Object3D) => boolean },
+  ): Uint8Array {
+    this._resetState();
+    const exclude = options?.exclude;
+    const rootIndices: number[] = [];
+    for (const child of root.children) {
+      if (exclude?.(child)) continue;
+      rootIndices.push(this._writeNode(child));
+    }
+    return this._finalizeGlb(rootIndices);
+  }
+
+  /** Serializes `obj` (and its subtree) directly into a binary `.glb` container (`Uint8Array`). */
+  public writeSingleGlb(obj: Object3D): Uint8Array {
+    this._resetState();
+    return this._finalizeGlb([this._writeNode(obj)]);
+  }
+
   private _resetState(): void {
     this._nodes = [];
     this._meshes = [];
@@ -94,7 +116,7 @@ export class WorldWriter {
     this._extensionState = new Map();
   }
 
-  private _finalize(rootIndices: number[]): GltfDocument {
+  private _finalizeDocumentShell(rootIndices: number[]): GltfDocument {
     const doc: GltfDocument = {
       // `swmLightColorSpace` marks light colours as linear (`lightColorToGltf`). Files from this
       // generator without it predate that encoding and carry raw sRGB (see `KhrLightsPunctual`).
@@ -111,10 +133,10 @@ export class WorldWriter {
     if (0 < this._materials.length) doc.materials = this._materials;
     if (0 < this._accessors.length) doc.accessors = this._accessors;
     if (0 < this._bufferViews.length) doc.bufferViews = this._bufferViews;
-    if (0 < this._bufferChunks.length) {
-      doc.buffers = [this._writeCombinedBuffer()];
-    }
+    return doc;
+  }
 
+  private _applyFinalizeExtensions(doc: GltfDocument): GltfDocument {
     const writeCtx: GltfWriteContext = { doc, state: this._extensionState };
     for (const plugin of this._extensions ?? getGltfExtensions()) plugin.finalizeWrite?.(writeCtx);
 
@@ -122,6 +144,26 @@ export class WorldWriter {
     if (0 < extensionsUsed.length) doc.extensionsUsed = extensionsUsed;
 
     return doc;
+  }
+
+  private _finalize(rootIndices: number[]): GltfDocument {
+    const doc = this._finalizeDocumentShell(rootIndices);
+    if (0 < this._bufferChunks.length) {
+      doc.buffers = [this._writeCombinedBuffer()];
+    }
+    return this._applyFinalizeExtensions(doc);
+  }
+
+  private _finalizeGlb(rootIndices: number[]): Uint8Array {
+    const doc = this._finalizeDocumentShell(rootIndices);
+    const combined = this._combineBufferChunks();
+    if (combined.byteLength > 0) {
+      (doc as unknown as { buffers: { byteLength: number }[] }).buffers = [
+        { byteLength: combined.byteLength },
+      ];
+    }
+    this._applyFinalizeExtensions(doc);
+    return GlbWriter.pack(doc, combined.byteLength > 0 ? combined : undefined);
   }
 
   /** Every extension name actually present in the finished document (root or any node), so
@@ -256,7 +298,7 @@ export class WorldWriter {
     return accessorIndex;
   }
 
-  private _writeCombinedBuffer(): { uri: string; byteLength: number } {
+  private _combineBufferChunks(): Uint8Array {
     const totalLength = this._bufferChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
     const combined = new Uint8Array(totalLength);
     let offset = 0;
@@ -264,9 +306,14 @@ export class WorldWriter {
       combined.set(chunk, offset);
       offset += chunk.byteLength;
     }
+    return combined;
+  }
+
+  private _writeCombinedBuffer(): { uri: string; byteLength: number } {
+    const combined = this._combineBufferChunks();
     return {
       uri: `data:application/octet-stream;base64,${WorldWriter._encodeBase64(combined)}`,
-      byteLength: totalLength,
+      byteLength: combined.byteLength,
     };
   }
 
