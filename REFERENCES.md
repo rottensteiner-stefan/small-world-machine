@@ -1249,6 +1249,16 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Per-segment matrix maps the unit `Plane` onto the segment between two history samples (camera-aligned width basis, trig-free like `ParticleMeshRenderer`); alpha carries the tail fade and folds the width taper, so the ribbon tapers instead of ending in a hard transparent edge.
 - **Usage:** Camera-facing ribbon trails behind a tracked node (tracer sparks, spell casts) as an `InstancedMesh` of one quad per segment — deterministic, zero-allocation, and fully symmetric with the existing stream contract.
 
+### Smoothed Particle Hydrodynamics (SPH 3D Fluid Dynamics & Spatial Hash)
+
+- **File:** `packages/vfx-extras/src/affectors/SphFluidAffector.ts`, tests `packages/vfx-extras/tests/SphFluidAffector.test.ts`
+- **Authors/Gurus:** Matthias Müller, David Charypar, Markus Gross (ETH Zürich, 2003, *Particle-Based Fluid Simulation for Interactive Applications*); Matthias Teschner et al. (2003, *Optimized Spatial Hashing for Collision Detection of Deformable Objects*); Markus Ihmsen et al. (2011)
+- **Formulas:**
+  - 3D Poly6 Density Kernel: $W_{\text{poly6}}(r, h) = \frac{315}{64\pi h^9}(h^2 - r^2)^3$ ($0 \le r \le h$, $\int_0^h 4\pi r^2 W_{\text{poly6}} dr = 1$, `@invariant SPH-KERNEL-NORMALIZATION`)
+  - 3D Spiky Pressure Gradient: $\nabla W_{\text{spiky}}(\mathbf{r}, h) = -\frac{45}{\pi h^6}(h - r)^2 \frac{\mathbf{r}}{r}$, symmetric force $\mathbf{f}^{\text{press}}_i = -\sum_{j\neq i} m_j \frac{p_i + p_j}{2\rho_j} \nabla W_{\text{spiky}}$ with ideal-gas EoS $p_i = k\max(\rho_i - \rho_0, 0)$
+  - 3D Viscosity Kernel Laplacian: $\nabla^2 W_{\text{visc}}(r, h) = \frac{45}{\pi h^6}(h - r)$, symmetric acceleration $\mathbf{a}_i = \mathbf{f}_i / \rho_i \implies \mathbf{F}_{ij} + \mathbf{F}_{ji} = \mathbf{0}$ (`@invariant SPH-MOMENTUM-CONSERVATION`)
+- **Usage:** Provides O(N) zero-GC 3D liquid interaction (pressure, viscosity, optional cohesion, optional world-space bounds) in `@small-world-machine/vfx-extras` via pre-allocated SoA linked-cell spatial hashing (`dirtyBuckets` O(N) reset + exact cell-coordinate deduplication).
+
 
 ### Physical Gerstner Waves & Deep-Water Dispersion Relation
 

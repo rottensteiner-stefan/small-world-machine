@@ -9,5 +9,8 @@ describe("46 Variants", () => {
     expect(resolveVariant(null).id).toBe("overview");
     expect(resolveVariant(undefined).id).toBe("overview");
     expect(resolveVariant("toString").id).toBe("overview");
+    expect(resolveVariant("fluid").id).toBe("fluid");
+    expect(resolveVariant("fluid").lanes.fluid).toBe(true);
+    expect(resolveVariant("overview").lanes.fluid).toBe(false);
   });
 });

@@ -144,6 +144,8 @@ const INVARIANT_REGISTRY: readonly string[] = [
   // invariant from the single-pass render-list remediation — registered WITH the code anchor
   // (WebGPURenderer.render frame-frozen contract), D2 runtime anchor pending.
   "FRAME-RENDER-LIST-FROZEN", // WebGPURenderer: CPU render list computed ONCE per frame from the frame's vp/camPos and frozen for every pass (6 call sites share it; direct-execute() fallback keeps unit scaffolds green), Test WebGPUPassRenderList (D2 runtime anchor pending)
+  "SPH-KERNEL-NORMALIZATION", // SphFluidAffector: 3D Poly6 kernel integrates to 1 over sphere of radius h, Spiky/Viscosity derivatives exact, Test SphFluidAffector
+  "SPH-MOMENTUM-CONSERVATION", // SphFluidAffector: pairwise pressure/viscosity/cohesion forces satisfy F_ij + F_ji = 0 (incl. r->0 and unequal masses), Test SphFluidAffector
 ];
 const INVARIANT_REGISTRY_SET: ReadonlySet<string> = new Set<string>(INVARIANT_REGISTRY);
 

@@ -86,3 +86,11 @@ Translated user-facing strings to English.
 - `GoldenCapture.ts` now delegates query parsing, surface pinning, resize handler, ready signal, frame stepping and repaint to `apps/showcases/shared/GoldenCapture.ts` (`GoldenSession`, `parseGoldenSpec`, `lookupOwn`); only the showcase-specific mapping/hooks stay here. Public API (`GoldenCapture`, `parseGoldenSpec`, options) unchanged, `showcase.ts` untouched.
 - Pool-key lookups are prototype-safe (`__golden=constructor` -> `Unknown __golden pool` in `meta.error`, no TypeError).
 - Byte-stability verified: pre/post gl2 captures pixel-identical (see `apps/showcases/tests/GoldenCapture.test.ts` for parser/session tests).
+
+---
+
+## 2026-11-21 — `fluid` variant (`SphFluidAffector`) wired into Showcase 46
+
+- **Engine/VFX:** Added [`SphFluidAffector.ts`](file:///Users/stefan.rottensteiner/Projekte/rottensteiner-stefan/small-world-machine/packages/vfx-extras/src/affectors/SphFluidAffector.ts) (Müller 2003 Poly6/Spiky/Viscosity kernels + zero-GC SoA linked-cell spatial hash + containment bounds).
+- **Variant Lab (`fluid`, hotkey `KeyF`, `?variant=fluid`):** Added a 420-particle SPH water basin/jet lane colliding with the central anvil sphere SDF collider (`_fluidSystem` + `_fluidRenderer`), driven by an isolated `mulberry32(20260720)` PRNG stream.
+- **Golden isolation:** `overview.lanes.fluid` stays `false` and `fluid` uses its own PRNG, leaving all 5 existing `part46-*` golden baselines byte-untouched.

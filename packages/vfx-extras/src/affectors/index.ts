@@ -15,3 +15,4 @@ export * from "./SizeGrowthAffector.js";
 export * from "./BatchedAffector.js";
 export * from "./SdfColliderAffector.js";
 export * from "./CurlNoiseAffector.js";
+export * from "./SphFluidAffector.js";

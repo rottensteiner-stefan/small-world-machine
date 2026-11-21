@@ -276,6 +276,10 @@ _Avoid_: Equating with opacity — the alpha is pure opacity here; the soft fade
 The dark grounding mark a real fire leaves (ADR 0053): a box-projected `Decal` (unlit, deterministic procedural texture, coverage in alpha) that renders natively on WEB_GPU/WEB_GL2 and is baked into the floor geometry only on WEB_GL1 (`bakeSceneDecals`, ADR 0029 Phase 5). Static by contract — it has no runtime state, so it never flickers and costs nothing while the scene stands still.
 _Avoid_: Dynamic Soot Growth, Second Shadow (the mark is baked/static, not a live simulation).
 
+**SPH Fluid Simulation (`SphFluidAffector`)**:
+The zero-GC 3D Smoothed Particle Hydrodynamics affector in `@small-world-machine/vfx-extras` (Müller et al. 2003 Poly6 density, Spiky symmetric pressure gradient, Viscosity Laplacian, optional cohesion, and containment bounds) accelerated by an $O(N)$ SoA linked-cell spatial hash (`dirtyBuckets` reset + exact cell check). Preserves linear momentum pairwise (`@invariant SPH-MOMENTUM-CONSERVATION`) and exact 3D kernel normalization (`@invariant SPH-KERNEL-NORMALIZATION`).
+_Avoid_: Eulerian Grid Fluid (this is Lagrangian particle SPH), Full-Buffer Hash Clear (`Array.fill(-1)` per tick).
+
 **State Data**:
 The user-defined payload object passed into a Finite State Machine's `onEnter`/`onUpdate`/`onExit` callbacks.
 _Avoid_: Context, FSM Context — collides with Context Object, an unrelated DI concept; "State" is already the FSM's node/mode (`idle`, `patrolling`, ...), so State Data is deliberately a third, distinct word rather than overloading either.

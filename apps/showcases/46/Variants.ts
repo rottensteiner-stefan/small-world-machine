@@ -12,7 +12,8 @@ import { Vector3D } from "@small-world-machine/engine";
  */
 
 /** Effect variants the viewer can switch between. Unknown ids (query params) degrade to `overview`. */
-export type ParticleVariantId = "overview" | "forge" | "smoke" | "trails" | "weather" | "gpu";
+export type ParticleVariantId =
+  "overview" | "forge" | "smoke" | "trails" | "weather" | "gpu" | "fluid";
 
 /** Curated camera pools, mirroring the `fire45` pool convention (overview / closeup / budget). */
 export type CameraPoolId = "overview" | "closeup" | "budget";
@@ -34,6 +35,8 @@ export interface VariantLanes {
   readonly weather: boolean;
   /** WebGPU compute lane (only wired when a GPU device is present). */
   readonly gpu: boolean;
+  /** 3D SPH fluid dynamics basin/jet lane (Müller 2003 kernels + spatial hash). */
+  readonly fluid: boolean;
   /** The plain lab floor + lights stay in every variant. */
 }
 
@@ -50,43 +53,50 @@ export const PARTICLE_VARIANTS: readonly ParticleVariant[] = [
     id: "overview",
     title: "Overview",
     icon: "🧪",
-    hint: "All lanes (default)",
-    lanes: { sparks: true, smoke: true, trails: true, weather: true, gpu: false },
+    hint: "All baseline lanes (default)",
+    lanes: { sparks: true, smoke: true, trails: true, weather: true, gpu: false, fluid: false },
   },
   {
     id: "forge",
     title: "Forge",
     icon: "⚒️",
     hint: "Sparks · SDF · light pool",
-    lanes: { sparks: true, smoke: false, trails: false, weather: false, gpu: false },
+    lanes: { sparks: true, smoke: false, trails: false, weather: false, gpu: false, fluid: false },
   },
   {
     id: "smoke",
     title: "Smoke",
     icon: "💨",
     hint: "Soft smoke · 6-way light",
-    lanes: { sparks: false, smoke: true, trails: false, weather: false, gpu: false },
+    lanes: { sparks: false, smoke: true, trails: false, weather: false, gpu: false, fluid: false },
   },
   {
     id: "trails",
     title: "Trails",
     icon: "✨",
     hint: "Ribbon tracers · bursts",
-    lanes: { sparks: true, smoke: false, trails: true, weather: false, gpu: false },
+    lanes: { sparks: true, smoke: false, trails: true, weather: false, gpu: false, fluid: false },
   },
   {
     id: "weather",
     title: "Weather",
     icon: "🌧️",
     hint: "Rain · roof · splash",
-    lanes: { sparks: false, smoke: false, trails: false, weather: true, gpu: false },
+    lanes: { sparks: false, smoke: false, trails: false, weather: true, gpu: false, fluid: false },
+  },
+  {
+    id: "fluid",
+    title: "Fluid",
+    icon: "💧",
+    hint: "SPH pressure · viscosity · basin",
+    lanes: { sparks: false, smoke: false, trails: false, weather: false, gpu: false, fluid: true },
   },
   {
     id: "gpu",
     title: "GPU",
     icon: "⚡",
     hint: "WebGPU compute lane",
-    lanes: { sparks: false, smoke: false, trails: false, weather: false, gpu: true },
+    lanes: { sparks: false, smoke: false, trails: false, weather: false, gpu: true, fluid: false },
   },
 ];
 
@@ -117,6 +127,9 @@ export const CAMERA_OVERRIDES: Readonly<
     // anvil): closer than the overview, sight line through the mid-burst with the launch base
     // partially visible below. The generic anvil closeup would clip the band's upper edge.
     closeup: { position: [0, 1.0, 2.3], target: [0, 2.3, 0] },
+  },
+  fluid: {
+    closeup: { position: [0, 1.05, 2.75], target: [0, 0.75, 0] },
   },
 };
 

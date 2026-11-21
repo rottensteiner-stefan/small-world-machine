@@ -26,6 +26,7 @@ import {
   ParticleTrailRenderer,
   SdfColliderAffector,
   SmokeSpriteMaterial,
+  SphFluidAffector,
   SubEmitter,
 } from "@small-world-machine/vfx-extras";
 import { GoldenCapture, parseGoldenSpec, type GoldenCaptureOptions } from "./GoldenCapture.js";
@@ -62,10 +63,12 @@ import {
 const SPARK_EMIT_RATE = 30;
 const SMOKE_EMIT_RATE = 6;
 const GPU_EMIT_RATE = 64;
+const FLUID_EMIT_RATE = 140;
 /** HUD readout refresh interval (seconds). Status text is cheap, not per-frame work. */
 const READOUT_INTERVAL = 0.33;
 /** Seed for the deterministic auto-emission stream (`mulberry32`); re-pinned at golden freeze. */
 const EMISSION_SEED = 20260718;
+const FLUID_SEED = 20260720;
 
 export class Showcase extends AbstractShowcase {
   private _sparks!: ParticleSystem;
@@ -86,6 +89,8 @@ export class Showcase extends AbstractShowcase {
   private _roofBakeCooldown = 0;
   private _splashSource!: ParticleSystem;
   private _splashRenderer!: ParticleMeshRenderer;
+  private _fluidSystem!: ParticleSystem;
+  private _fluidRenderer!: ParticleMeshRenderer;
   private _burstCooldown = 0;
 
   // Variant lab state (fire-45 style): HUD settings, golden capture, deterministic emission.
@@ -94,7 +99,7 @@ export class Showcase extends AbstractShowcase {
   private _goldenCapture: GoldenCapture | undefined = undefined;
   /** WebGPU compute lane; only present when a live GPU device could be attached. */
   private _gpuSystem: GPUParticleSystem | undefined = undefined;
-  // Scratch options for `_emitSparkBurst` (emit copies into the SoA arrays; no per-spark allocation).
+  // Scratch options for `_emitSparkBurst` and `_emitFluidDrops` (zero per-particle allocation).
   private readonly _burstOptions = {
     position: new Vector3D(),
     velocity: new Vector3D(),
@@ -103,9 +108,11 @@ export class Showcase extends AbstractShowcase {
     heat: 0,
   };
   private _rng = mulberry32(EMISSION_SEED);
+  private _fluidRng = mulberry32(FLUID_SEED);
   private _autoSparksAcc = 0;
   private _autoSmokeAcc = 0;
   private _autoGpuAcc = 0;
+  private _autoFluidAcc = 0;
   private _readoutTimer = 0;
   /** Last applied (variant|pool) combination; the camera re-positions only when it changed. */
   private _lastCamKey: string | undefined = undefined;
@@ -324,10 +331,47 @@ export class Showcase extends AbstractShowcase {
     });
     this.scene.add(this._weather.mesh);
 
+    // ---- Lane: 3D SPH fluid dynamics (Müller 2003 kernels + SoA linked-cell hash + basin) ----
+    const sphAffector = new SphFluidAffector({
+      smoothingRadius: 0.24,
+      restDensity: 260,
+      stiffness: 3.5,
+      viscosity: 1.2,
+      cohesion: 0.25,
+      maxAcceleration: 220,
+      capacity: 420,
+      bounds: {
+        min: new Vector3D(-1.05, 0.24, -0.68),
+        max: new Vector3D(1.05, 2.5, 0.68),
+        restitution: 0.22,
+        friction: 0.08,
+      },
+    });
+    this._fluidSystem = new ParticleSystem({
+      capacity: 420,
+      affectors: [
+        new GravityAffector({ acceleration: new Vector3D(0, -9.81, 0) }),
+        sphAffector,
+        this._collider,
+      ],
+    });
+    this._fluidRenderer = new ParticleMeshRenderer({
+      name: "LabFluidMesh",
+      billboard: "spherical",
+      system: this._fluidSystem,
+      material: new BasicMaterial({ color: new Color(0.28, 0.74, 1.0, 1.0) }),
+      geometryMode: "octagon",
+      enableColorBuffer: true,
+    });
+    this._fluidRenderer.mesh.isVisible = false;
+    this.scene.add(this._fluidRenderer.mesh);
+
     // Deterministic warm-up: seed the smoke plume and a first tracer so variants are observable
     // immediately and golden captures start from a non-empty lane state.
     this._emitSmokePuffs(40);
     this._emitTracer();
+    // Fluid uses its own PRNG stream so baseline RNG state stays bit-identical across goldens.
+    this._emitFluidDrops(90);
 
     // WebGPU compute lane: attach only when a live device exists; otherwise this lane stays
     // absent and the `gpu` variant honestly falls back to `forge` (see `_applyVariant`).
@@ -347,6 +391,11 @@ export class Showcase extends AbstractShowcase {
       this._settings.burstScale = 1;
       this._settings.smokeScale = 1;
       this._settings.weatherScale = 1;
+    } else if (typeof window !== "undefined") {
+      const rawVariant = new URLSearchParams(window.location.search).get("variant");
+      if (rawVariant !== null) {
+        this._settings.variant = resolveVariant(rawVariant).id;
+      }
     }
     await super.start();
     if (golden) {
@@ -398,9 +447,11 @@ export class Showcase extends AbstractShowcase {
     // Re-pin the emission RNG and all accumulators so the deterministic stepping phase always
     // starts from the same stream position regardless of what happened before `stop()`.
     this._rng = mulberry32(EMISSION_SEED);
+    this._fluidRng = mulberry32(FLUID_SEED);
     this._autoSparksAcc = 0;
     this._autoSmokeAcc = 0;
     this._autoGpuAcc = 0;
+    this._autoFluidAcc = 0;
     this._burstCooldown = 0;
     this._trailEmitterCooldown = 0;
     this._applySettings();
@@ -419,6 +470,7 @@ export class Showcase extends AbstractShowcase {
     this._trailRenderer.mesh.isVisible = l.trails;
     this._weather.mesh.isVisible = l.weather;
     this._splashRenderer.mesh.isVisible = l.weather;
+    this._fluidRenderer.mesh.isVisible = l.fluid;
     // The GPU lane is only meaningful when a live device is mounted AND the viewer enables it
     // (HUD switch); otherwise the `gpu` variant honestly degrades to `forge` (visible CPU sparks).
     if (variant.id === "gpu" && !(this._settings.gpuAllowed && this._gpuSystem)) {
@@ -468,10 +520,16 @@ export class Showcase extends AbstractShowcase {
     } else if (this._gpuSystem) {
       gpu = "disabled (fallback: forge)";
     }
+    let fluidAlive = 0;
+    const aliveFlags = this._fluidSystem.arrays.aliveFlags;
+    for (let i = 0; i < this._fluidSystem.activeCount; i++) {
+      if (aliveFlags[i] === 1) fluidAlive++;
+    }
     return (
       `Variant:    ${variant.icon} ${variant.title} (${variant.id})\n` +
       `Camera:     ${s.pool}\n` +
       `Sparks ×${s.burstScale.toFixed(2)}  Smoke ×${s.smokeScale.toFixed(2)}  Weather ×${s.weatherScale.toFixed(2)}\n` +
+      `Fluid-SPH:  ${fluidAlive}/${this._fluidSystem.capacity}\n` +
       `Time:       ${speed}\n` +
       `GPU-Lane:   ${gpu}\n` +
       `Renderer:   ${this.renderer.type}`
@@ -608,6 +666,30 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
+  private _emitFluidDrops(count: number): void {
+    const o = this._burstOptions;
+    for (let i = 0; i < count; i++) {
+      const a = this._fluidRng() * Math.PI * 2;
+      const r = this._fluidRng() * 0.12;
+      const ox = Math.cos(a) * r;
+      const oz = Math.sin(a) * r;
+      o.position.set(ox, 1.95 + (this._fluidRng() - 0.5) * 0.08, oz);
+      o.velocity.set(ox * 1.4, -0.8 - this._fluidRng() * 0.5, oz * 1.4);
+      o.size = 0.085 + this._fluidRng() * 0.025;
+      o.maxLife = 2.6 + this._fluidRng() * 0.8;
+      o.heat = 0;
+      const idx = this._fluidSystem.emit(o);
+      if (idx >= 0) {
+        const c = idx * 4;
+        const tint = this._fluidRng();
+        this._fluidSystem.arrays.colors[c] = 0.18 + tint * 0.24;
+        this._fluidSystem.arrays.colors[c + 1] = 0.62 + tint * 0.24;
+        this._fluidSystem.arrays.colors[c + 2] = 0.96;
+        this._fluidSystem.arrays.colors[c + 3] = 0.92;
+      }
+    }
+  }
+
   protected override update(deltaTime: number): void {
     const s = this._settings;
     const dt = s.paused ? 0 : deltaTime * s.timeScale;
@@ -640,6 +722,14 @@ export class Showcase extends AbstractShowcase {
         this._emitSmokePuffs(n);
       }
     }
+    if (lanes.fluid && dt > 0) {
+      this._autoFluidAcc += dt * FLUID_EMIT_RATE;
+      const n = Math.floor(this._autoFluidAcc);
+      if (n >= 1) {
+        this._autoFluidAcc -= n;
+        this._emitFluidDrops(n);
+      }
+    }
 
     // Tracer upkeep (trails lane): manual Shift respawn + automatic re-fire after expiry.
     this._trailEmitterCooldown = Math.max(0, this._trailEmitterCooldown - dt);
@@ -657,6 +747,7 @@ export class Showcase extends AbstractShowcase {
     this._sparks.update(dt);
     this._embers.update(dt);
     this._smoke.update(dt);
+    this._fluidSystem.update(dt);
     this._impactSubEmitter.flush();
 
     // T1: update the pooled lights before rendering (heat/alpha ranking, fade envelope).
@@ -706,6 +797,7 @@ export class Showcase extends AbstractShowcase {
     this._sparkRenderer.sync(this.camera.position);
     this._emberRenderer.sync(this.camera.position);
     this._smokeRenderer.sync(this.camera.position);
+    this._fluidRenderer.sync(this.camera.position);
 
     // HUD readout on a steady ~3 Hz cadence (raw deltaTime, so pause never freezes the UI).
     this._readoutTimer -= deltaTime;

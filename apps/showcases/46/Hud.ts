@@ -52,6 +52,7 @@ const VARIANT_KEYS: Readonly<Record<string, ParticleVariantId>> = {
   Digit4: "trails",
   Digit5: "weather",
   Digit6: "gpu",
+  KeyF: "fluid",
 };
 const POOL_KEYS: Readonly<Record<string, CameraPoolId>> = {
   Digit7: "overview",
@@ -125,7 +126,7 @@ export class Hud {
         <div class="hud-section"><pre id="particleLabReadout"></pre></div>
         ${hudSection(
           "🧨 Effect variant",
-          "1–6",
+          "1–6 · F",
           `<div class="preset-group">${variants}</div>` +
             hudNote("Each variant focuses one particle lane; the overview shows all."),
         )}
@@ -144,7 +145,7 @@ export class Hud {
            <button id="particleLabPause" class="btn-preset" style="width:100%;margin-top:6px;" title="Freeze (P)"></button>`,
         )}
         <div class="hud-section hud-keys">
-          <kbd>1–6</kbd> Variant · <kbd>7–9</kbd> Camera · <kbd>P</kbd> Pause · <kbd>T</kbd> Speed · <kbd>R</kbd> Camera reset · <kbd>I</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Fly
+          <kbd>1–6</kbd>/<kbd>F</kbd> Variant · <kbd>7–9</kbd> Camera · <kbd>P</kbd> Pause · <kbd>T</kbd> Speed · <kbd>R</kbd> Camera reset · <kbd>I</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Fly
         </div>
       `,
     });
