@@ -91,3 +91,10 @@ Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
 
 * Engine default tone curve became `PBR_NEUTRAL`; this showcase pins `quality.toneMapping = ToneMappingMode.REINHARD` (its former implicit forward curve). Per-channel Reinhard keeps the emissive lava/slime pools on the red -> yellow -> white path; Neutral turned the lava cracks salmon-pink (goldens 2-10 % drift).
 * Verification: liquid goldens 32/32 within tolerance again (gl2).
+
+## 2026-11-21 · OilSlick GL2 ↔ WebGPU Parity Fix (Audit S9 / Backlog 2026-10-26)
+
+* **Root cause:** `OilSlickMaterial` called `waterHash()` inside `oilValueNoise()`, while `liquid_worley_noise.glsl` (`fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123)`) and `liquid_worley_noise.wgsl` (Dave Hoskins polynomial hash) used different hash functions. On `petroleum-oil`, the resulting `oilFlow` noise mismatch shifted both patch placement and thin-film interference phase (`grey-blue` on WebGPU vs `reddish` on GL2). `toxic-slime` was already parity-clean on HEAD (0.0000–0.0002% vs baseline).
+* **Fix:** `OilSlickMaterial.ts` now defines an identical self-contained `oilHash(p)` across GLSL and WGSL matching `liquid_worley_noise.glsl`, leaving GL2 golden baselines 0.0000% byte-identical while aligning WebGPU sheen patches and hues with GL2.
+* **Verification:** `gl2` vs `.agents/goldens/liquid/baseline` (`petroleum-oil` top/oblique = `0.0000%` byte-identical); `gpu` vs `gl2` (`petroleum-oil__top` `0.1149%`, `petroleum-oil__oblique` `0.3560%`), visually confirmed matching sheen patches and colors.
+

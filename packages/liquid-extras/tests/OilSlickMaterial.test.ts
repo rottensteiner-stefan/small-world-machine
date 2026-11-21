@@ -27,6 +27,8 @@ describe("OilSlickMaterial Hook-Based Extension", () => {
     ]) {
       expect(src).toContain("oilFilmThinFilm");
       expect(src).toContain("oilFlowNoise");
+      expect(src).toContain("oilHash");
+      expect(src).toContain("12.9898");
     }
   });
 

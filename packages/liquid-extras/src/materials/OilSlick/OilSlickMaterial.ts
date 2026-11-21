@@ -106,12 +106,17 @@ export class OilSlickMaterial extends StylizedWaterMaterial {
   protected override _getLiquidWaveShaderSources(): ShaderDefinition["sources"] {
     const glslDecl = `
     ${THIN_FILM_GLSL_DECL}
+    // Explicit hash matching liquid_worley_noise.glsl so GL2 and WebGPU sample the identical sheen phase
+    // (liquid_worley_noise.wgsl uses a polynomial waterHash that shifts thin-film colors/patches).
+    float oilHash(vec2 p) {
+        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
+    }
     float oilValueNoise(vec2 p) {
         vec2 c = floor(p);
         vec2 f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(waterHash(c), waterHash(c + vec2(1.0, 0.0)), f.x),
-                   mix(waterHash(c + vec2(0.0, 1.0)), waterHash(c + vec2(1.0, 1.0)), f.x), f.y);
+        return mix(mix(oilHash(c), oilHash(c + vec2(1.0, 0.0)), f.x),
+                   mix(oilHash(c + vec2(0.0, 1.0)), oilHash(c + vec2(1.0, 1.0)), f.x), f.y);
     }
     // Smooth domain-warped flow noise, slow like viscous liquid
     float oilFlowNoise(vec2 p, float t) {
@@ -140,12 +145,15 @@ export class OilSlickMaterial extends StylizedWaterMaterial {
 
     const wgslDecl = `
     ${THIN_FILM_WGSL_DECL}
+    fn oilHash(p: vec2<f32>) -> f32 {
+        return fract(sin(dot(p, vec2<f32>(12.9898, 78.233))) * 43758.5453123);
+    }
     fn oilValueNoise(p: vec2<f32>) -> f32 {
         let c = floor(p);
         var f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(waterHash(c), waterHash(c + vec2<f32>(1.0, 0.0)), f.x),
-                   mix(waterHash(c + vec2<f32>(0.0, 1.0)), waterHash(c + vec2<f32>(1.0, 1.0)), f.x), f.y);
+        return mix(mix(oilHash(c), oilHash(c + vec2<f32>(1.0, 0.0)), f.x),
+                   mix(oilHash(c + vec2<f32>(0.0, 1.0)), oilHash(c + vec2<f32>(1.0, 1.0)), f.x), f.y);
     }
     fn oilFlowNoise(p: vec2<f32>, t: f32) -> f32 {
         let warp = vec2<f32>(oilValueNoise(p * 0.8 + vec2<f32>(t * 0.05, 3.1)), oilValueNoise(p * 0.8 + vec2<f32>(7.7, -t * 0.04)));
