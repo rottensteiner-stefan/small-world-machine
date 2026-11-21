@@ -70,3 +70,17 @@
 ## 8. Links
 
 - Contract: `packages/engine/src/core/InstanceField.ts` · Tests: `packages/engine/tests/renderers/InstanceFieldCull.test.ts` · Plan: `.agents/scratches/veg-p1/charly-test-plan.md` · Baseline: `docs/research/vegetation-baseline-2026-11-07.md` · ADR: `docs/adr/0059-gpu-driven-vegetation-rendering.md`.
+
+## 9. S3 Spike: Tight Cylinder Bounds, Box AABB & Two-Phase Occlusion (2026-11-21)
+
+- **Scope (`InstanceField` + `HzbOcclusionSystem` + `GroundCoverSystem` + Showcase 51):**
+  - **Tight yaw-invariant cylinder bounds:** `PrototypeDescriptor` gains optional `hzbRadiusXZ`, `hzbMinY`, `hzbMaxY` (packed into `fieldPrototypeInfo` vec4 slots alongside `boundingRadius`), tested as a wind-expanded 8-corner world AABB in `fieldHzbVisible` (`instance_cull.wgsl`, falling back to bounding sphere when `hzbRadiusXZ <= 0`). Showcase 51 and `GroundCoverSystem` compute tight bounds per prototype so slender conifers/clumps no longer leak around foreground occluders via oversized bounding spheres.
+  - **`BoundingType.BOX` tight AABB HZB test:** `HzbOcclusionSystem` packs `halfExtents` + `useTightBox` (from `BoundingType.BOX`), and `hzb_visibility_test.wgsl` projects all 8 world AABB corners instead of inflating to an oversized bounding sphere (preserving sphere fallback for `SPHERE`/`OBB`/`ConvexHull`).
+  - **Two-phase Mode B (`cullMode == 2`, Wihlidal / Haar & Aaltonen):** Phase 1 (`cullInstances`) records prev-frame HZB rejects into `fieldPhase2.indices`; after `DepthPrePassGPU` + pyramid build (`HzbOcclusionPassGPU` / `FieldHzbBuildPassGPU`), `_recordInstanceFieldPhase2` dispatches `finalizePhase2Args` + `cullInstancesPhase2` against the current frame's HZB pyramid (`global.vp`), depth-patches rescued instances (`depthLoadOp: "load"`, `depthCompare: "less-equal"`), and `MainRenderPass` renders rescued color (`depthCompare: "equal"`). Exposed via `InstanceFieldOptions.twoPhaseOcclusion`, `InstanceFieldSystem.setTwoPhaseOcclusion()`, and Showcase 51 `?occlusion=two-phase` (plus `?twoPhase=1`).
+- **Verification (vitest + headless Chrome SwiftShader WebGPU, 2026-11-21):**
+  - `InstanceFieldCull.test.ts`, `InstanceFieldSystemDevice.test.ts`, `HzbOcclusionPassGPU.test.ts`, `FroxelFogGeometryWGSL.test.ts`: **4/4 files, 115/115 tests passing** (lazy phase-2 buffer allocation, bind-group wiring, `BoundingType.BOX` packing, reset/finalize/phase-2 dispatch sequence).
+  - Showcase 51 (`?rendererType=WEB_GPU&mode=field&path=walk&pausedAt=0.15&cover=0&wind=0&popcount=1&cullref=1`):
+    - `n=20000` (`tree=none`): `occ-a` `cpu=6146, gpu=6242`; `occ-b`, `occ-two-phase` (`fieldTwoPhase=1`), `occ-two-phase-cut` (`cutEvery=10`, `teleports=1`), `occ-two-phase-cover` (ground cover ON): **0 WebGPU/console errors across all 5 runs**.
+    - `n=50000` (`45 630` placed, `tree=none`): `occ-a` `cpu=14053, gpu=14053` vs. `occ-b` `gpu=14041` (`12` self-occluded pines dropped cleanly) and `occ-two-phase` `gpu=14041` (`fieldTwoPhase=1`, **0 errors**).
+    - `n=5000` (`tree=none`, `occlusion=two-phase`) dynamic opaque wall occluder probe: `cpu=1417`, `gpu` drops `1417 → 28` (`1 389` trees / `98.0 %` HZB-culled) behind the opaque wall and recovers to `1417` immediately on wall removal, **0 errors**.
+    - `n=2000` (`1 850` placed, `tree=jacaranda` 4 real LODs): `occ-a` `cpu=682, gpu=682`, `occ-b` `cpu=682, gpu=682`, **0 errors**.

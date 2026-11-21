@@ -1,4 +1,4 @@
-// Instance-field GPU cull + segment-table reset -- ADR 0059 step 1 (P1-2) / step 2 (P2), WebGPU lane.
+// Instance-field GPU cull + segment-table reset -- ADR 0059 step 1 (P1-2) / step 2 (P2) / step 3, WebGPU lane.
 // Runtime assembly (composed by the renderer, mirrored by lint-wgsl.ts):
 //   chunk instance_field_structs.wgsl   // SOLE declaration of FieldInfo/CullParams + the 12
 //                                       // @group(2) bindings (INSTANCE_FIELD_BIND_GROUP, frozen)
@@ -17,30 +17,25 @@
 // CULL MODES (runtime uniform `cullParams.cullMode`, set by the coordinator):
 //   0 = C: frustum + projected-size only.
 //   1 = A: + previous-frame HZB skip (main-camera view only, `hzbEnabled && !hzbSkip`).
-//   2 = B: two-phase occlusion (Wihlidal / Haar & Aaltonen) is SPEC'D but not built -- until the
-//         S3 A/B/C spike needs the depth-pre-pass split, mode 2 takes the mode-A path. The split
-//         (prev-visible draw -> this-frame HZB rebuild -> cull the rest) is the documented TODO.
-//   TODO(veg-p1-bob): mode 2B depth-pre-pass split at spike time (ADR 0059 decision protocol).
+//   2 = B: two-phase occlusion (Wihlidal / Haar & Aaltonen): phase 1 tests previous-frame HZB
+//          and records frustum+size survivors rejected by prev-HZB into `fieldPhase2.indices`;
+//          after DepthPrePass + current-frame HZB pyramid build, `finalizePhase2Args` +
+//          `cullInstancesPhase2` rescue any disoccluded instances against current-frame HZB and
+//          emit them into the phase-2 indirect draw buffer for depth patch + main color draw.
 //
 // SEGMENT TABLE (frozen `IndirectDrawSource`): `bv = view * MAX_LOD_BUCKETS + bucket` names one
 // (view x bucket) segment. Each segment header is 8 u32 words (INDIRECT_SEGMENT_HEADER_BYTES 32):
 //   [0] indexCount, [1] instanceCount (atomic cursor), [2] firstIndex, [3] baseVertex,
 //   [4] firstInstance (0), [5] liveCount, [6] state, [7] reserved.
-// The geometry words [0,2,3,4] are written once at setup (static V1 population); the RESET entry
-// zeroes the producer-owned words [1,5,6,7] per frame BEFORE any cull dispatch (separate compute
-// pass -- a dispatches-inside-one-pass pair has no cross-workgroup barrier in WGSL, same
-// reasoning as `gpu_particles.wgsl`'s three-stage separation).
 //
 // CAPACITY POLICY (binding, IF-CULL-ROUTING / IF-BUDGET): clamp-at-capacity with drop. Each
 // (view x bucket) page is sized at `fieldInfo.pageCapacity` = 2 * maxInstances -- the worst-case
-// two-bucket routing bound, see `fieldEmit`'s capacity argument. Over-budget survivors are
-// dropped (no OOB write, no cross-segment overrun) and the compaction cursor is CLAMPED so the
-// drawn instance count never exceeds the page; `firstInstance + instanceCount <= page capacity`
-// is a hard invariant the indirect draw can rely on (P0).
+// two-bucket routing bound, see `fieldEmit`'s capacity argument.
 
 // @fixed: frozen segment-table constant (see `InstanceField.ts` MAX_LOD_BUCKETS *
 //         MAX_INDIRECT_VIEWS -- 21 x 8 headers). 8 u32 words per header (INDIRECT_SEGMENT_HEADER_BYTES).
 const FIELD_SEGMENTS: u32 = 168u;
+const PHASE2_SEGMENTS: u32 = 8u;
 
 // ── per-lane helpers ──────────────────────────────────────────────────────────────────────────
 
@@ -84,10 +79,7 @@ fn fieldProjectedDiameterPx(radius: f32, viewDist: f32) -> f32 {
 }
 
 // Deterministic per-instance threshold jitter in [-1, 1): the stateless hysteresis discriminator
-// of candidate C (ADR 0059 step 2). Pure mirror of `instanceLodJitter` (InstanceField.ts) --
-// identical finalizer constants, so the CPU reference reproduces the same effective thresholds
-// (IF-CULL-DETERMINISM). Frame-stable because `inst` is the record index of the static V1
-// population; identical in every view (shadows reuse the main camera's choice unchanged).
+// of candidate C (ADR 0059 step 2). Pure mirror of `instanceLodJitter` (InstanceField.ts).
 fn fieldLodJitter(inst: u32) -> f32 {
     var h = (inst ^ 0x9E3779B9u) * 0x85EBCA6Bu;
     h = (h ^ (h >> 13u)) * 0xC2B2AE35u;
@@ -96,18 +88,14 @@ fn fieldLodJitter(inst: u32) -> f32 {
 }
 
 // Effective upper band bound of one bucket: authored max + per-tier bias + per-instance hysteresis
-// jitter (`effectiveBucketMaxPx` in InstanceField.ts). At default knobs (bias 0, hysteresis 0)
-// this equals the authored max exactly -- the frozen IF-PROJECTED-SIZE selection is unchanged.
+// jitter (`effectiveBucketMaxPx` in InstanceField.ts).
 fn fieldEffectiveMaxPx(prototype: u32, bucket: u32, jitter: f32) -> f32 {
     let maxPx = fieldLodMaxima[prototype * 2u + bucket / 4u][bucket % 4u];
     return maxPx * (1.0 + cullParams.lodHysteresis * jitter) + cullParams.lodBiasPx;
 }
 
 // Ascending per-prototype bucket maxima, EFFECTIVE (bias + hysteresis adjusted); select the
-// finest band whose upper bound is not exceeded. Bucket 0 is the smallest projected-size band
-// (farthest under the near=detail authoring convention); the hidden coarsest band holds every
-// diameter above all authored maxima. P1 fields route through this path from day 1 (bucketed
-// compaction) -- IF-CULL-ROUTING.
+// finest band whose upper bound is not exceeded.
 fn fieldSelectBucket(prototype: u32, diam: f32, jitter: f32) -> u32 {
     let bucketCount = min(fieldPrototypeRange[prototype].z, 8u);
     var bucket = 0u;
@@ -119,65 +107,82 @@ fn fieldSelectBucket(prototype: u32, diam: f32, jitter: f32) -> u32 {
     return bucket;
 }
 
-// Conservative previous-frame HZB decision (mode A), mirroring `hzb_visibility_test.wgsl`'s
-// 4-corner max-mip load (same conservative spirit, IF-CULL-NO-FALSE-NEGATIVE / IF-CAMERA-CUT-HZB-
-// SKIP): skipped only when every sampled texel is STRICTLY nearer than the sphere's nearest
-// point. Only evaluated when `hzbEnabled && !hzbSkip` (main-camera view). The sample reads the
-// PREVIOUS frame's pyramid (ping-pong, `getPreviousFrameHzb()`) -- never newer data.
-fn fieldHzbVisible(center: vec3f, radius: f32) -> bool {
-    // PREVIOUS-frame projection (Frame N-1's VP -- the frame whose depth built the sampled
-    // pyramid): the HZB data is one frame old by construction, so the footprint AND the depth
-    // compare must live in Frame N-1's space. Projecting with the current `global.vp` would test
-    // a stale screen rect and a stale z against the old pyramid and falsely cull near the
-    // frustum edges (frame-staleness fix; ping-pong slot served = last completed build).
-    let prevClip = cullParams.prevVp * vec4f(center, 1.0);
-    // Sphere reaching the eye / near plane cannot be projected reliably -> conservative visible
-    // (the 1.05 margin replaces a 1x1 border-texel collapse, matching hzb_visibility_test).
-    if (prevClip.w <= radius * 1.05) {
-        return true;
+// Conservative HZB decision against `vpMat` and the bound pyramid (`fieldPrevHzb` holds Frame N-1
+// during phase 1 or Frame N during phase 2). Uses the tight wind-expanded vertical-cylinder AABB
+// when `protoBounds.y > 0.0` (hzbRadiusXZ authored), else falls back to the bounding sphere.
+fn fieldHzbVisible(
+    center: vec3f,
+    radius: f32,
+    scale: f32,
+    protoBounds: vec4f,
+    vpMat: mat4x4f,
+) -> bool {
+    var uvMin = vec2f(0.0);
+    var uvMax = vec2f(1.0);
+    var nearDepth = 0.0;
+
+    if (protoBounds.y > 0.0) {
+        let rXZ = protoBounds.y * scale + fieldInfo.windHeight * scale * fieldInfo.wind.p3.x;
+        var yMin = protoBounds.z * scale;
+        var yMax = protoBounds.w * scale;
+        if (fieldInfo.windHeight > 0.0) {
+            yMin = min(yMin, yMin * 0.55);
+            yMax = max(yMax, yMax * 0.55);
+        }
+        var minNdc = vec3f(1e9);
+        var maxNdc = vec3f(-1e9);
+        for (var corner = 0u; corner < 8u; corner++) {
+            let sx = select(-rXZ, rXZ, (corner & 1u) != 0u);
+            let sy = select(yMin, yMax, (corner & 2u) != 0u);
+            let sz = select(-rXZ, rXZ, (corner & 4u) != 0u);
+            let cornerClip = vpMat * vec4f(center + vec3f(sx, sy, sz), 1.0);
+            if (cornerClip.w <= 1e-4 || cornerClip.z < 0.0) {
+                return true;
+            }
+            let cornerNdc = cornerClip.xyz / cornerClip.w;
+            minNdc = min(minNdc, cornerNdc);
+            maxNdc = max(maxNdc, cornerNdc);
+        }
+        if (maxNdc.x < -1.0 || minNdc.x > 1.0 || maxNdc.y < -1.0 || minNdc.y > 1.0) {
+            return true;
+        }
+        uvMin = clamp(
+            vec2f(minNdc.x * 0.5 + 0.5, 1.0 - (maxNdc.y * 0.5 + 0.5)),
+            vec2f(0.0),
+            vec2f(1.0),
+        );
+        uvMax = clamp(
+            vec2f(maxNdc.x * 0.5 + 0.5, 1.0 - (minNdc.y * 0.5 + 0.5)),
+            vec2f(0.0),
+            vec2f(1.0),
+        );
+        nearDepth = minNdc.z;
+    } else {
+        let clip = vpMat * vec4f(center, 1.0);
+        if (clip.w <= radius * 1.05) {
+            return true;
+        }
+        let ndc = clip.xyz / clip.w;
+        let uvCenter = vec2f(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
+        if (any(uvCenter < vec2f(0.0)) || any(uvCenter > vec2f(1.0))) {
+            return true;
+        }
+        let axis = normalize(vec3f(vpMat[0][2], vpMat[1][2], vpMat[2][2]));
+        let nearClipA = vpMat * vec4f(center + axis * radius, 1.0);
+        let nearClipB = vpMat * vec4f(center - axis * radius, 1.0);
+        nearDepth = min(nearClipA.z / nearClipA.w, nearClipB.z / nearClipB.w);
+
+        let ndcRadius = worldRadiusToNdcRadius(radius, clip.w);
+        let uvHalf = ndcRadius * 0.5;
+        uvMin = clamp(uvCenter - uvHalf, vec2f(0.0), vec2f(1.0));
+        uvMax = clamp(uvCenter + uvHalf, vec2f(0.0), vec2f(1.0));
     }
-    let prevNdc = prevClip.xyz / prevClip.w;
 
-    // Off-screen center: the frustum + size gate already ran, so the sphere may still clip the
-    // frustum while its center projects off-screen; clamping the rect to [0,1] would collapse
-    // the footprint to a 1x1 border texel and falsely cull -> conservative visible instead.
-    let uvCenter = vec2f(prevNdc.x * 0.5 + 0.5, 1.0 - (prevNdc.y * 0.5 + 0.5));
-    if (any(uvCenter < vec2f(0.0)) || any(uvCenter > vec2f(1.0))) {
-        return true;
-    }
-
-    // Nearest point of the sphere for the depth compare. The euclidean nearest-to-eye point
-    // (center + normalize(viewPos - center) * radius) minimizes EUCLIDEAN distance, not
-    // view-space depth: 45 degrees off-axis its depth exceeds z_c - r, which OVER-estimates
-    // nearDepth -> false cull. The conservative nearest point lies on the previous camera's VIEW
-    // AXIS through the center. Clip depth is monotone in view-space z, so the sphere's extremal
-    // view depth is reached at one of the two axis endpoints; taking the min of both is
-    // sign-agnostic (no camera-basis convention to get wrong) and provably no deeper than any
-    // other sphere point. The view axis in world space is prevVp's depth row -- in a column-
-    // major mat4x4f the row's first three components are element [i][2]; the projection's P22
-    // scale cancels under normalize(). `prevClip.w > radius` (checked above) guarantees both
-    // endpoints project with w > 0, so the divisions are well-defined.
-    let axis = normalize(vec3f(cullParams.prevVp[0][2], cullParams.prevVp[1][2], cullParams.prevVp[2][2]));
-    let nearClipA = cullParams.prevVp * vec4f(center + axis * radius, 1.0);
-    let nearClipB = cullParams.prevVp * vec4f(center - axis * radius, 1.0);
-    let nearDepth = min(nearClipA.z / nearClipA.w, nearClipB.z / nearClipB.w);
-
-    // Screen-space rect of the sphere in PREVIOUS-frame NDC (worldRadiusToNdcRadius is the
-    // conservative tangent projection, see the screen-footprint chunk).
-    let ndcRadius = worldRadiusToNdcRadius(radius, prevClip.w);
-    let uvHalf = ndcRadius * 0.5;
-    let uvMin = clamp(uvCenter - uvHalf, vec2f(0.0), vec2f(1.0));
-    let uvMax = clamp(uvCenter + uvHalf, vec2f(0.0), vec2f(1.0));
-    let rectPx = (uvMax - uvMin) * global.resolution.xy;
+    let baseDims = vec2f(textureDimensions(fieldPrevHzb, 0u));
+    let rectPx = (uvMax - uvMin) * baseDims;
     let extentPx = max(max(rectPx.x, rectPx.y), 1.0);
 
     let mip = min(u32(ceil(log2(extentPx))), fieldInfo.hzbMipCount - 1u);
-
-    // Mip-0 texel cover of the rect, then right-shift by `mip` (hzb_downsample_max.wgsl maps mip-L
-    // texel t to mip-0 texels [t*2^L, (t+1)*2^L)). Directly computing uv * mipDims drifts by up
-    // to one full texel on NPOT bases (1080p: mip 9 is 2 px wide) -- deriving from BASE dims and
-    // shifting right is exact.
-    let baseDims = vec2f(textureDimensions(fieldPrevHzb, 0u));
     let mipDimsI = vec2i(textureDimensions(fieldPrevHzb, mip));
     let maxCoord = mipDimsI - vec2i(1);
     let shift = vec2u(mip);
@@ -192,26 +197,31 @@ fn fieldHzbVisible(center: vec3f, radius: f32) -> bool {
     return nearDepth <= farthestInFootprint;
 }
 
-// ── reset entry: frame-head zeroing of the producer-owned segment words (separate pass) ─────────
+// ── stage-specific bindings ───────────────────────────────────────────────────────────────────
 
-// One thread per segment; zeroes [instanceCount, liveCount, state, reserved] and leaves the
-// setup-time geometry words [indexCount, firstIndex, baseVertex, firstInstance] untouched.
-// Recorded by the coordinator at frame head BEFORE any cull dispatch (single submit orders them).
-// Stage-specific bindings 2/3 of the field group (see instance_field_structs.wgsl): the segment
-// table is atomic because `instanceCount` is the compaction cursor.
-@group(2) @binding(2) var<storage, read_write> fieldIndirectArgs: array<atomic<u32>>; // 128 x 8 words
-@group(2) @binding(3) var<storage, read_write> fieldVisibleIndices: array<u32>;       // pages [bv * pageCapacity, +cap)
-// P2 crossfade channel (ADR 0059 step 2, candidate A): one SIGNED f32 per (segment, instance)
-// slot, at the SAME page address as the visible index (page-indexed exactly like
-// `fieldVisibleIndices`). Per-slot value [blend contract, aligned with the pull fragment
-// `fieldLodDitherDiscard`, veg-p2-erin committed 2026-11-09 (5e44515)]:
-//   +p (0 < p < 1) = FINE-side entry of a crossfade band pair (keeps dither >= p)
-//   -p (0 < p < 1) = COARSE-side entry (keeps dither < p)
-//   both slots of one pair carry the SAME magnitude p = 1 - t (t = band position, 0 at the
-//   coarse end -> 1 at the fine end): the two draws' kept pixels are an exact partition.
-//   0 = settled single-write / unwritten zero-filled slot: keep all (fail-closed = P1).
-// The draw reads only slots < the segment's instanceCount, so no per-frame reset is needed.
+struct FieldPhase2Rejects {
+    rejectCount: atomic<u32>,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
+    indices: array<u32>,
+}
+
+struct FieldPhase2DispatchArgs {
+    dispatchX: u32,
+    dispatchY: u32,
+    dispatchZ: u32,
+    count: u32,
+}
+
+@group(1) @binding(0) var<storage, read_write> fieldPhase2: FieldPhase2Rejects;
+@group(1) @binding(1) var<storage, read_write> fieldPhase2Dispatch: FieldPhase2DispatchArgs;
+
+@group(2) @binding(2) var<storage, read_write> fieldIndirectArgs: array<atomic<u32>>;
+@group(2) @binding(3) var<storage, read_write> fieldVisibleIndices: array<u32>;
 @group(2) @binding(11) var<storage, read_write> fieldLodBlend: array<f32>;
+
+// ── reset entries (separate passes before cull dispatches) ────────────────────────────────────
 
 @compute @workgroup_size(64)
 fn resetFieldCounters(@builtin(global_invocation_id) id: vec3u) {
@@ -220,25 +230,42 @@ fn resetFieldCounters(@builtin(global_invocation_id) id: vec3u) {
         return;
     }
     let base = segment * 8u;
-    atomicStore(&fieldIndirectArgs[base + 1u], 0u); // instanceCount -- the compaction atomic cursor
-    atomicStore(&fieldIndirectArgs[base + 5u], 0u); // liveCount (readback mirror)
-    atomicStore(&fieldIndirectArgs[base + 6u], 1u); // state = CULLING (field producer lifecycle word)
-    atomicStore(&fieldIndirectArgs[base + 7u], 0u); // reserved (must stay 0)
+    atomicStore(&fieldIndirectArgs[base + 1u], 0u); // instanceCount
+    atomicStore(&fieldIndirectArgs[base + 5u], 0u); // liveCount
+    atomicStore(&fieldIndirectArgs[base + 6u], 1u); // state = CULLING
+    atomicStore(&fieldIndirectArgs[base + 7u], 0u); // reserved
 }
 
-// ── cull entry ────────────────────────────────────────────────────────────────────────────────
+// Zeros the phase-2 reject counter and the view-0 phase-2 indirect args headers.
+@compute @workgroup_size(64)
+fn resetPhase2Counters(@builtin(global_invocation_id) id: vec3u) {
+    let segment = id.x;
+    if (segment == 0u) {
+        atomicStore(&fieldPhase2.rejectCount, 0u);
+    }
+    if (segment >= PHASE2_SEGMENTS) {
+        return;
+    }
+    let base = segment * 8u;
+    atomicStore(&fieldIndirectArgs[base + 1u], 0u);
+    atomicStore(&fieldIndirectArgs[base + 5u], 0u);
+    atomicStore(&fieldIndirectArgs[base + 6u], 1u);
+    atomicStore(&fieldIndirectArgs[base + 7u], 0u);
+}
 
-// Emits one survivor into the (segment, slot) page of `bucket`: the draw-index atomic cursor
-// reserves the slot, then index AND blend are written at the SAME page address (one writer per
-// slot -> no cross-invocation race). WORST-CASE CAPACITY ARGUMENT (P0): an instance in a LOD
-// crossfade band emits into the adjacent {coarse, fine} pair -- at most two slots, at most ONE
-// per segment -- so a naive per-segment bound of `maxInstances` holds for the CURRENT routing,
-// but the audited two-bucket worst case is `2 * maxInstances` total writes when routing is
-// adversarial. `fieldInfo.pageCapacity` (= the buffer's per-segment page size = 2 * maxInstances,
-// see InstanceFieldSystem) therefore makes every emission land in-bounds. Defense in depth: the
-// atomicSub here CLAMPS the drawn instanceCount to the page capacity, so `drawIndexedIndirect`
-// can never execute a vertex with iid >= pageCapacity (no OOB read of fieldVisibleIndices /
-// fieldLodBlend) even if the two-bucket bound were ever exceeded by future routing logic.
+// Writes the indirect compute dispatch dimensions for `cullInstancesPhase2`.
+@compute @workgroup_size(1)
+fn finalizePhase2Args() {
+    let rawCount = atomicLoad(&fieldPhase2.rejectCount);
+    let count = min(rawCount, arrayLength(&fieldPhase2.indices));
+    fieldPhase2Dispatch.dispatchX = (count + 63u) / 64u;
+    fieldPhase2Dispatch.dispatchY = 1u;
+    fieldPhase2Dispatch.dispatchZ = 1u;
+    fieldPhase2Dispatch.count = count;
+}
+
+// ── shared emission + LOD routing ─────────────────────────────────────────────────────────────
+
 fn fieldEmit(bucket: u32, inst: u32, blend: f32) {
     let bv = cullParams.segmentBase + bucket;
     let argsBase = bv * 8u;
@@ -248,17 +275,53 @@ fn fieldEmit(bucket: u32, inst: u32, blend: f32) {
         fieldVisibleIndices[page] = inst;
         fieldLodBlend[page] = blend;
     } else {
-        // Roll the cursor back so instanceCount never exceeds the page; the dropped emission is
-        // an over-budget survivor (IF-BUDGET), the page is provably full, and count-1 still
-        // describes the same compacted set. Ensures firstInstance + instanceCount <= capacity.
         atomicSub(&fieldIndirectArgs[argsBase + 1u], 1u);
     }
 }
 
-// One invocation per instance record. Order: range resolve -> conservative sphere-frustum ->
-// projected-size sub-pixel drop -> (mode A/B) previous-frame HZB skip -> P2 LOD selection +
-// crossfade-band split -> clamp-at-capacity atomic compaction into the (view x bucket) segment
-// page (dual-write inside a transition band, ADR 0059 step 2 candidate A).
+fn fieldRouteAndEmit(inst: u32, prototype: u32, diam: f32) {
+    let jitter = fieldLodJitter(inst);
+    let bucketCount = min(fieldPrototypeRange[prototype].z, 8u);
+    let bias = min(cullParams.lodBiasBuckets, bucketCount - 1u);
+    let bucket = fieldSelectBucket(prototype, diam, jitter);
+    let band = cullParams.lodCrossfadeBand;
+
+    var inBand = band > 0.0;
+    var coarseBucket = bucket;
+    var blend = 0.0;
+    if (inBand) {
+        inBand = false;
+        for (var bl = 0u; bl + 1u < bucketCount; bl++) {
+            let eff = fieldEffectiveMaxPx(prototype, bl, jitter);
+            let lo = eff * (1.0 - band);
+            let hi = eff * (1.0 + band);
+            if (diam > lo && diam < hi) {
+                let t = clamp((diam - lo) / max(hi - lo, 1e-6), 0.0, 1.0);
+                inBand = true;
+                coarseBucket = bl;
+                blend = 1.0 - t;
+                break;
+            }
+        }
+    }
+    if (inBand) {
+        let fineBucket = coarseBucket + 1u;
+        let coarse = max(coarseBucket, bias) - bias;
+        let fine = max(fineBucket, bias) - bias;
+        if (coarse == fine) {
+            fieldEmit(fine, inst, 0.0);
+        } else {
+            fieldEmit(coarse, inst, -blend);
+            fieldEmit(fine, inst, blend);
+        }
+    } else {
+        let selected = max(bucket, bias) - bias;
+        fieldEmit(selected, inst, 0.0);
+    }
+}
+
+// ── cull entries ──────────────────────────────────────────────────────────────────────────────
+
 @compute @workgroup_size(64)
 fn cullInstances(@builtin(global_invocation_id) id: vec3u) {
     let inst = id.x;
@@ -272,92 +335,66 @@ fn cullInstances(@builtin(global_invocation_id) id: vec3u) {
     let scaleWord = packed >> 16u;
     let scale = f32(scaleWord) * (1.0 / 256.0);
     let prototype = fieldPrototypeOf(inst);
-    // Wind-bent bounding radius: the crown leans up to `windHeight * maxLean` horizontally
-    // (maxLean = fieldInfo.wind.p3.x, the `SwmWind` authored max lean; windHeight 0 = the term
-    // vanishes). A frustum/HZB test against the REST radius would cull a wind-bent crown that is
-    // still on screen / in the shadow volume at the edges (IF-CULL-NO-FALSE-NEGATIVE).
-    let radius = fieldPrototypeInfo[prototype].x * scale + fieldInfo.windHeight * scale * fieldInfo.wind.p3.x;
+    let protoBounds = fieldPrototypeInfo[prototype];
+    let radius = protoBounds.x * scale + fieldInfo.windHeight * scale * fieldInfo.wind.p3.x;
 
-    // Conservative sphere-frustum against this view's inward planes (IF-CULL-NO-FALSE-NEGATIVE).
     var keep = fieldSphereVisible(center, radius);
+    if (!keep) {
+        return;
+    }
 
-    if (keep) {
-        // Projected-size sub-pixel drop through the primary-view metric (IF-PROJECTED-SIZE).
-        let toCam = center - global.viewPos.xyz;
-        let viewDist = max(length(toCam), 1e-6);
-        let diam = fieldProjectedDiameterPx(radius, viewDist);
-        // The sub-pixel size gate applies ONLY to the main view: a caster that is sub-pixel from
-        // the main camera can still cast a visible shadow, so shadow views keep EVERY frustum-
-        // visible caster (casters whose shadows enter the frustum must be emitted; no perspective
-        // maxCullRadius in the GPU lane).
-        if (cullParams.isMainView != 0u) {
-            keep = diam >= fieldInfo.cullPixelSize;
-        }
-        if (keep) {
-            // Mode A/B previous-frame HZB skip (main-camera view only; coordinator never sets
-            // `hzbEnabled` for shadow views). Mode 2 uses the mode-A path until the 2B split.
-            if (cullParams.cullMode == 1u || cullParams.cullMode == 2u) {
-                if (cullParams.hzbEnabled != 0u && cullParams.hzbSkip == 0u) {
-                    if (!fieldHzbVisible(center, radius)) {
-                        keep = false;
-                    }
-                }
-            }
-            if (keep) {
-                // P2: selection + crossfade band through the EFFECTIVE (main-camera-metric)
-                // thresholds. The jitter is per-record, so every view derives the SAME band/pair
-                // as the main camera; shadow views only shift the targets toward the coarse end
-                // by `lodBiasBuckets` (authored `shadowLodBias`, 0 = reuse the main choice).
-                let jitter = fieldLodJitter(inst);
-                let bucketCount = min(fieldPrototypeRange[prototype].z, 8u);
-                let bias = min(cullParams.lodBiasBuckets, bucketCount - 1u);
-                let bucket = fieldSelectBucket(prototype, diam, jitter);
-                let band = cullParams.lodCrossfadeBand;
+    let toCam = center - global.viewPos.xyz;
+    let viewDist = max(length(toCam), 1e-6);
+    let diam = fieldProjectedDiameterPx(radius, viewDist);
+    if (cullParams.isMainView != 0u && diam < fieldInfo.cullPixelSize) {
+        return;
+    }
 
-                // Crossfade band (candidate A): diameter STRICTLY inside `(T*(1-band), T*(1+band))`
-                // of an EFFECTIVE boundary T -> dual-write into the adjacent {coarse, fine} pair
-                // with the SHARED magnitude p = 1 - t (t: 0 at the coarse end -> 1 at the fine
-                // end), written FINE +p / COARSE -p per the pull-fragment contract: fine keeps
-                // dither >= p, coarse keeps dither < p on the SAME 8x8 Bayer -> kept sets are an
-                // exact partition of the mask range (no holes, no overdraw; the fine share grows
-                // with t). Strict membership keeps p in (0,1) -- the band edges fall to the single
-                // write path below, so no slot ever carries the ambiguous p = 0/p = 1 endpoint.
-                // Single prototype bands never apply (no coarser neighbour). band <= 0 = hard
-                // switch (candidate C): always single-write, jitter-only decorrelation.
-                var inBand = band > 0.0;
-                var coarseBucket = bucket;
-                var blend = 0.0;
-                if (inBand) {
-                    inBand = false;
-                    for (var bl = 0u; bl + 1u < bucketCount; bl++) {
-                        let eff = fieldEffectiveMaxPx(prototype, bl, jitter);
-                        let lo = eff * (1.0 - band);
-                        let hi = eff * (1.0 + band);
-                        if (diam > lo && diam < hi) {
-                            let t = clamp((diam - lo) / max(hi - lo, 1e-6), 0.0, 1.0);
-                            inBand = true;
-                            coarseBucket = bl;
-                            blend = 1.0 - t;
-                            break;
-                        }
+    if (cullParams.cullMode == 1u || cullParams.cullMode == 2u) {
+        if (cullParams.hzbEnabled != 0u && cullParams.hzbSkip == 0u) {
+            if (!fieldHzbVisible(center, radius, scale, protoBounds, cullParams.prevVp)) {
+                if (cullParams.cullMode == 2u) {
+                    let rSlot = atomicAdd(&fieldPhase2.rejectCount, 1u);
+                    if (rSlot < arrayLength(&fieldPhase2.indices)) {
+                        fieldPhase2.indices[rSlot] = inst;
                     }
                 }
-                if (inBand) {
-                    let fineBucket = coarseBucket + 1u;
-                    let coarse = max(coarseBucket, bias) - bias;
-                    let fine = max(fineBucket, bias) - bias;
-                    if (coarse == fine) {
-                        // Biased onto the same (coarsest) segment: settle on it, keep-all (0).
-                        fieldEmit(fine, inst, 0.0);
-                    } else {
-                        fieldEmit(coarse, inst, -blend);
-                        fieldEmit(fine, inst, blend);
-                    }
-                } else {
-                    let selected = max(bucket, bias) - bias;
-                    fieldEmit(selected, inst, 0.0);
-                }
+                return;
             }
         }
     }
+
+    fieldRouteAndEmit(inst, prototype, diam);
 }
+
+// Phase 2 rescue pass (mode B, Wihlidal / Haar & Aaltonen): tests previous-frame HZB rejects
+// against the current frame's HZB pyramid (`fieldPrevHzb` bound to Frame N's pyramid) using
+// `global.vp` and emits disoccluded survivors into the phase-2 indirect draw buffer.
+@compute @workgroup_size(64)
+fn cullInstancesPhase2(@builtin(global_invocation_id) id: vec3u) {
+    let rIdx = id.x;
+    let count = min(atomicLoad(&fieldPhase2.rejectCount), arrayLength(&fieldPhase2.indices));
+    if (rIdx >= count) {
+        return;
+    }
+
+    let inst = fieldPhase2.indices[rIdx];
+    let record = fieldRecords[inst];
+    let center = record.xyz;
+    let packed = bitcast<u32>(record.w);
+    let scaleWord = packed >> 16u;
+    let scale = f32(scaleWord) * (1.0 / 256.0);
+    let prototype = fieldPrototypeOf(inst);
+    let protoBounds = fieldPrototypeInfo[prototype];
+    let radius = protoBounds.x * scale + fieldInfo.windHeight * scale * fieldInfo.wind.p3.x;
+
+    if (!fieldHzbVisible(center, radius, scale, protoBounds, global.vp)) {
+        return;
+    }
+
+    let toCam = center - global.viewPos.xyz;
+    let viewDist = max(length(toCam), 1e-6);
+    let diam = fieldProjectedDiameterPx(radius, viewDist);
+    fieldRouteAndEmit(inst, prototype, diam);
+}
+

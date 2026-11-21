@@ -163,6 +163,8 @@ export interface InstanceFieldRenderHost {
   readonly whiteTextureView: GPUTextureView;
   /** Previous-frame pyramid handle the main-view cull consumes (ping-pong, see HZB system). */
   getPreviousFrameHzb(): HzbFieldPyramidAccess;
+  /** Optional current-frame pyramid handle consumed by two-phase occlusion (ADR 0059 step 3). */
+  getCurrentFrameHzb?(): HzbFieldPyramidAccess;
   /** Texture view of an uploaded `Texture`, or the white fallback (unloaded / disableTextures). */
   getTextureView(tex: Texture | undefined): GPUTextureView;
   /** Pins `geometry` in the renderer's geometry cache (one scratch-object refcount) and returns
@@ -277,6 +279,12 @@ export interface InstanceFieldSystemSetup {
    *         word). Runtime-toggleable via {@link InstanceFieldSystem.setLodDitherMode}.
    */
   lodDitherMode?: "crossfade" | "hard";
+  /**
+   * @domain Enables two-phase occlusion culling (ADR 0059 step 3 mode B): phase 1 captures
+   *         prev-HZB rejects and phase 2 rescues disoccluded survivors against the current frame's
+   *         HZB pyramid for depth patch + main color draw. Default false (mode A single-phase).
+   */
+  twoPhaseOcclusion?: boolean;
 }
 
 /** Vertex streams bound per bucket: slot 1 normal, 2 uv, 3 colour (slot 0 = the cached position).
@@ -347,6 +355,25 @@ interface FieldCullParamsSlot {
   planes: [number, number, number, number][];
 }
 
+/** GPU buffers + pipelines for two-phase occlusion culling (lazily allocated on enable). */
+interface FieldPhase2Gpu {
+  rejectCapacity: number;
+  rejectBuffer: GPUBuffer;
+  dispatchBuffer: GPUBuffer;
+  indirectArgs: GPUBuffer;
+  visibleIndices: GPUBuffer;
+  fieldLodBlend: GPUBuffer;
+  phase2FinalizeBGL: GPUBindGroupLayout;
+  rejectBg: GPUBindGroup;
+  finalizeBg: GPUBindGroup;
+  resetPhase2Pipeline: GPUComputePipeline;
+  finalizePhase2Pipeline: GPUComputePipeline;
+  cullPhase2Pipeline: GPUComputePipeline;
+  drawBg: GPUBindGroup;
+  cullBg: GPUBindGroup;
+  cullBgByView: Map<GPUTextureView, GPUBindGroup>;
+}
+
 /** GPU buffers + pipelines of ONE field (all owned by this node; destroyed on `dispose()`). */
 interface FieldGpuState {
   records: GPUBuffer;
@@ -367,6 +394,12 @@ interface FieldGpuState {
   cullGlobalBGL: GPUBindGroupLayout;
   cullGlobalBg: GPUBindGroup;
   cullGlobalBuffer: GPUBuffer;
+  /** Group 1 for cull pipelines: binding 0 `fieldPhase2` rw storage. */
+  phase2RejectBGL: GPUBindGroupLayout;
+  /** 20-byte shared dummy buffer bound at group 1 when two-phase occlusion is disabled. */
+  phase2DummyBuffer: GPUBuffer;
+  phase2RejectDummyBg: GPUBindGroup;
+  cullModule: GPUShaderModule;
   cullPipeline: GPUComputePipeline;
   resetPipeline: GPUComputePipeline;
   pullModule: GPUShaderModule;
@@ -379,6 +412,8 @@ interface FieldGpuState {
   albedoFallback: GPUTexture;
   /** Canopy coverage (r8unorm) at binding 14; 1x1 zero when no canopy is authored. */
   canopyTexture: GPUTexture;
+  /** Lazily created when two-phase occlusion is enabled. */
+  phase2: FieldPhase2Gpu | undefined;
 }
 
 /** Pipeline slot of each draw variant (`_getDrawPipeline`). */
@@ -445,6 +480,9 @@ function ignoreMapAbort(): void {}
 interface FieldProbeState {
   argsStage: GPUBuffer;
   indicesStage: GPUBuffer;
+  phase2ArgsStage: GPUBuffer | undefined;
+  phase2IndicesStage: GPUBuffer | undefined;
+  hasPhase2: boolean;
   pending: boolean;
   frameIndex: number;
 }
@@ -553,6 +591,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   /** S2 A/B/C comparison knob (lead-authorized 2026-11-09): `undefined` = auto (pyramid
    * availability), `false` = force-disable main-view HZB culling, `true` = force-on. */
   private _occlusionOverride: boolean | undefined = undefined;
+  /** @domain Two-phase occlusion toggle (ADR 0059 step 3 mode B): false = single-phase mode A. */
+  private _twoPhaseOcclusion: boolean = false;
 
   /**
    * @domain S2 occlusion A/B/C knob: overrides the auto `hzbEnabled` decision (pyramid
@@ -562,6 +602,22 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
    */
   public setOcclusionEnabled(enabled: boolean): void {
     this._occlusionOverride = enabled;
+  }
+
+  /** @domain Whether two-phase occlusion culling (ADR 0059 step 3 mode B) is enabled. */
+  public get twoPhaseOcclusion(): boolean {
+    return this._twoPhaseOcclusion;
+  }
+
+  /**
+   * @domain Enables or disables two-phase occlusion culling (ADR 0059 step 3 mode B).
+   *         Lazily allocates phase-2 GPU resources when enabled on an attached field.
+   */
+  public setTwoPhaseOcclusion(enabled: boolean): void {
+    this._twoPhaseOcclusion = enabled;
+    if (enabled && this._gpu) {
+      this._ensurePhase2GpuState();
+    }
   }
 
   /**
@@ -708,6 +764,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     }
     this._windHeight = windHeight;
     this._windUniforms = windUniforms;
+    this._twoPhaseOcclusion = setup.twoPhaseOcclusion === true;
 
     const lodDitherMode = setup.lodDitherMode ?? "crossfade";
     if (lodDitherMode !== "crossfade" && lodDitherMode !== "hard") {
@@ -758,7 +815,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
 
     const prototypes = setup.prototypes ?? options.prototypes ?? [];
     const protoCount = prototypes.length;
-    const bounds = new Float32Array(protoCount);
+    // vec4f per prototype: [boundingRadius, hzbRadiusXZ, hzbMinY, hzbMaxY]
+    const bounds = new Float32Array(protoCount * 4);
     const range = new Uint32Array(protoCount * 3); // x=start, y=count, z=bucketCount
     const lodMaxima = new Float32Array(protoCount * 8); // 2 vec4f rows per prototype
     let maxBucketCount = 0;
@@ -777,7 +835,23 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       if (!(proto.maxInstances > 0)) {
         throw new Error(`[InstanceFieldSystem] Prototype '${proto.id}' needs maxInstances > 0.`);
       }
-      bounds[p] = proto.boundingRadius;
+      const hzbRadiusXZ = proto.hzbRadiusXZ ?? 0;
+      if (!Number.isFinite(hzbRadiusXZ) || hzbRadiusXZ < 0) {
+        throw new Error(`[InstanceFieldSystem] Prototype '${proto.id}': hzbRadiusXZ must be >= 0.`);
+      }
+      bounds[p * 4] = proto.boundingRadius;
+      if (hzbRadiusXZ > 0) {
+        const minY = proto.hzbMinY ?? 0;
+        const maxY = proto.hzbMaxY ?? proto.boundingRadius;
+        if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY < minY) {
+          throw new Error(
+            `[InstanceFieldSystem] Prototype '${proto.id}': hzbMaxY must be >= hzbMinY.`,
+          );
+        }
+        bounds[p * 4 + 1] = hzbRadiusXZ;
+        bounds[p * 4 + 2] = minY;
+        bounds[p * 4 + 3] = maxY;
+      }
       range[p * 3 + 2] = proto.lodBuckets.length;
       maxBucketCount = Math.max(maxBucketCount, proto.lodBuckets.length);
       for (let b = 0; b < proto.lodBuckets.length; b++) {
@@ -983,10 +1057,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
 
   /**
    * Prepares the MAIN view (view 0): refreshes the previous-frame HZB handle + cull bind group,
-   * writes the view-0 param block (mode A, `hzbEnabled` = pyramid available, `hzbSkip` = the
-   * one-frame camera-cut flag) and arms the once-per-frame counter reset. `vp` is the RAW
-   * (non-ZO-corrected) main-camera view-projection; `viewportHeightPx`/`fovRadiansY` are the
-   * frozen projected-size (primary-view) metric inputs (IF-PROJECTED-SIZE).
+   * writes the view-0 param block (mode A = 1 or two-phase mode B = 2, `hzbEnabled` = pyramid
+   * available, `hzbSkip` = the one-frame camera-cut flag) and arms the once-per-frame counter
+   * reset. `vp` is the RAW (non-ZO-corrected) main-camera view-projection;
+   * `viewportHeightPx`/`fovRadiansY` are the frozen projected-size (primary-view) metric inputs.
    */
   public prepareMainView(
     vp: Float32Array,
@@ -1013,6 +1087,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const hzEnabled = this._occlusionOverride ?? hzb.available;
     const skip = this._pendingTeleportSkip;
     this._pendingTeleportSkip = false;
+    const cullMode = this._twoPhaseOcclusion ? 2 : 1;
     // Main view: `lodBiasBuckets` = 0 (shadow views apply `shadowLodBias` on top of THIS choice).
     // `prevVp` = Frame N-1's ZO-corrected main VP (see `_prevMainVp`): the pyramid the lane
     // samples was built from it, so `fieldHzbVisible` must project into its space.
@@ -1023,7 +1098,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       fovRadiansY,
       hzEnabled,
       skip,
-      1,
+      cullMode,
       0,
       true,
       this._prevMainVp,
@@ -1035,10 +1110,55 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     this._prevMainVp.set(this._prevMainVpMatrix.data);
   }
 
-  /** Culls the MAIN view (view 0): records the once-per-frame counter reset, then the mode-A
+  /** Culls the MAIN view (view 0): records the once-per-frame counter reset, then the main-view
    * cull dispatch (dynamic param block 0). No-op on an inert / empty field. */
   public cullMainView(ce: GPUCommandEncoder): void {
     this._recordCull(ce, 0);
+  }
+
+  /**
+   * Records phase-2 rescue culling (ADR 0059 step 3 mode B): computes indirect dispatch args from
+   * the phase-1 HZB rejects and tests them against the CURRENT frame's HZB pyramid (`global.vp`).
+   * No-op unless two-phase occlusion is enabled and the host exposes a built current-frame HZB.
+   */
+  public cullPhase2(ce: GPUCommandEncoder): void {
+    if (!this._twoPhaseOcclusion || this._occlusionOverride === false) return;
+    const host = this._host;
+    const gpu = this._gpu;
+    const device = host?.gpuDevice;
+    const p2 = gpu?.phase2;
+    if (!host || !gpu || !device || !p2 || this._instanceCount === 0) return;
+
+    const hzb = host.getCurrentFrameHzb?.();
+    if (!hzb || !hzb.available) return;
+    if (hzb.readHandle.mipLevelCount !== this._hzMipCount) {
+      this._hzMipCount = Math.max(1, hzb.readHandle.mipLevelCount);
+      this._writeFieldInfoWord(INFO_OFFSET_HZB_MIP_COUNT, this._hzMipCount);
+    }
+    this._rebuildPhase2CullBg(hzb);
+
+    if (gpu.cullGlobalBuffer !== host.globalUniformBuffer) {
+      gpu.cullGlobalBuffer = host.globalUniformBuffer;
+      gpu.cullGlobalBg = this._createCullGlobalBindGroup(
+        device,
+        gpu.cullGlobalBGL,
+        gpu.cullGlobalBuffer,
+      );
+    }
+
+    const finalize = ce.beginComputePass({ label: "InstanceFieldPhase2Finalize" });
+    finalize.setPipeline(p2.finalizePhase2Pipeline);
+    finalize.setBindGroup(1, p2.finalizeBg);
+    finalize.dispatchWorkgroups(1);
+    finalize.end();
+
+    const cull = ce.beginComputePass({ label: "InstanceFieldCullPhase2" });
+    cull.setPipeline(p2.cullPhase2Pipeline);
+    cull.setBindGroup(0, gpu.cullGlobalBg);
+    cull.setBindGroup(1, p2.rejectBg);
+    cull.setBindGroup(2, p2.cullBg, [0]);
+    cull.dispatchWorkgroupsIndirect(p2.dispatchBuffer, 0);
+    cull.end();
   }
 
   /** Prepares a SHADOW view (viewIndex >= 1): frustum from the RAW VP, mode C (no HZB),
@@ -1114,6 +1234,40 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     }
   }
 
+  /**
+   * Records phase-2 rescued indirect draws for view 0 into an open render pass `rp` (depth patch
+   * right after `cullPhase2`, then main color draw right after `recordDraw`). No-op unless
+   * `twoPhaseOcclusion` is enabled and `viewIndex === 0`.
+   */
+  public recordPhase2Draw(
+    rp: GPURenderPassEncoder,
+    viewOffset: number,
+    viewIndex: number,
+    bindGlobal: boolean,
+    variant: FieldDrawVariant,
+  ): void {
+    if (!this._twoPhaseOcclusion || viewIndex !== 0) return;
+    const host = this._host;
+    const gpu = this._gpu;
+    const p2 = gpu?.phase2;
+    if (!host || !gpu || !p2) return;
+    if (this._maxBucketCount === 0 || this._instanceCount === 0) return;
+
+    if (bindGlobal) rp.setBindGroup(0, host.globalBindGroup);
+    rp.setBindGroup(3, host.viewBindGroup, [viewOffset]);
+
+    const targetFormat = host.currentColorTargetFormat;
+    for (let b = 0; b < this._maxBucketCount; b++) {
+      const entry = this._bucketGeoEntry[b];
+      const streams = this._bucketStreams[b];
+      if (!entry || !streams || entry.indexCount === 0) continue;
+      rp.setPipeline(this._getDrawPipeline(variant, targetFormat));
+      this._bindGeometry(rp, entry, streams);
+      rp.setBindGroup(2, p2.drawBg, [b * CULL_PARAM_BLOCK_BYTES]);
+      rp.drawIndexedIndirect(p2.indirectArgs, b * INDIRECT_SEGMENT_HEADER_BYTES);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Opt-in probe (dual-lane harness; never in the render path)
   // ---------------------------------------------------------------------------
@@ -1123,6 +1277,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   public recordProbeStaging(ce: GPUCommandEncoder, frameIndex: number): void {
     const gpu = this._gpu;
     const st = this._probeState;
+    const device = this._host?.gpuDevice;
     if (!this._probe || !gpu || !st) return;
     if (st.pending) return;
     ce.copyBufferToBuffer(
@@ -1133,6 +1288,32 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       FIELD_SEGMENTS * INDIRECT_SEGMENT_HEADER_BYTES,
     );
     ce.copyBufferToBuffer(gpu.visibleIndices, 0, st.indicesStage, 0, gpu.visibleIndices.size);
+    const p2 = this._twoPhaseOcclusion ? gpu.phase2 : undefined;
+    st.hasPhase2 = false;
+    if (p2 && device) {
+      if (!st.phase2ArgsStage) {
+        st.phase2ArgsStage = device.createBuffer({
+          size: MAX_LOD_BUCKETS * INDIRECT_SEGMENT_HEADER_BYTES,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+      }
+      if (!st.phase2IndicesStage || st.phase2IndicesStage.size !== p2.visibleIndices.size) {
+        st.phase2IndicesStage?.destroy();
+        st.phase2IndicesStage = device.createBuffer({
+          size: p2.visibleIndices.size,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+      }
+      ce.copyBufferToBuffer(
+        p2.indirectArgs,
+        0,
+        st.phase2ArgsStage,
+        0,
+        MAX_LOD_BUCKETS * INDIRECT_SEGMENT_HEADER_BYTES,
+      );
+      ce.copyBufferToBuffer(p2.visibleIndices, 0, st.phase2IndicesStage, 0, p2.visibleIndices.size);
+      st.hasPhase2 = true;
+    }
     st.pending = true;
     st.frameIndex = frameIndex;
     // Snapshot the mirror now: by readback time the slots have moved on.
@@ -1150,6 +1331,14 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     // Probe-only path: a destroyed buffer (dispose mid-flight) rejects the map -- not an error.
     st.argsStage.mapAsync(GPUMapMode.READ, 0, st.argsStage.size).catch(ignoreMapAbort);
     st.indicesStage.mapAsync(GPUMapMode.READ, 0, st.indicesStage.size).catch(ignoreMapAbort);
+    if (st.hasPhase2 && st.phase2ArgsStage && st.phase2IndicesStage) {
+      st.phase2ArgsStage
+        .mapAsync(GPUMapMode.READ, 0, st.phase2ArgsStage.size)
+        .catch(ignoreMapAbort);
+      st.phase2IndicesStage
+        .mapAsync(GPUMapMode.READ, 0, st.phase2IndicesStage.size)
+        .catch(ignoreMapAbort);
+    }
   }
 
   /** Polls the staging maps at the NEXT frame head: when both are ready, builds this frame's
@@ -1159,13 +1348,37 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const probe = this._probe;
     if (!st || !probe || !st.pending) return;
     if (st.argsStage.mapState !== "mapped" || st.indicesStage.mapState !== "mapped") return;
+    const readPhase2 =
+      st.hasPhase2 && st.phase2ArgsStage !== undefined && st.phase2IndicesStage !== undefined;
+    if (
+      readPhase2 &&
+      (st.phase2ArgsStage!.mapState !== "mapped" || st.phase2IndicesStage!.mapState !== "mapped")
+    ) {
+      return;
+    }
     try {
       const argsWords = new Uint32Array(st.argsStage.getMappedRange());
       const indicesWords = new Uint32Array(st.indicesStage.getMappedRange());
+      const p2ArgsWords = readPhase2
+        ? new Uint32Array(st.phase2ArgsStage!.getMappedRange())
+        : undefined;
+      const p2IndicesWords = readPhase2
+        ? new Uint32Array(st.phase2IndicesStage!.getMappedRange())
+        : undefined;
+      const outIndices = new Uint32Array(indicesWords);
       const counts: IndirectSegmentCounts[] = [];
       for (let v = 0; v < this._viewCount; v++) {
         for (let b = 0; b < this._maxBucketCount; b++) {
-          const count = argsWords[(v * MAX_LOD_BUCKETS + b) * 8 + 1] ?? 0;
+          const c1 = argsWords[(v * MAX_LOD_BUCKETS + b) * 8 + 1] ?? 0;
+          const c2 = v === 0 && p2ArgsWords ? (p2ArgsWords[b * 8 + 1] ?? 0) : 0;
+          if (v === 0 && p2IndicesWords && c2 > 0) {
+            const pageBase = b * this._pageCapacity;
+            const copyCount = Math.min(c2, Math.max(0, this._pageCapacity - c1));
+            for (let k = 0; k < copyCount; k++) {
+              outIndices[pageBase + c1 + k] = p2IndicesWords[pageBase + k]!;
+            }
+          }
+          const count = c1 + c2;
           if (count === 0) continue;
           counts.push({ viewIndex: v, bucketIndex: b, count });
         }
@@ -1174,12 +1387,16 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
         frameIndex: st.frameIndex,
         params: this._probeParamsSnapshot,
         segmentCounts: counts,
-        visibleIndices: new Uint32Array(indicesWords),
+        visibleIndices: outIndices,
       };
       probe.onCullFrame(sets);
     } finally {
       st.argsStage.unmap();
       st.indicesStage.unmap();
+      if (readPhase2) {
+        st.phase2ArgsStage!.unmap();
+        st.phase2IndicesStage!.unmap();
+      }
       st.pending = false;
     }
   }
@@ -1207,12 +1424,23 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       gpu.fieldInfo.destroy();
       gpu.albedoFallback.destroy();
       gpu.canopyTexture.destroy();
+      gpu.phase2DummyBuffer.destroy();
+      if (gpu.phase2) {
+        gpu.phase2.cullBgByView.clear();
+        gpu.phase2.rejectBuffer.destroy();
+        gpu.phase2.dispatchBuffer.destroy();
+        gpu.phase2.indirectArgs.destroy();
+        gpu.phase2.visibleIndices.destroy();
+        gpu.phase2.fieldLodBlend.destroy();
+      }
     }
     const st = this._probeState;
     this._probeState = undefined;
     if (st) {
       st.argsStage.destroy();
       st.indicesStage.destroy();
+      st.phase2ArgsStage?.destroy();
+      st.phase2IndicesStage?.destroy();
     }
     for (let b = 0; b < MAX_LOD_BUCKETS; b++) {
       const streams = this._bucketStreams[b];
@@ -1450,10 +1678,23 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     });
     const cullGlobalBuffer = host.globalUniformBuffer;
     const cullGlobalBg = this._createCullGlobalBindGroup(device, cullGlobalBGL, cullGlobalBuffer);
+    const phase2RejectBGL = device.createBindGroupLayout({
+      label: "InstanceFieldPhase2RejectBGL",
+      entries: [{ binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } }],
+    });
+    const phase2DummyBuffer = device.createBuffer({
+      size: 20, // 4 u32 header words + 1 array<u32> element (WGSL minimum binding size)
+      usage: GPUBufferUsage.STORAGE,
+    });
+    const phase2RejectDummyBg = device.createBindGroup({
+      label: "InstanceFieldPhase2Dummy",
+      layout: phase2RejectBGL,
+      entries: [{ binding: 0, resource: { buffer: phase2DummyBuffer } }],
+    });
     const cullPipeline = device.createComputePipeline({
       layout: device.createPipelineLayout({
-        // Field-data group folded to `INSTANCE_FIELD_BIND_GROUP` (2); global stays at 0.
-        bindGroupLayouts: [cullGlobalBGL, null, cullFieldBGL],
+        // Field-data group folded to `INSTANCE_FIELD_BIND_GROUP` (2); global at 0, phase-2 rejects at 1.
+        bindGroupLayouts: [cullGlobalBGL, phase2RejectBGL, cullFieldBGL],
       }),
       compute: { module: cullModule, entryPoint: "cullInstances" },
     });
@@ -1502,6 +1743,10 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       cullGlobalBGL,
       cullGlobalBg,
       cullGlobalBuffer,
+      phase2RejectBGL,
+      phase2DummyBuffer,
+      phase2RejectDummyBg,
+      cullModule,
       cullPipeline,
       resetPipeline,
       pullModule,
@@ -1511,13 +1756,150 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       albedoSampler,
       albedoFallback,
       canopyTexture,
+      phase2: undefined,
     };
 
     // Static table writes (geometry words, prototype tables, per-segment bases) + population.
     this._writeStaticTables();
     this._uploadRecords();
     this._writeFieldInfo();
+    if (this._twoPhaseOcclusion) this._ensurePhase2GpuState();
     if (this._probe) this._ensureProbeState();
+  }
+
+  /** Lazily creates phase-2 buffers, bind groups, and pipelines on first two-phase enable. */
+  private _ensurePhase2GpuState(): void {
+    const gpu = this._gpu;
+    const host = this._host;
+    const device = host?.gpuDevice;
+    if (!gpu || !host || !device || gpu.phase2) return;
+
+    const rejectCapacity = Math.max(1, this._maxInstances);
+    const rejectBuffer = device.createBuffer({
+      size: 16 + rejectCapacity * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    const dispatchBuffer = device.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE,
+    });
+    const indirectArgs = device.createBuffer({
+      size: MAX_LOD_BUCKETS * INDIRECT_SEGMENT_HEADER_BYTES,
+      usage:
+        GPUBufferUsage.STORAGE |
+        GPUBufferUsage.INDIRECT |
+        GPUBufferUsage.COPY_DST |
+        GPUBufferUsage.COPY_SRC,
+    });
+    const phase2VisibleBytes = MAX_LOD_BUCKETS * this._pageCapacity * 4;
+    const visibleIndices = device.createBuffer({
+      size: phase2VisibleBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
+    const fieldLodBlend = device.createBuffer({
+      size: phase2VisibleBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
+    const phase2FinalizeBGL = device.createBindGroupLayout({
+      label: "InstanceFieldPhase2FinalizeBGL",
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      ],
+    });
+    const rejectBg = device.createBindGroup({
+      label: "InstanceFieldPhase2Rejects",
+      layout: gpu.phase2RejectBGL,
+      entries: [{ binding: 0, resource: { buffer: rejectBuffer } }],
+    });
+    const finalizeBg = device.createBindGroup({
+      label: "InstanceFieldPhase2Finalize",
+      layout: phase2FinalizeBGL,
+      entries: [
+        { binding: 0, resource: { buffer: rejectBuffer } },
+        { binding: 1, resource: { buffer: dispatchBuffer } },
+      ],
+    });
+    const resetPhase2Pipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [null, gpu.phase2RejectBGL, gpu.cullFieldBGL],
+      }),
+      compute: { module: gpu.cullModule, entryPoint: "resetPhase2Counters" },
+    });
+    const finalizePhase2Pipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [null, phase2FinalizeBGL],
+      }),
+      compute: { module: gpu.cullModule, entryPoint: "finalizePhase2Args" },
+    });
+    const cullPhase2Pipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [gpu.cullGlobalBGL, gpu.phase2RejectBGL, gpu.cullFieldBGL],
+      }),
+      compute: { module: gpu.cullModule, entryPoint: "cullInstancesPhase2" },
+    });
+
+    const p2Locals: FieldLocals = {
+      records: gpu.records,
+      prototypeInfo: gpu.prototypeInfo,
+      prototypeRange: gpu.prototypeRange,
+      lodMaxima: gpu.lodMaxima,
+      indirectArgs,
+      visibleIndices,
+      fieldLodBlend,
+      cullParams: gpu.cullParams,
+      fieldInfo: gpu.fieldInfo,
+    };
+    const cullBg = this._createCullBindGroup(
+      device,
+      gpu.cullFieldBGL,
+      p2Locals,
+      host.whiteTextureView,
+    );
+    const drawBg = this._createDrawBindGroup(
+      device,
+      gpu.drawFieldBGL,
+      p2Locals,
+      host.getTextureView(this._alphaMap),
+      gpu.alphaSampler,
+      this._albedoView(gpu.albedoFallback),
+      gpu.albedoSampler,
+      gpu.canopyTexture.createView(),
+    );
+
+    gpu.phase2 = {
+      rejectCapacity,
+      rejectBuffer,
+      dispatchBuffer,
+      indirectArgs,
+      visibleIndices,
+      fieldLodBlend,
+      phase2FinalizeBGL,
+      rejectBg,
+      finalizeBg,
+      resetPhase2Pipeline,
+      finalizePhase2Pipeline,
+      cullPhase2Pipeline,
+      drawBg,
+      cullBg,
+      cullBgByView: new Map(),
+    };
+    this._writePhase2StaticArgs();
+  }
+
+  /** Writes bucket `indexCount` words into the phase-2 indirect args buffer (view 0 only). */
+  private _writePhase2StaticArgs(): void {
+    const p2 = this._gpu?.phase2;
+    const device = this._host?.gpuDevice;
+    if (!p2 || !device) return;
+    const args = new Uint32Array(MAX_LOD_BUCKETS * 8);
+    for (let b = 0; b < this._maxBucketCount; b++) {
+      const entry = this._bucketGeoEntry[b];
+      if (!entry) continue;
+      args[b * 8] = entry.indexCount;
+    }
+    device.queue.writeBuffer(p2.indirectArgs, 0, args);
   }
 
   /** Regrows population-dependent buffers after `rebuild()` (records + fieldInfo + tables). */
@@ -1588,6 +1970,46 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       host.deferDestroyBuffer(gpu.fieldLodBlend);
       gpu.visibleIndices = nextVisible;
       gpu.fieldLodBlend = nextLodBlend;
+
+      const p2 = gpu.phase2;
+      if (p2) {
+        p2.cullBgByView.clear();
+        if (recordCount > p2.rejectCapacity) {
+          const nextReject = device.createBuffer({
+            size: 16 + recordCount * 4,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+          });
+          host.deferDestroyBuffer(p2.rejectBuffer);
+          p2.rejectBuffer = nextReject;
+          p2.rejectCapacity = recordCount;
+          p2.rejectBg = device.createBindGroup({
+            label: "InstanceFieldPhase2Rejects",
+            layout: gpu.phase2RejectBGL,
+            entries: [{ binding: 0, resource: { buffer: p2.rejectBuffer } }],
+          });
+          p2.finalizeBg = device.createBindGroup({
+            label: "InstanceFieldPhase2Finalize",
+            layout: p2.phase2FinalizeBGL,
+            entries: [
+              { binding: 0, resource: { buffer: p2.rejectBuffer } },
+              { binding: 1, resource: { buffer: p2.dispatchBuffer } },
+            ],
+          });
+        }
+        const phase2Bytes = MAX_LOD_BUCKETS * this._pageCapacity * 4;
+        const nextP2Visible = device.createBuffer({
+          size: phase2Bytes,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+        const nextP2Blend = device.createBuffer({
+          size: phase2Bytes,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        host.deferDestroyBuffer(p2.visibleIndices);
+        host.deferDestroyBuffer(p2.fieldLodBlend);
+        p2.visibleIndices = nextP2Visible;
+        p2.fieldLodBlend = nextP2Blend;
+      }
     }
     this._rebuildBindGroups();
     if (pagesNeedRegrow && this._probeState) {
@@ -1595,6 +2017,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       // NEW buffers (a pending readback of the old size is dropped -- latency self-corrects).
       this._probeState.argsStage.destroy();
       this._probeState.indicesStage.destroy();
+      this._probeState.phase2ArgsStage?.destroy();
+      this._probeState.phase2IndicesStage?.destroy();
       this._probeState = undefined;
       this._ensureProbeState();
     }
@@ -1633,6 +2057,38 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     // `_cullBgByView` was cleared by the regrow path; `_rebuildCullBg` re-creates + re-caches the
     // cull group against the current pyramid handle (the `gpu.cullBg` write happens there).
     this._rebuildCullBg(host.getPreviousFrameHzb());
+
+    const p2 = gpu.phase2;
+    if (p2) {
+      p2.cullBgByView.clear();
+      const p2Locals: FieldLocals = {
+        records: gpu.records,
+        prototypeInfo: gpu.prototypeInfo,
+        prototypeRange: gpu.prototypeRange,
+        lodMaxima: gpu.lodMaxima,
+        indirectArgs: p2.indirectArgs,
+        visibleIndices: p2.visibleIndices,
+        fieldLodBlend: p2.fieldLodBlend,
+        cullParams: gpu.cullParams,
+        fieldInfo: gpu.fieldInfo,
+      };
+      p2.drawBg = this._createDrawBindGroup(
+        device,
+        gpu.drawFieldBGL,
+        p2Locals,
+        host.getTextureView(this._alphaMap),
+        gpu.alphaSampler,
+        this._albedoView(gpu.albedoFallback),
+        gpu.albedoSampler,
+        gpu.canopyTexture.createView(),
+      );
+      p2.cullBg = this._createCullBindGroup(
+        device,
+        gpu.cullFieldBGL,
+        p2Locals,
+        host.whiteTextureView,
+      );
+    }
   }
 
   /** Writes the per-segment geometry words + per-segment `segmentBase` values (immutable after
@@ -1642,12 +2098,12 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     const device = this._host?.gpuDevice;
     if (!gpu || !device) return;
 
-    // Prototype tables: bounds (vec4f.x = radius), ranges (start/count/bucketCount), maxima.
+    // Prototype tables: bounds (vec4f: boundingRadius, hzbRadiusXZ, hzbMinY, hzbMaxY), ranges, maxima.
     const boundsData = new Float32Array(this._protoCount * 4);
     const rangeData = new Uint32Array(this._protoCount * 4);
     const maximaData = new Float32Array(this._protoCount * 8);
+    boundsData.set(this._protoBounds);
     for (let p = 0; p < this._protoCount; p++) {
-      boundsData[p * 4] = this._protoBounds[p]!;
       rangeData[p * 4] = this._protoRange[p * 3]!;
       rangeData[p * 4 + 1] = this._protoRange[p * 3 + 1]!;
       rangeData[p * 4 + 2] = this._protoRange[p * 3 + 2]!;
@@ -1668,6 +2124,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       }
     }
     device.queue.writeBuffer(gpu.indirectArgs, 0, args);
+    this._writePhase2StaticArgs();
 
     // Per-segment param blocks: block k's `segmentBase` field == k (class doc); the cull
     // per-frame writes only refresh the planes/metric/flags at view-base blocks.
@@ -1797,6 +2254,42 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   }
 
   /**
+   * Rebuilds the phase-2 cull bind group against the CURRENT-frame pyramid handle (`global.vp`
+   * phase-2 rescue test). Cached per pyramid texture view (max 4 entries across resizes).
+   */
+  private _rebuildPhase2CullBg(hzb: HzbFieldPyramidAccess): void {
+    const gpu = this._gpu;
+    const host = this._host;
+    const device = host?.gpuDevice;
+    const p2 = gpu?.phase2;
+    if (!gpu || !host || !device || !p2) return;
+    const view = hzb.readHandle.view ?? host.whiteTextureView;
+    const cached = p2.cullBgByView.get(view);
+    if (cached) {
+      p2.cullBg = cached;
+      return;
+    }
+    if (p2.cullBgByView.size >= 4) p2.cullBgByView.clear();
+    p2.cullBg = this._createCullBindGroup(
+      device,
+      gpu.cullFieldBGL,
+      {
+        records: gpu.records,
+        prototypeInfo: gpu.prototypeInfo,
+        prototypeRange: gpu.prototypeRange,
+        lodMaxima: gpu.lodMaxima,
+        indirectArgs: p2.indirectArgs,
+        visibleIndices: p2.visibleIndices,
+        fieldLodBlend: p2.fieldLodBlend,
+        cullParams: gpu.cullParams,
+        fieldInfo: gpu.fieldInfo,
+      },
+      view,
+    );
+    p2.cullBgByView.set(view, p2.cullBg);
+  }
+
+  /**
    * Writes one (view x bucket)-base param block header (planes + metric + flags), uploads it
    * and refreshes the cull mirror. Only view-base blocks (index `viewIndex * MAX_LOD_BUCKETS`)
    * are per-frame refreshed; the draw blocks keep their attach-time `segmentBase`.
@@ -1893,6 +2386,18 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       this._resetRecordedThisFrame = true;
     }
 
+    if (viewIndex === 0 && this._twoPhaseOcclusion) {
+      this._ensurePhase2GpuState();
+      if (gpu.phase2) {
+        const resetP2 = ce.beginComputePass({ label: "InstanceFieldPhase2Reset" });
+        resetP2.setPipeline(gpu.phase2.resetPhase2Pipeline);
+        resetP2.setBindGroup(1, gpu.phase2.rejectBg);
+        resetP2.setBindGroup(2, gpu.phase2.cullBg, [0]);
+        resetP2.dispatchWorkgroups(1);
+        resetP2.end();
+      }
+    }
+
     const cull = ce.beginComputePass({ label: "InstanceFieldCull" });
     cull.setPipeline(gpu.cullPipeline);
     if (gpu.cullGlobalBuffer !== host.globalUniformBuffer) {
@@ -1904,6 +2409,12 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       );
     }
     cull.setBindGroup(0, gpu.cullGlobalBg);
+    cull.setBindGroup(
+      1,
+      viewIndex === 0 && this._twoPhaseOcclusion && gpu.phase2
+        ? gpu.phase2.rejectBg
+        : gpu.phase2RejectDummyBg,
+    );
     cull.setBindGroup(2, gpu.cullBg, [viewIndex * MAX_LOD_BUCKETS * CULL_PARAM_BLOCK_BYTES]);
     cull.dispatchWorkgroups(Math.ceil(this._instanceCount / CULL_WORKGROUP_SIZE));
     cull.end();
@@ -2150,6 +2661,9 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       }),
       pending: false,
       frameIndex: 0,
+      phase2ArgsStage: undefined,
+      phase2IndicesStage: undefined,
+      hasPhase2: false,
     };
     this._probeParamsSnapshot = [];
   }

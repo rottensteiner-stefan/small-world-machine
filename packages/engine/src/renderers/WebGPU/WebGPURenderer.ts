@@ -383,6 +383,28 @@ export class WebGPURenderer
     frameIndex: 0,
     readHandle: { slot: 0, view: undefined as unknown as GPUTextureView, mipLevelCount: 1 },
   };
+  private readonly _currHzbResult: HzbFieldPyramidAccess = {
+    available: false,
+    frameIndex: 0,
+    readHandle: { slot: 0, view: undefined as unknown as GPUTextureView, mipLevelCount: 1 },
+  };
+  private readonly _phase2ColorAttachments: [GPURenderPassColorAttachment] = [
+    {
+      view: undefined as unknown as GPUTextureView,
+      loadOp: "clear",
+      clearValue: { r: 0, g: 0, b: 0, a: 1 },
+      storeOp: "discard",
+    },
+  ];
+  private readonly _phase2DepthAttachment: GPURenderPassDepthStencilAttachment = {
+    view: undefined as unknown as GPUTextureView,
+    depthLoadOp: "load",
+    depthStoreOp: "store",
+  };
+  private readonly _phase2PassDescriptor: GPURenderPassDescriptor = {
+    colorAttachments: this._phase2ColorAttachments,
+    depthStencilAttachment: this._phase2DepthAttachment,
+  };
 
   private _shadowMaps = new Map<DirectionalLight | SpotLight, GPUTexture>();
   /** Same Map instance every frame -- shadow passes `.get()`/`.set()` on it directly. */
@@ -658,6 +680,22 @@ export class WebGPURenderer
     return hzb.getPreviousFrameHzb();
   }
 
+  /** Current-frame pyramid handle for the field phase-2 rescue cull (mode B, Wihlidal / Haar &
+   *  Aaltonen). Returns the same reused-scratch fallback shape when `_hzbSystem` is absent. */
+  public getCurrentFrameHzb(): HzbFieldPyramidAccess {
+    const hzb = this._hzbSystem;
+    if (!hzb) {
+      const out = this._currHzbResult;
+      out.available = false;
+      out.frameIndex = 0;
+      out.readHandle.slot = 0;
+      out.readHandle.view = this._fallback.whiteTextureView;
+      out.readHandle.mipLevelCount = 1;
+      return out;
+    }
+    return hzb.getCurrentFrameHzb();
+  }
+
   /** `InstanceFieldRenderHost` hook: retains `tex` in the texture cache for the whole life of a
    * field's alpha-map binding -- a field-scoped texture no object's material refcount covers
    * would otherwise be destroyed underneath the draw bind group. Delegates to the cache. */
@@ -810,6 +848,57 @@ export class WebGPURenderer
     for (let i = 0; i < fields.length; i++) {
       fields[i]!.recordDraw(rp, viewOffset, viewIndex, bindGlobal, variant);
     }
+  }
+
+  /** Records phase-2 rescued field color draws right after `_recordFieldDraws` in MainRenderPass. */
+  public _recordFieldPhase2Draws(
+    rp: GPURenderPassEncoder,
+    viewOffset: number,
+    viewIndex: number,
+    bindGlobal: boolean,
+    variant: FieldDrawVariant,
+  ): void {
+    if (this._activeRenderTarget) return;
+    const fields = this._instanceFields;
+    if (fields.length === 0) return;
+    for (let i = 0; i < fields.length; i++) {
+      fields[i]!.recordPhase2Draw(rp, viewOffset, viewIndex, bindGlobal, variant);
+    }
+  }
+
+  /**
+   * Runs phase-2 rescue culling + depth patching right after the current-frame HZB pyramid is built
+   * (mode B, Wihlidal / Haar & Aaltonen). Zero-GC: uses preallocated attachment/pass descriptors.
+   */
+  public _recordInstanceFieldPhase2(ce: GPUCommandEncoder, targetView: GPUTextureView): void {
+    if (this._activeRenderTarget) return;
+    const fields = this._instanceFields;
+    let hasPhase2 = false;
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]!;
+      if (f.twoPhaseOcclusion && f.instanceCount > 0) {
+        hasPhase2 = true;
+        break;
+      }
+    }
+    if (!hasPhase2) return;
+
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]!;
+      if (f.twoPhaseOcclusion) f.cullPhase2(ce);
+    }
+
+    this._phase2ColorAttachments[0].view = targetView;
+    this._phase2DepthAttachment.view = this.activeDepthView;
+    const rp = ce.beginRenderPass(this._phase2PassDescriptor);
+    rp.setBindGroup(0, this._globalBindGroup);
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]!;
+      if (f.twoPhaseOcclusion) {
+        f.recordPhase2Draw(rp, 0, VIEW_SLOT_MAIN_CAMERA, false, "depth");
+      }
+    }
+    rp.end();
   }
 
   /** Records the opt-in cull-probe staging copies for every probed field, right before
@@ -1633,6 +1722,9 @@ export class WebGPURenderer
       // instead of the interface's.
       const nextPass: RenderPass = pass;
       nextPass.execute(this, scene, ce, renderTargetView, vp, camPos, vMat);
+      if (nextPass.name === "HzbOcclusionPassGPU" || nextPass.name === "FieldHzbBuildPassGPU") {
+        this._recordInstanceFieldPhase2(ce, renderTargetView);
+      }
     }
 
     // Record this frame's timestamp resolve (if timing is enabled and segments were recorded)

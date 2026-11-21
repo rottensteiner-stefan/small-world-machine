@@ -715,4 +715,282 @@ describe("InstanceFieldSystem on a recording device", () => {
     system.setLodTransition({ crossfadeBand: 0.3 });
     expect(system.lodTransitionMode).toBe("hysteresis");
   });
+
+  // ---------------------------------------------------------------------------
+  // ADR 0059 step 3 (HZB Occlusion Spike): tight cylinder bounds + two-phase mode B
+  // ---------------------------------------------------------------------------
+
+  it("packs tight HZB cylinder bounds into prototypeInfo and fails fast on invalid values", () => {
+    const rec: Recorded = { writes: [], bindGroups: 0, buffers: [] };
+    const geoEntry = {
+      vb: { id: "vb" },
+      uvb: { id: "uvb" },
+      ib: { id: "ib" },
+      indexCount: 36,
+      vertexCount: 3,
+      format: "uint32",
+    };
+    const host = {
+      gpuDevice: makeDevice(rec),
+      globalBGL: {},
+      globalBindGroup: {},
+      globalUniformBuffer: { id: "global" },
+      viewBGL: {},
+      viewBindGroup: {},
+      currentColorTargetFormat: "bgra8unorm",
+      fieldCullModuleSource: "",
+      fieldPullModuleSource: "",
+      whiteTextureView: {},
+      getPreviousFrameHzb: () => ({
+        available: true,
+        frameIndex: 1,
+        readHandle: { view: {}, mipLevelCount: 8 },
+      }),
+      getTextureView: () => ({}),
+      acquireFieldGeometry: () => geoEntry,
+      releaseFieldGeometry: () => {},
+    } as unknown as InstanceFieldRenderHost;
+
+    const geometry = {
+      vertices: new Float32Array(9),
+      indices: new Uint32Array(3),
+      uvs: new Float32Array(6),
+    } as unknown as GeometryDataInterface;
+
+    const buildWithProto = (proto: PrototypeDescriptor): Float32Array => {
+      rec.writes.length = 0;
+      rec.buffers.length = 0;
+      const sys = new InstanceFieldSystem(host, {
+        instanceRecords: new Float32Array(16),
+        prototypes: [proto],
+        geometryTable: [[geometry]],
+        options: { maxInstances: 1, cellSize: 10, cullPixelSize: 2, maxViews: 1 },
+      });
+      // `prototypeInfo` is the first 16-B table buffer created (`prototypeRange` is second).
+      const protoInfo = rec.buffers.find((b) => b.size === 16)!;
+      const write = rec.writes.find((w) => w.buffer === protoInfo && w.offset === 0)!;
+      const out = new Float32Array((write.data as Uint8Array).slice().buffer);
+      sys.dispose();
+      return out;
+    };
+
+    const tight = buildWithProto({
+      id: "conifer",
+      boundingRadius: 10,
+      hzbRadiusXZ: 2.5,
+      hzbMinY: -0.25,
+      hzbMaxY: 12.5,
+      lodBuckets: [
+        { name: "L0", lodIndex: 0, minProjectedSize: 3, maxProjectedSize: 1e6, geometrySlot: 0 },
+      ],
+      materialSlot: 0,
+      maxInstances: 1,
+    });
+    expect(Array.from(tight)).toEqual([10, 2.5, -0.25, 12.5]);
+
+    const fallback = buildWithProto({
+      id: "sphereOnly",
+      boundingRadius: 8,
+      lodBuckets: [
+        { name: "L0", lodIndex: 0, minProjectedSize: 3, maxProjectedSize: 1e6, geometrySlot: 0 },
+      ],
+      materialSlot: 0,
+      maxInstances: 1,
+    });
+    expect(Array.from(fallback)).toEqual([8, 0, 0, 0]);
+
+    expect(() =>
+      buildWithProto({
+        id: "badRadius",
+        boundingRadius: 5,
+        hzbRadiusXZ: -1,
+        lodBuckets: [
+          { name: "L0", lodIndex: 0, minProjectedSize: 3, maxProjectedSize: 1e6, geometrySlot: 0 },
+        ],
+        materialSlot: 0,
+        maxInstances: 1,
+      }),
+    ).toThrow(/hzbRadiusXZ/);
+
+    expect(() =>
+      buildWithProto({
+        id: "invertedY",
+        boundingRadius: 5,
+        hzbRadiusXZ: 2,
+        hzbMinY: 5,
+        hzbMaxY: 2,
+        lodBuckets: [
+          { name: "L0", lodIndex: 0, minProjectedSize: 3, maxProjectedSize: 1e6, geometrySlot: 0 },
+        ],
+        materialSlot: 0,
+        maxInstances: 1,
+      }),
+    ).toThrow(/hzbMaxY/);
+  });
+
+  it("enables mode-2 two-phase occlusion lazily, dispatches rescue passes, and merges probe results", () => {
+    const rec: Recorded = { writes: [], bindGroups: 0, buffers: [] };
+    const computeLabels: string[] = [];
+    let indirectDispatched = 0;
+    let indirectDraws = 0;
+    const currHzbView = { id: "currHzb" };
+    const geoEntry = {
+      vb: { id: "vb" },
+      uvb: { id: "uvb" },
+      ib: { id: "ib" },
+      indexCount: 36,
+      vertexCount: 3,
+      format: "uint32",
+    };
+
+    const host = {
+      gpuDevice: makeDevice(rec),
+      globalBGL: {},
+      globalBindGroup: {},
+      globalUniformBuffer: { id: "global" },
+      viewBGL: {},
+      viewBindGroup: {},
+      currentColorTargetFormat: "bgra8unorm",
+      fieldCullModuleSource: "",
+      fieldPullModuleSource: "",
+      whiteTextureView: {},
+      getPreviousFrameHzb: () => ({
+        available: true,
+        frameIndex: 1,
+        readHandle: { view: { id: "prevHzb" }, mipLevelCount: 8 },
+      }),
+      getCurrentFrameHzb: () => ({
+        available: true,
+        frameIndex: 2,
+        readHandle: { view: currHzbView, mipLevelCount: 8 },
+      }),
+      getTextureView: () => ({}),
+      acquireFieldGeometry: () => geoEntry,
+      releaseFieldGeometry: () => {},
+    } as unknown as InstanceFieldRenderHost;
+
+    const geometry = {
+      vertices: new Float32Array(9),
+      indices: new Uint32Array(3),
+      uvs: new Float32Array(6),
+    } as unknown as GeometryDataInterface;
+    const prototype: PrototypeDescriptor = {
+      id: "tree",
+      boundingRadius: 2,
+      lodBuckets: [
+        { name: "L0", lodIndex: 0, minProjectedSize: 3, maxProjectedSize: 1e6, geometrySlot: 0 },
+      ],
+      materialSlot: 0,
+      maxInstances: 5,
+    };
+    const records = new Float32Array(20);
+    const system = new InstanceFieldSystem(host, {
+      instanceRecords: records,
+      prototypes: [prototype],
+      geometryTable: [[geometry]],
+      options: { maxInstances: 5, cellSize: 10, cullPixelSize: 2, maxViews: 2 },
+    });
+
+    // Default off: mode 1, Phase-2 GPU buffers not allocated yet.
+    expect(system.twoPhaseOcclusion).toBe(false);
+    const buffersBeforePhase2 = rec.buffers.length;
+    const rejectBufferSize = 16 + 5 * 4;
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    expect(lastParamBlock(rec, 0)[CULL_MODE_WORD]).toBe(1);
+    expect(rec.buffers.length).toBe(buffersBeforePhase2);
+
+    // Enable mode B: 5 lazy Phase-2 buffers created and mode word switches to 2.
+    system.setTwoPhaseOcclusion(true);
+    expect(system.twoPhaseOcclusion).toBe(true);
+    const phase2Buffers = rec.buffers.slice(buffersBeforePhase2);
+    expect(phase2Buffers.length).toBe(5);
+    expect(phase2Buffers.some((b) => b.size === rejectBufferSize)).toBe(true);
+    system.prepareMainView(VP, { x: 0, y: 0, z: 0 }, 720, 1);
+    expect(lastParamBlock(rec, 0)[CULL_MODE_WORD]).toBe(2);
+
+    const ce = {
+      beginComputePass: (desc?: { label?: string }) => {
+        if (desc?.label) computeLabels.push(desc.label);
+        return {
+          setPipeline: vi.fn(),
+          setBindGroup: vi.fn(),
+          dispatchWorkgroups: vi.fn(),
+          dispatchWorkgroupsIndirect: (): void => {
+            indirectDispatched++;
+          },
+          end: vi.fn(),
+        };
+      },
+      copyBufferToBuffer: vi.fn(),
+    } as unknown as GPUCommandEncoder;
+    const rp = {
+      setBindGroup: vi.fn(),
+      setPipeline: vi.fn(),
+      setVertexBuffer: vi.fn(),
+      setIndexBuffer: vi.fn(),
+      drawIndexedIndirect: (): void => {
+        indirectDraws++;
+      },
+    } as unknown as GPURenderPassEncoder;
+
+    system.cullMainView(ce);
+    system.cullPhase2(ce);
+    system.recordPhase2Draw(rp, 0, 0, true, "depth");
+
+    expect(computeLabels).toEqual([
+      "InstanceFieldReset",
+      "InstanceFieldPhase2Reset",
+      "InstanceFieldCull",
+      "InstanceFieldPhase2Finalize",
+      "InstanceFieldCullPhase2",
+    ]);
+    expect(indirectDispatched).toBe(1);
+    expect(indirectDraws).toBe(1);
+
+    // Probe readback merges Phase-1 (2 instances) + Phase-2 (1 rescued instance) into view 0 / bucket 0.
+    let polled: readonly { viewIndex: number; bucketIndex: number; count: number }[] = [];
+    let visibleOut: Uint32Array | undefined;
+    system.installCullProbe({
+      onCullFrame: (sets): void => {
+        polled = sets.segmentCounts;
+        visibleOut = sets.visibleIndices;
+      },
+    });
+    system.recordProbeStaging(ce, 2);
+
+    // Populate the 4 mapped staging buffers directly (phase1 args/indices + phase2 args/indices).
+    const mappedBuffers = new Map<object, ArrayBuffer>();
+    const p1Args = new Uint32Array(MAX_LOD_BUCKETS * 2 * 8);
+    p1Args[1] = 2; // view 0 bucket 0: 2 survivors
+    const p1Idx = new Uint32Array(2 * MAX_LOD_BUCKETS * 8);
+    p1Idx[0] = 0;
+    p1Idx[1] = 2;
+    const p2Args = new Uint32Array(MAX_LOD_BUCKETS * 8);
+    p2Args[1] = 1; // bucket 0: 1 rescued survivor
+    const p2Idx = new Uint32Array(MAX_LOD_BUCKETS * 8);
+    p2Idx[0] = 3;
+
+    const stageBufs = rec.buffers.filter((b) => b.size > 0);
+    // The last 4 created MAP_READ buffers are [argsStage, indicesStage, phase2ArgsStage, phase2IndicesStage].
+    const p2IdxBuf = stageBufs.at(-1)!;
+    const p2ArgsBuf = stageBufs.at(-2)!;
+    const p1IdxBuf = stageBufs.at(-3)!;
+    const p1ArgsBuf = stageBufs.at(-4)!;
+    mappedBuffers.set(p1ArgsBuf, p1Args.buffer);
+    mappedBuffers.set(p1IdxBuf, p1Idx.buffer);
+    mappedBuffers.set(p2ArgsBuf, p2Args.buffer);
+    mappedBuffers.set(p2IdxBuf, p2Idx.buffer);
+    for (const [buf, backing] of mappedBuffers) {
+      const m = buf as MockBuffer & { getMappedRange?: () => ArrayBuffer; unmap?: () => void };
+      m.mapState = "mapped";
+      m.getMappedRange = (): ArrayBuffer => backing;
+      m.unmap = (): void => {
+        m.mapState = "unmapped";
+      };
+    }
+
+    system.pollProbeReadback();
+    expect(polled).toEqual([{ viewIndex: 0, bucketIndex: 0, count: 3 }]);
+    expect(Array.from(visibleOut!.subarray(0, 3))).toEqual([0, 2, 3]);
+  });
 });

@@ -83,12 +83,13 @@ export class GroundCoverSystem {
         cameraClearRadius: options.cameraClearRadius ?? 2,
         scaleRange: options.scaleRange ?? [0.7, 1.6],
       });
+      const hzbRadiusXZ = variety.radius + variety.height * variety.lean[1];
       const prototype: PrototypeDescriptor = {
         id: `ground-cover-${variety.id}`,
-        boundingRadius: Math.hypot(
-          variety.height,
-          variety.radius + variety.height * variety.lean[1],
-        ),
+        boundingRadius: Math.hypot(variety.height, hzbRadiusXZ),
+        hzbRadiusXZ,
+        hzbMinY: 0,
+        hzbMaxY: variety.height,
         lodBuckets: [
           {
             name: "far",

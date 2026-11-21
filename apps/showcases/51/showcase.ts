@@ -301,8 +301,10 @@ interface MeasureResult {
   gpuPassesMs?: Record<string, number>;
   /** S2 field lane diagnostics (`?mode=field`): GPU-managed instance count. */
   fieldInstances?: number;
-  /** S2 field lane: active occlusion mode (`a`|`b`|`c`). */
+  /** S2 field lane: active occlusion mode (`a`|`b`|`c`|`two-phase`). */
   fieldOcclusionMode?: string;
+  /** S2 field lane: 1 = two-phase occlusion culling enabled (ADR 0059 step 3 mode B). */
+  fieldTwoPhase?: number;
   /** S2 field lane: geometry-chain source (`proxy` = stride-decimation default, `reallod` =
    *  real `<stem>_LOD<n>.glb` chain of a `?tree=` species). Field lane only, both values reported. */
   lodSource?: "proxy" | "reallod";
@@ -489,6 +491,7 @@ export class Showcase extends AbstractShowcase {
   // S2 field lane (ADR 0059 step 1, WebGPU only). See `_buildFieldLane`.
   private _fieldSystem: InstanceFieldSystem | undefined = undefined;
   private readonly _occlusionMode: "a" | "b" | "c";
+  private readonly _twoPhaseOcclusion: boolean;
   private readonly _popcount: boolean;
   private readonly _cullref: boolean;
   private readonly _cutEvery: number;
@@ -584,6 +587,7 @@ export class Showcase extends AbstractShowcase {
     // S2 field-lane knobs (ADR 0059 step 1). `?occlusion=a|b|c`, `?popcount=1`, `?cullref=1` and
     // `?cutEvery=N` only take effect on the WebGPU field lane; elsewhere they are inert.
     const occ = params.get("occlusion");
+    this._twoPhaseOcclusion = params.get("twoPhase") === "1" || occ === "two-phase";
     this._occlusionMode = occ === "a" || occ === "b" || occ === "c" ? occ : "b";
     this._popcount = params.get("popcount") === "1";
     this._cullref = params.get("cullref") === "1";
@@ -1155,9 +1159,24 @@ export class Showcase extends AbstractShowcase {
             geometrySlot: 2,
           },
         ];
+    let maxXZ = 0;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = 0;
+    const verts = merged.vertices;
+    for (let i = 0; i < verts.length; i += 3) {
+      const xz = Math.hypot(verts[i]!, verts[i + 2]!);
+      if (xz > maxXZ) maxXZ = xz;
+      const vy = verts[i + 1]!;
+      if (vy < minY) minY = vy;
+      if (vy > maxY) maxY = vy;
+    }
+    if (!Number.isFinite(minY)) minY = 0;
     const prototype: PrototypeDescriptor = {
       id: `s51-${proto.name}`,
       boundingRadius: radius,
+      hzbRadiusXZ: Math.max(maxXZ * 1.05, 0.5),
+      hzbMinY: minY < 0 ? minY * 1.05 : minY,
+      hzbMaxY: Math.max(maxY * 1.05, minY + 0.5),
       lodBuckets: bands,
       materialSlot: 0,
       maxInstances: instances.length,
@@ -1225,6 +1244,8 @@ export class Showcase extends AbstractShowcase {
     });
     if (this._occlusionMode === "a") {
       system.setOcclusionEnabled(false);
+    } else if (this._twoPhaseOcclusion) {
+      system.setTwoPhaseOcclusion(true);
     }
     // Fail-closed registration (ADR 0043): on a 4-cap `maxBindGroups` device (e.g. headless
     // Dawn/SwiftShader) the field lane cannot bind group 4 — the renderer throws by design
@@ -1268,9 +1289,11 @@ export class Showcase extends AbstractShowcase {
         onCullFrame: (sets: FieldVisibleSets): void => this._onFieldCullFrame(sets),
       });
     }
+    const occlusionLabel =
+      this._twoPhaseOcclusion && this._occlusionMode !== "a" ? "two-phase" : this._occlusionMode;
     console.info(
       `[Showcase51] field lane: ${instances.length} records, cullRadius=${radius.toFixed(2)} m, ` +
-        `occlusion=${this._occlusionMode}` +
+        `occlusion=${occlusionLabel}` +
         `, wind=${this._windField !== undefined && this._windLive ? "on" : "off"}` +
         `${this._popcount ? ", popcount" : ""}${this._cullref ? ", cullref" : ""}` +
         `, LOD mode=${this._lodMode}` +
@@ -1756,7 +1779,9 @@ export class Showcase extends AbstractShowcase {
     // (no CPU readback stall on the render path, ADR 0059).
     if (this._mode === "field" && this._fieldSystem !== undefined) {
       result.fieldInstances = this._fieldSystem.instanceCount;
-      result.fieldOcclusionMode = this._occlusionMode;
+      result.fieldOcclusionMode =
+        this._twoPhaseOcclusion && this._occlusionMode !== "a" ? "two-phase" : this._occlusionMode;
+      result.fieldTwoPhase = this._twoPhaseOcclusion && this._occlusionMode !== "a" ? 1 : 0;
       result.fieldShading = "lambert-csm";
       // Field-lane geometry-chain source (both values reported); `lodTris` only for real LODs.
       result.lodSource = this._lodSource;

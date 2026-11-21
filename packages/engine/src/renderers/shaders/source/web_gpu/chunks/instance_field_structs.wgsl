@@ -74,7 +74,7 @@ struct CullParams {
     segmentBase: u32,               // FULL (view x bucket) segment base `bv` (block index of the
                                     //   per-segment 256 B param block the draw/cull binds; the cull
                                     //   adds the in-shader bucket to this view base)
-    cullMode: u32,                  // 0=C, 1=A, 2=B(->A path until the S3 spike)
+    cullMode: u32,                  // 0=C, 1=A (single-phase prev HZB), 2=B (two-phase Wihlidal / Haar & Aaltonen)
     // ADR 0059 step 2 (P2) per-view LOD transition state (written by the coordinator every frame;
     // identical across views except `lodBiasBuckets`, which shadow views set to shift the main
     // camera's bucket choice toward the coarse end -- field-scoped knobs mirrored per view).
@@ -89,8 +89,8 @@ struct CullParams {
     _pad1: u32,                     // byte 140 -- vec4 alignment padding for `prevVp` below
     // Frame N-1 main-camera view-projection (ZO-corrected -- the exact matrix the depth pre-pass
     // used when the sampled previous-frame pyramid was built). `fieldHzbVisible` projects the
-    // sphere into THIS space so the footprint and depth compare share the pyramid's coordinate
-    // system instead of Frame N's (the frame-staleness fix; HZB data is always one frame old).
+    // volume into THIS space during phase 1 so the footprint and depth compare share the pyramid's
+    // coordinate system instead of Frame N's (the frame-staleness fix; HZB data is always one frame old).
     // Only ever read when `hzbEnabled` (main view); shadow views leave it untrusted/unused.
     prevVp: mat4x4f,                // byte 144..208
     _pad: array<u32, 12>,           // byte 208..256 -- block stays 256 B (dynamic-offset stride)
@@ -121,7 +121,7 @@ struct CullParams {
 //                                   shared truth documented here; see field_pull.wgsl for the
 //                                   value/sign semantics (veg-p2-bob + veg-p2-erin contract).
 @group(2) @binding(0) var<storage, read> fieldRecords: array<vec4f>;           // 16 B/inst: xyz=pos, w=packedPose
-@group(2) @binding(1) var<storage, read> fieldPrototypeInfo: array<vec4f>;     // x = boundingRadius @ scale 1
+@group(2) @binding(1) var<storage, read> fieldPrototypeInfo: array<vec4f>;     // x=boundingRadius, y=hzbRadiusXZ (>0 enables tight AABB), z=hzbMinY, w=hzbMaxY @ scale 1
 // bindings 2 (`fieldIndirectArgs`) and 3 (`fieldVisibleIndices`) are declared by each consumer
 // module, not here: their access differs per stage. The cull writes them (`read_write`, the
 // instance cursor atomic), the pull vertex only reads indices -- and WebGPU forbids `read_write`

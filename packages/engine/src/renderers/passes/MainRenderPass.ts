@@ -177,6 +177,13 @@ export class MainRenderPass implements RenderPass {
       true,
       normalView ? "colorNormal" : "color",
     );
+    renderer._recordFieldPhase2Draws(
+      rp,
+      0,
+      VIEW_SLOT_MAIN_CAMERA,
+      true,
+      normalView ? "colorNormal" : "color",
+    );
 
     // 2b. Open Ocean (ADR 0062): reads solid terrain/seabed color+depth for shoreline surf &
     // Beer-Lambert absorption, then writes wave surface depth & shading normals before decals,

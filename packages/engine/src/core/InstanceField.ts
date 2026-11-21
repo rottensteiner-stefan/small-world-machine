@@ -199,6 +199,23 @@ export interface PrototypeDescriptor {
    */
   boundingRadius: number;
   /**
+   * @domain meters — optional tight horizontal bounding-cylinder radius at uniform scale 1
+   *         (yaw-invariant XZ reach around the instance origin). When > 0, the GPU HZB test
+   *         projects the tight world AABB `[±hzbRadiusXZ, hzbMinY..hzbMaxY]` instead of the
+   *         base-centered bounding sphere (avoids projecting far into sky/ground for tall trees).
+   */
+  hzbRadiusXZ?: number;
+  /**
+   * @domain meters — optional local minimum Y bound relative to the instance origin at scale 1
+   *         (used with `hzbRadiusXZ`; defaults to 0 when `hzbRadiusXZ > 0`).
+   */
+  hzbMinY?: number;
+  /**
+   * @domain meters — optional local maximum Y bound relative to the instance origin at scale 1
+   *         (used with `hzbRadiusXZ`; defaults to `boundingRadius` when `hzbRadiusXZ > 0`).
+   */
+  hzbMaxY?: number;
+  /**
    * @domain Authored LOD chain, ascending by projected size: bucket 0 = farthest/coarsest,
    *         highest index = nearest/finest (geometry binds by BUCKET index, see
    *         `LodBucketDescriptor` — each descriptor's `lodIndex` is descriptive asset level

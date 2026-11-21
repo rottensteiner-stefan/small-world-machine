@@ -924,6 +924,19 @@ This document serves to record external sources, algorithms, mathematical deriva
 - **Source:** [Physically-based & Unified Volumetric Rendering in Frostbite (SIGGRAPH 2015)](https://www.ea.com/frostbite/news/physically-based-unified-volumetric-rendering-in-frostbite)
 - **Usage:** Generates unified 3D volumetric fog by dividing the view frustum into exponential depth slices coupled to the clustered light lists (ADR 0007). In-scattering and extinction from point, spot, and directional lights are computed in a WebGPU compute pass using Henyey-Greenstein/Schlick phase functions, integrated along depth, and composited into the scene buffer before tone mapping.
 
+### Two-Phase Hierarchical-Z (HZB) Occlusion Culling
+
+- **File:** `packages/engine/src/renderers/shaders/source/web_gpu/compute/instance_cull.wgsl`, `packages/engine/src/renderers/shaders/source/web_gpu/compute/hzb_visibility_test.wgsl`, `packages/engine/src/renderers/WebGPU/managers/InstanceFieldSystem.ts`, `packages/engine/src/renderers/WebGPU/managers/HzbOcclusionSystem.ts`
+- **Authors/Gurus:** Graham Wihlidal (Frostbite / EA, GDC 2016), Ulrich Haar & Sebastian Aaltonen (Ubisoft, SIGGRAPH 2015), Michael Mara & Morgan McGuire (JCGT 2013)
+- **Source:**
+  - [Optimizing the Graphics Pipeline with Compute (Wihlidal, GDC 2016)](https://www.gdcvault.com/play/1023109/Optimizing-the-Graphics-Pipeline-with)
+  - [GPU-Driven Rendering Pipelines (Haar & Aaltonen, SIGGRAPH 2015)](https://advances.realtimerendering.com/s2015/aaltonenhaar_siggraph2015_combined_final_footer_220dpi.pdf)
+  - [2D Polyhedral Bounds of a Clipped, Perspective-Projected 3D Sphere (Mara & McGuire, JCGT 2013)](https://jcgt.org/published/0002/02/05/)
+- **Formulas / Architecture:**
+  - Single-phase (`cullMode == 1`): frustum + projected-size survivors are tested against the previous frame's max-depth HZB pyramid (`prevVp`) using conservative projected sphere bounds (Mara & McGuire) or wind-expanded yaw-invariant vertical cylinder / 8-corner world AABB bounds, testing at `mip = min(ceil(log2(max(rectPx.x, rectPx.y))), mipCount - 1)` so four texel loads cover any screen-space footprint (`nearDepth <= farthestInFootprint`).
+  - Two-phase (`cullMode == 2`): Phase 1 appends prev-frame HZB rejects to `fieldPhase2.indices`; after `DepthPrePassGPU` + current-frame HZB pyramid rebuild (`FieldHzbBuildPassGPU`), `finalizePhase2Args` + `cullInstancesPhase2` re-test rejects against the current-frame HZB (`global.vp`), depth-patch rescued survivors (`depthLoadOp: "load"`, `depthCompare: "less-equal"`), and draw rescued color in `MainRenderPass` (`depthCompare: "equal"`).
+- **Usage:** Eliminates single-phase HZB disocclusion popping on camera movement without CPU readback (`InstanceField` ADR 0059 Step 3 S3) and tightens bounding-footprint coverage for elongated vegetation canopies and `BoundingType.BOX` objects (`HzbOcclusionSystem`).
+
 ## Graphics APIs (WebGPU / WebGL)
 
 ### W3C WebGPU Specification

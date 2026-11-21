@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { BoundingType } from "../../src/enums/index.js";
 import { HzbOcclusionSystem } from "../../src/renderers/WebGPU/managers/HzbOcclusionSystem.js";
 import type { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
 
@@ -184,5 +185,104 @@ describe("HzbOcclusionSystem.invalidatePyramid — post-teleport pre-cut leak (I
     expect(next.available).toBe(true);
     expect(next.frameIndex).toBe(5);
     expect(next.readHandle.slot).toBe(1);
+  });
+});
+
+describe("HzbOcclusionSystem.getCurrentFrameHzb & tight BOX packing (ADR 0059 step 3)", () => {
+  it("getCurrentFrameHzb exposes the just-written slot on Frame 1+ and clears on invalidatePyramid", () => {
+    const system = makeReadySystem();
+    expect(system.getCurrentFrameHzb().available).toBe(false);
+
+    const enc = (): GPUCommandEncoder =>
+      makeMockCommandEncoder().ce as unknown as GPUCommandEncoder;
+    system.buildPyramid(enc(), false);
+    const f1 = system.getCurrentFrameHzb();
+    expect(f1.available).toBe(true);
+    expect(f1.frameIndex).toBe(1);
+    expect(f1.readHandle.slot).toBe(1);
+    expect(f1.readHandle.view).toBe(system._hzbSampledViews[1]);
+
+    system.buildPyramid(enc(), false);
+    const f2 = system.getCurrentFrameHzb();
+    expect(f2.available).toBe(true);
+    expect(f2.frameIndex).toBe(2);
+    expect(f2.readHandle.slot).toBe(0);
+    expect(f2.readHandle.view).toBe(system._hzbSampledViews[0]);
+
+    system.invalidatePyramid();
+    expect(system.getCurrentFrameHzb().available).toBe(false);
+  });
+
+  it("dispatchTest packs padded AABB half-extents (w=1) for BoundingType.BOX and zeroed sphere fallback (w=0)", () => {
+    const { device } = makeMockDevice();
+    const system = new HzbOcclusionSystem(
+      device as unknown as GPUDevice,
+      {} as unknown as GPUFallbackResources,
+      "testShaderCode",
+      {} as unknown as GPUBindGroupLayout,
+      () => 4,
+    );
+    system.resize(64, 64, { id: "depthView" } as unknown as GPUTextureView);
+    const { ce } = makeMockCommandEncoder();
+    system.buildPyramid(ce as unknown as GPUCommandEncoder, false);
+
+    const boxObj = {
+      isVisible: true,
+      inFrustum: true,
+      occlusionCulled: false,
+      geometry: undefined,
+      bounds: {
+        type: BoundingType.BOX,
+        center: { x: 1, y: 2, z: 3 },
+        min: { x: 0, y: 0, z: 0 },
+        max: { x: 2, y: 4, z: 6 },
+        getBroadRadius: (): number => Math.hypot(1, 2, 3),
+      },
+    };
+    const sphereObj = {
+      isVisible: true,
+      inFrustum: true,
+      occlusionCulled: false,
+      geometry: undefined,
+      bounds: {
+        type: BoundingType.SPHERE,
+        center: { x: -4, y: 5, z: -6 },
+        getBroadRadius: (): number => 2.5,
+      },
+    };
+    const scene = {
+      lastFrustumVisibleObjects: [boxObj, sphereObj],
+    };
+
+    system.dispatchTest(
+      ce as unknown as GPUCommandEncoder,
+      scene as never,
+      {} as GPUBindGroup,
+      false,
+    );
+
+    // First writeBuffer call in dispatchTest uploads the AABB array (`count * 8` floats).
+    const aabbCall = device.queue.writeBuffer.mock.calls.find((call) => call[4] === 16);
+    expect(aabbCall).toBeDefined();
+    const uploaded = Array.from((aabbCall![2] as Float32Array).subarray(0, 16));
+    // Object 0 (BOX): half extents = (1, 2, 3) * 1.15 padding, w = 1
+    expect(uploaded[0]).toBeCloseTo(1, 5);
+    expect(uploaded[1]).toBeCloseTo(2, 5);
+    expect(uploaded[2]).toBeCloseTo(3, 5);
+    expect(uploaded[3]).toBeCloseTo(Math.hypot(1, 2, 3) * 1.15, 5);
+    expect(uploaded[4]).toBeCloseTo(1 * 1.15, 5);
+    expect(uploaded[5]).toBeCloseTo(2 * 1.15, 5);
+    expect(uploaded[6]).toBeCloseTo(3 * 1.15, 5);
+    expect(uploaded[7]).toBe(1);
+
+    // Object 1 (SPHERE): w = 0 sphere fallback
+    expect(uploaded[8]).toBeCloseTo(-4, 5);
+    expect(uploaded[9]).toBeCloseTo(5, 5);
+    expect(uploaded[10]).toBeCloseTo(-6, 5);
+    expect(uploaded[11]).toBeCloseTo(2.5 * 1.15, 5);
+    expect(uploaded[12]).toBe(0);
+    expect(uploaded[13]).toBe(0);
+    expect(uploaded[14]).toBe(0);
+    expect(uploaded[15]).toBe(0);
   });
 });

@@ -575,3 +575,9 @@ overlap (throughput baseline, not placement art) — accepted.
 - `_loadPrototype()` now gates `_tryLoadSpecies(this._treeStem)` on `this.renderer.type === RendererType.WEB_GPU` alongside `this._mode === "field"`.
 - Prevents `WEB_GL1`/`WEB_GL2` (where `_buildFieldLane()` falls back to `autoinst`) from instancing 2,000 copies of 141k-tri `jacaranda_LOD0.glb` (~281M tris/pass) and timing out software-rendered `check-showcases` runs; `WEB_GPU` stays byte-identical.
 
+## 2026-11-21 — S3 occlusion spike: tight cylinder bounds + two-phase Mode B
+
+- Tree field now computes yaw-invariant tight cylinder bounds (`hzbRadiusXZ`, `hzbMinY`, `hzbMaxY`) per prototype alongside `boundingRadius`; `GroundCoverSystem` populates the same tight cylinder bounds per grass variety.
+- Added `?occlusion=two-phase` (and `?twoPhase=1`) wiring `InstanceFieldSystem.setTwoPhaseOcclusion(true)` for Wihlidal / Haar & Aaltonen two-phase HZB culling (prev-frame reject capture -> current-frame HZB rescue -> depth patch -> main color `equal`).
+- Headless Chrome SwiftShader WebGPU verified across `occ-a`, `occ-b`, `two-phase`, camera-cut skip (`cutEvery=10`), ground-cover ON, `jacaranda` (`n=2000`), and `n=50000` (`45 630` placed: `occ-a` `14 053` vs `occ-b`/`two-phase` `14 041`, 12 self-occluded trees dropped), 0 errors.
+

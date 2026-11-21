@@ -1,4 +1,5 @@
 import type { Object3D, Scene } from "../../../core/index.js";
+import { BoundingType } from "../../../enums/index.js";
 import type { GPUFallbackResources } from "./GPUFallbackResources.js";
 import hzbCopyDepthWGSL from "../../shaders/source/web_gpu/compute/hzb_copy_depth.wgsl?raw";
 import hzbDownsampleMaxWGSL from "../../shaders/source/web_gpu/compute/hzb_downsample_max.wgsl?raw";
@@ -15,7 +16,7 @@ const MAX_HZB_TESTED_OBJECTS = 8192;
 /**
  * Readback latency is 1-3 frames (ping-pong `mapAsync`), so a test result describes the camera of
  * a few frames ago. Two conservative mitigations, both biased toward "draw it":
- * - `HZB_RADIUS_PADDING`: the tested sphere is inflated, so small camera/object motion during the
+ * - `HZB_RADIUS_PADDING`: the tested bounds are inflated, so small camera/object motion during the
  *   latency window cannot reveal a texel the stale footprint did not cover.
  * - `HZB_OCCLUDED_FRAMES_TO_CULL`: an object is only culled after this many consecutive
  *   "occluded" results (flicker suppression); a single "visible" result un-culls it at once.
@@ -130,8 +131,8 @@ export class HzbOcclusionSystem {
    */
   private _occludedStreak = new WeakMap<Object3D, number>();
 
-  /** Reused every frame -- see `dispatchTest()`. */
-  private readonly _hzbAabbScratch = new Float32Array(MAX_HZB_TESTED_OBJECTS * 4);
+  /** Reused every frame -- 2 x vec4f per object (center+radius, halfExtents+useTightBox). */
+  private readonly _hzbAabbScratch = new Float32Array(MAX_HZB_TESTED_OBJECTS * 8);
   private readonly _hzbParamsScratch = new Uint32Array(4);
 
   /** Persistent previous-frame pyramid handle (`getPreviousFrameHzb()` mutates and returns this
@@ -139,6 +140,18 @@ export class HzbOcclusionSystem {
    * the call that received it (the field lane only ever does: it copies `mipLevelCount`, binds the
    * `view` and reads the flags, all inside `prepareMainView`). */
   private readonly _prevHzbResult: HzbFieldPyramidAccess = {
+    available: false,
+    frameIndex: 0,
+    readHandle: {
+      slot: 0,
+      view: undefined as unknown as GPUTextureView,
+      mipLevelCount: 1,
+    },
+  };
+
+  /** Persistent current-frame pyramid handle (`getCurrentFrameHzb()` mutates and returns this
+   * separate scratch so it never aliases `_prevHzbResult`). */
+  private readonly _currHzbResult: HzbFieldPyramidAccess = {
     available: false,
     frameIndex: 0,
     readHandle: {
@@ -223,7 +236,7 @@ export class HzbOcclusionSystem {
     });
 
     this._hzbAabbBuffer = this._device.createBuffer({
-      size: MAX_HZB_TESTED_OBJECTS * 16, // vec4f (center.xyz, radius) per object
+      size: MAX_HZB_TESTED_OBJECTS * 32, // 2 x vec4f (center+radius, halfExtents+useTightBox) per object
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     this._hzbResultsBuffer = this._device.createBuffer({
@@ -493,15 +506,28 @@ export class HzbOcclusionSystem {
     const count = this._collectHzbCandidates(scene, objects);
     for (let i = 0; i < count; i++) {
       const obj = objects[i]!;
-      const c = obj.bounds!.center;
-      this._hzbAabbScratch[i * 4 + 0] = c.x;
-      this._hzbAabbScratch[i * 4 + 1] = c.y;
-      this._hzbAabbScratch[i * 4 + 2] = c.z;
-      this._hzbAabbScratch[i * 4 + 3] = obj.bounds!.getBroadRadius() * HZB_RADIUS_PADDING;
+      const bounds = obj.bounds!;
+      const c = bounds.center;
+      const base = i * 8;
+      this._hzbAabbScratch[base + 0] = c.x;
+      this._hzbAabbScratch[base + 1] = c.y;
+      this._hzbAabbScratch[base + 2] = c.z;
+      this._hzbAabbScratch[base + 3] = bounds.getBroadRadius() * HZB_RADIUS_PADDING;
+      if (bounds.type === BoundingType.BOX) {
+        this._hzbAabbScratch[base + 4] = (bounds.max.x - bounds.min.x) * 0.5 * HZB_RADIUS_PADDING;
+        this._hzbAabbScratch[base + 5] = (bounds.max.y - bounds.min.y) * 0.5 * HZB_RADIUS_PADDING;
+        this._hzbAabbScratch[base + 6] = (bounds.max.z - bounds.min.z) * 0.5 * HZB_RADIUS_PADDING;
+        this._hzbAabbScratch[base + 7] = 1;
+      } else {
+        this._hzbAabbScratch[base + 4] = 0;
+        this._hzbAabbScratch[base + 5] = 0;
+        this._hzbAabbScratch[base + 6] = 0;
+        this._hzbAabbScratch[base + 7] = 0;
+      }
     }
     if (count === 0) return;
 
-    this._device.queue.writeBuffer(this._hzbAabbBuffer, 0, this._hzbAabbScratch, 0, count * 4);
+    this._device.queue.writeBuffer(this._hzbAabbBuffer, 0, this._hzbAabbScratch, 0, count * 8);
     this._hzbParamsScratch[0] = count;
     this._hzbParamsScratch[1] = this._hzbMipLevelCount;
     this._hzbParamsScratch[2] = 0;
@@ -638,6 +664,23 @@ export class HzbOcclusionSystem {
     out.frameIndex = this._slotBuiltFrame[prevSlot]!;
     out.readHandle.slot = prevSlot;
     out.readHandle.view = this._hzbSampledViews[prevSlot]!;
+    out.readHandle.mipLevelCount = this._hzbMipLevelCount;
+    return out;
+  }
+
+  /**
+   * Returns read access to the CURRENT frame's HZB pyramid slot right after `buildPyramid()`
+   * runs mid-frame (consumed by two-phase occlusion culling, ADR 0059 step 3 mode B). Uses its
+   * own `_currHzbResult` scratch so callers never alias `getPreviousFrameHzb()`.
+   */
+  public getCurrentFrameHzb(): HzbFieldPyramidAccess {
+    const currSlot: 0 | 1 = this._lastWriteSlot;
+    const out = this._currHzbResult;
+    const written = this._slotWriteCount[currSlot]! > 0;
+    out.available = this._hzbAvailable && written;
+    out.frameIndex = this._slotBuiltFrame[currSlot]!;
+    out.readHandle.slot = currSlot;
+    out.readHandle.view = this._hzbSampledViews[currSlot]!;
     out.readHandle.mipLevelCount = this._hzbMipLevelCount;
     return out;
   }
