@@ -959,7 +959,11 @@ export class Showcase extends AbstractShowcase {
    */
   private async _loadPrototype(): Promise<TreePrototype> {
     const loader = new GltfLoader({ basePath: "./assets/" });
-    if (this._treeStem !== undefined && this._mode === "field") {
+    if (
+      this._treeStem !== undefined &&
+      this._mode === "field" &&
+      this.renderer.type === RendererType.WEB_GPU
+    ) {
       const species = await this._tryLoadSpecies(this._treeStem);
       if (species) return species;
     }

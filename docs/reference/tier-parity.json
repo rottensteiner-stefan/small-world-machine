@@ -95,6 +95,11 @@
       "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "u_iridescenceMap" },
       "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "u_iridescenceMap" },
       "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "u_iridescenceMap", "reason": "audit-sweep T01 (deliberate 2026-11-21): GL1 caps at 8 texture units; iridescence (+thickness) maps are intentionally omitted in glsl100, scalar factors apply, and WebGLProgramCache warns once per renderer instance." }
+    },
+    "morph_targets": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/WebGPU/WebGPURenderer.ts", "pattern": "GPUMorphTargetSystem" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts", "pattern": "WebGL2MorphTargetManager" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/WebGL1/WebGL1Renderer.ts", "pattern": "MorphTargetBlender" }
     }
   }
 }

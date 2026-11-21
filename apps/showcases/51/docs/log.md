@@ -569,3 +569,9 @@ overlap (throughput baseline, not placement art) — accepted.
   `_tryLoadRealLodLevels` / `_collectAssetParts` removed. Showcase 51 1998 -> 1832 lines.
 - Real M4 Pro: jacaranda default, `?tree=none`, `?frames=10` load as before; `lodTris`
   [3989, 13294, 41632, 140789], 296 473 clumps, 0 errors.
+
+## 2026-11-21 — Non-WebGPU fallback skips high-poly field species load
+
+- `_loadPrototype()` now gates `_tryLoadSpecies(this._treeStem)` on `this.renderer.type === RendererType.WEB_GPU` alongside `this._mode === "field"`.
+- Prevents `WEB_GL1`/`WEB_GL2` (where `_buildFieldLane()` falls back to `autoinst`) from instancing 2,000 copies of 141k-tri `jacaranda_LOD0.glb` (~281M tris/pass) and timing out software-rendered `check-showcases` runs; `WEB_GPU` stays byte-identical.
+

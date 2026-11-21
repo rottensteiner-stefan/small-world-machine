@@ -42,7 +42,9 @@ const RIG = {
 
 const POLE_THRESHOLDS = {
   contactMinimum: 0.5,
-  farCollapseMaximum: 0.4,
+  // Calibration headroom after texel-snapped bounding-sphere cascades + IEC 61966-2-1 sRGB (`175024f`)
+  // shifted both WebGPU & WebGL2 far umbra contrast from ~0.39 to 0.41 (still well below `soft0` 0.82).
+  farCollapseMaximum: 0.45,
   spreadMinimum: 0.2,
   controlFarPersistMinimum: 0.5,
 };
