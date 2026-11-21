@@ -40,4 +40,5 @@ export * from "./TriStar.js";
 export * from "./CylindricalArch.js";
 export * from "./HollowTruncatedCone.js";
 export * from "./OceanGridGeometry.js";
+export * from "./WaterQuadtree.js";
 export * from "./procgen/index.js";
