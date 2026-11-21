@@ -6,7 +6,11 @@ import { Matrix4, Vector3D, Quaternion } from "../math/index.js";
 import type { GeometryDataInterface } from "../interfaces/index.js";
 import { getGltfExtensions } from "./gltf/GltfExtensionRegistry.js";
 import { GltfMaterialParser } from "./gltf/GltfMaterialParser.js";
-import type { GltfWriteContext, GltfWriteState } from "./gltf/GltfExtensionPlugin.js";
+import type {
+  GltfExtensionPlugin,
+  GltfWriteContext,
+  GltfWriteState,
+} from "./gltf/GltfExtensionPlugin.js";
 import type {
   GltfDocument,
   GltfNodeJson,
@@ -49,6 +53,11 @@ export class WorldWriter {
   private _bufferViews: GltfBufferViewJson[] = [];
   private _bufferChunks: Uint8Array[] = [];
   private _extensionState: Map<string, unknown> = new Map();
+  private readonly _extensions: readonly GltfExtensionPlugin[] | undefined;
+
+  constructor(options?: { extensions?: readonly GltfExtensionPlugin[] }) {
+    this._extensions = options?.extensions;
+  }
 
   /**
    * Serializes every child of `root` (not `root` itself -- it plays the same role as
@@ -107,7 +116,7 @@ export class WorldWriter {
     }
 
     const writeCtx: GltfWriteContext = { doc, state: this._extensionState };
-    for (const plugin of getGltfExtensions()) plugin.finalizeWrite?.(writeCtx);
+    for (const plugin of this._extensions ?? getGltfExtensions()) plugin.finalizeWrite?.(writeCtx);
 
     const extensionsUsed = WorldWriter._collectExtensionsUsed(doc);
     if (0 < extensionsUsed.length) doc.extensionsUsed = extensionsUsed;
@@ -145,7 +154,9 @@ export class WorldWriter {
     this._nodes.push(node);
 
     const writeState: GltfWriteState = { state: this._extensionState };
-    for (const plugin of getGltfExtensions()) plugin.writeNode?.(obj, node, writeState);
+    for (const plugin of this._extensions ?? getGltfExtensions()) {
+      plugin.writeNode?.(obj, node, writeState);
+    }
 
     // A Decal's unit box is shared engine geometry, not scene content: SWM_decal describes it.
     if (obj.geometry && obj.material && !(obj instanceof Decal)) {

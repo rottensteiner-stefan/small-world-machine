@@ -1,13 +1,16 @@
 import { Texture } from "@small-world-machine/engine";
-import { BasisWasmTranscoder } from "./BasisWasmTranscoder.js";
+import { BasisWasmTranscoder, hasKtx2Identifier } from "./BasisWasmTranscoder.js";
 import type { BasisDecodeResult, BasisTranscoderFormatId } from "./basisTypes.js";
 import { BasisTranscoderFormat } from "./basisTypes.js";
+import type { BlockFormatCapabilities } from "./compressedFormats.js";
 import { detectBestBlockFormat, engineFormatForBasisFormat } from "./compressedFormats.js";
 import { flippedCompressedMipChain } from "./compressedMirror.js";
 
 export interface BasisTranscodeOptions {
   format?: "rgba8" | "bc7" | "astc" | "etc2" | "dxt" | "auto";
   mipmaps?: boolean;
+  /** Optional active renderer capabilities for tier-accurate auto format selection. */
+  capabilities?: BlockFormatCapabilities;
 }
 
 export type BasisTranscodeHandler = (
@@ -25,6 +28,8 @@ export interface BasisTranscoderConfig {
    * is unavailable.
    */
   wasmBinary?: ArrayBuffer;
+  /** Optional default renderer capabilities used when `options.capabilities` is omitted. */
+  capabilities?: BlockFormatCapabilities;
 }
 
 /**
@@ -76,7 +81,10 @@ export class BasisTranscoder {
     }
 
     if (this._isKtx2(buffer)) {
-      const requestedFormat = this._resolveFormat(options?.format);
+      const requestedFormat = this._resolveFormat(
+        options?.format,
+        options?.capabilities ?? this._config.capabilities,
+      );
       const wasmBinary = this._config.wasmBinary;
       const result = await BasisWasmTranscoder.transcode(new Uint8Array(buffer), {
         format: requestedFormat,
@@ -99,7 +107,10 @@ export class BasisTranscoder {
   }
 
   /** Resolves the requested output format id, probing the device for "auto" (the default). */
-  private static _resolveFormat(format: BasisTranscodeOptions["format"]): BasisTranscoderFormatId {
+  private static _resolveFormat(
+    format: BasisTranscodeOptions["format"],
+    capabilities?: BlockFormatCapabilities,
+  ): BasisTranscoderFormatId {
     switch (format) {
       case "rgba8":
         return BasisTranscoderFormat.RGBA32;
@@ -113,7 +124,7 @@ export class BasisTranscoder {
         return BasisTranscoderFormat.BC3;
       case "auto":
       case undefined:
-        return detectBestBlockFormat() ?? BasisTranscoderFormat.RGBA32;
+        return detectBestBlockFormat(capabilities) ?? BasisTranscoderFormat.RGBA32;
       default: {
         const exhaustive: never = format;
         throw new Error(`[BasisTranscoder] Unknown format ${exhaustive}`);
@@ -154,19 +165,7 @@ export class BasisTranscoder {
   }
 
   private static _isKtx2(buffer: ArrayBuffer): boolean {
-    if (buffer.byteLength < 12) return false;
-    const view = new DataView(buffer);
-    // KTX2 Identifier: 0xAB 'K' 'T' 'X' ' ' '2' '0' 0xBB 0x0D 0x0A 0x1A 0x0A
-    return (
-      view.getUint8(0) === 0xab &&
-      view.getUint8(1) === 0x4b &&
-      view.getUint8(2) === 0x54 &&
-      view.getUint8(3) === 0x58 &&
-      view.getUint8(4) === 0x20 &&
-      view.getUint8(5) === 0x32 &&
-      view.getUint8(6) === 0x30 &&
-      view.getUint8(7) === 0xbb
-    );
+    return hasKtx2Identifier(new Uint8Array(buffer));
   }
 
   /**

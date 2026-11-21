@@ -422,6 +422,20 @@ export class AssetManager {
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
   ): Promise<ArrayBuffer> {
+    const existing = this._binaryCache.get(url);
+    if (existing) {
+      if (signal?.aborted) {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+      const buf = await existing;
+      if (signal?.aborted) {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+      if (onChunk) onChunk(new Uint8Array(buf), buf.byteLength, buf.byteLength);
+      if (onProgress) onProgress(buf.byteLength, buf.byteLength);
+      return buf;
+    }
+
     const trackingKey = `stream:${url}`;
     return this._cacheOrStart(this._binaryCache, url, async () => {
       const epoch = this._epoch;

@@ -1,6 +1,7 @@
 import type { Object3D } from "../core/Object3D.js";
 import type { StandardMaterial } from "../core/materials/surface/StandardMaterial.js";
 import type { AssetManager } from "../loaders/AssetManager.js";
+import type { GltfExtensionPlugin } from "../loaders/gltf/GltfExtensionPlugin.js";
 
 /**
  * Common configuration options for all resource loaders.
@@ -50,4 +51,9 @@ export interface GltfLoaderOptions extends LoaderOptions {
   defaultRoughness?: number;
   /** Initial material variant name or index to activate upon loading (KHR_materials_variants). */
   variant?: string | number;
+  /**
+   * Optional per-loader glTF extension plugins. When provided, isolates this loader instance
+   * from the process-wide `registerGltfExtension` registry.
+   */
+  extensions?: readonly GltfExtensionPlugin[];
 }

@@ -53,20 +53,95 @@ export function mipChainFromImages(images: BasisDecodedImage[]): Uint8Array[] {
 }
 
 /**
- * Memoized best block format for this page. `undefined` = not yet probed, `null` = no block
- * format usable (callers fall back to RGBA8). Device capabilities do not change at runtime, so
- * the {@link detectBestBlockFormatUncached} probe runs at most once per page.
+ * Renderer/device capability hint for {@link detectBestBlockFormat}. Passing the active
+ * renderer's capabilities avoids hidden probe contexts and respects Tiered Renderer Autonomy:
+ * WebGPU and WebGL2 pick their highest supported block format without being downgraded by
+ * WebGL1's narrower extension surface.
+ */
+export interface BlockFormatCapabilities {
+  /** Active renderer API tier when known. */
+  tier?: "webgpu" | "webgl2" | "webgl1";
+  /** WebGPU adapter/device feature set (e.g. `device.features`). */
+  gpuFeatures?: { has(feature: string): boolean };
+  /** Active WebGL1/WebGL2 rendering context when available. */
+  gl?: WebGLRenderingContext | WebGL2RenderingContext;
+}
+
+/**
+ * Memoized best block format for tier-blind probing on this page. `undefined` = not yet probed,
+ * `null` = no block format usable (callers fall back to RGBA8).
  */
 let cachedBlockFormat: BasisTranscoderFormatId | null | undefined;
 
 /**
- * Returns the memoized best block format, probing once on first use. Keeps a page decoding many
- * KTX2 textures to a single transient probe context instead of one per transcode.
+ * Clears the page-level memoized block format so tests or multi-context hosts can re-probe.
  */
-export function detectBestBlockFormat(): BasisTranscoderFormatId | null {
+export function resetCachedBlockFormat(): void {
+  cachedBlockFormat = undefined;
+}
+
+/**
+ * Returns the best block-compressed output format for the given renderer capabilities, or runs
+ * a memoized page-wide probe when `capabilities` is omitted.
+ */
+export function detectBestBlockFormat(
+  capabilities?: BlockFormatCapabilities,
+): BasisTranscoderFormatId | null {
+  if (capabilities) {
+    return detectBestBlockFormatForCapabilities(capabilities);
+  }
   if (cachedBlockFormat !== undefined) return cachedBlockFormat;
   cachedBlockFormat = detectBestBlockFormatUncached();
   return cachedBlockFormat;
+}
+
+/** Resolves the highest-quality block format supported by an explicit renderer tier/device. */
+function detectBestBlockFormatForCapabilities(
+  capabilities: BlockFormatCapabilities,
+): BasisTranscoderFormatId | null {
+  if (capabilities.gpuFeatures || capabilities.tier === "webgpu") {
+    const features = capabilities.gpuFeatures;
+    if (!features) return null;
+    if (features.has("texture-compression-bc")) return BasisTranscoderFormat.BC7;
+    if (features.has("texture-compression-astc")) return BasisTranscoderFormat.ASTC_4x4;
+    if (features.has("texture-compression-etc2")) return BasisTranscoderFormat.ETC2;
+    return null;
+  }
+
+  if (capabilities.tier === "webgl2") {
+    const gl = capabilities.gl ?? tryHiddenWebGl2();
+    if (!gl) return null;
+    const ownsContext = !capabilities.gl;
+    try {
+      if (gl.getExtension("EXT_texture_compression_bptc")) return BasisTranscoderFormat.BC7;
+      if (gl.getExtension("WEBGL_compressed_texture_astc")) return BasisTranscoderFormat.ASTC_4x4;
+      return BasisTranscoderFormat.ETC2;
+    } finally {
+      if (ownsContext) gl.getExtension("WEBGL_lose_context")?.loseContext();
+    }
+  }
+
+  if (capabilities.tier === "webgl1") {
+    const gl = capabilities.gl ?? tryHiddenWebGl1();
+    if (!gl) return null;
+    const ownsContext = !capabilities.gl;
+    try {
+      if (
+        gl.getExtension("EXT_texture_compression_bptc") ??
+        gl.getExtension("WEBGL_compressed_texture_bptc")
+      ) {
+        return BasisTranscoderFormat.BC7;
+      }
+      if (gl.getExtension("WEBGL_compressed_texture_astc")) return BasisTranscoderFormat.ASTC_4x4;
+      if (gl.getExtension("WEBGL_compressed_texture_etc")) return BasisTranscoderFormat.ETC2;
+      if (gl.getExtension("WEBGL_compressed_texture_s3tc")) return BasisTranscoderFormat.BC3;
+      return null;
+    } finally {
+      if (ownsContext) gl.getExtension("WEBGL_lose_context")?.loseContext();
+    }
+  }
+
+  return detectBestBlockFormat();
 }
 
 /**

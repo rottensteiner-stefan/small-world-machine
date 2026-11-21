@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
-import { detectBestBlockFormat } from "../src/basisu/compressedFormats.js";
+import { detectBestBlockFormat, resetCachedBlockFormat } from "../src/basisu/compressedFormats.js";
+import { BasisTranscoderFormat } from "../src/basisu/basisTypes.js";
 
 // K01 (a): `detectBestBlockFormatUncached` must be WebGL1-aware. The decoded KTX2 bytes fan out to
 // whichever renderer the APP uses, and a WebGL1 context cannot consume every WebGL2 candidate --
@@ -31,6 +32,42 @@ describe("WebGL1-aware block-format detection (K01 a)", () => {
     // vitest runs in a node environment without `document`: no probe context can exist, so the
     // contract is the uncompressed RGBA8 fallback -- never a format guess the tier cannot consume.
     expect(typeof document).toBe("undefined");
+    resetCachedBlockFormat();
     expect(detectBestBlockFormat()).toBeNull();
+  });
+
+  it("detects WebGPU, WebGL2, and WebGL1 formats independently when capabilities are supplied (AS01/AS02)", () => {
+    expect(
+      detectBestBlockFormat({
+        tier: "webgpu",
+        gpuFeatures: new Set(["texture-compression-bc"]),
+      }),
+    ).toBe(BasisTranscoderFormat.BC7);
+
+    expect(
+      detectBestBlockFormat({
+        tier: "webgpu",
+        gpuFeatures: new Set(["texture-compression-astc"]),
+      }),
+    ).toBe(BasisTranscoderFormat.ASTC_4x4);
+
+    expect(
+      detectBestBlockFormat({
+        tier: "webgpu",
+        gpuFeatures: new Set(["texture-compression-etc2"]),
+      }),
+    ).toBe(BasisTranscoderFormat.ETC2);
+
+    expect(detectBestBlockFormat({ tier: "webgpu", gpuFeatures: new Set() })).toBeNull();
+
+    // WebGL2 with no BPTC/ASTC still selects core ETC2 without being downgraded by WebGL1.
+    const fakeGl2 = { getExtension: () => null } as unknown as WebGL2RenderingContext;
+    expect(detectBestBlockFormat({ tier: "webgl2", gl: fakeGl2 })).toBe(BasisTranscoderFormat.ETC2);
+
+    // WebGL1 with S3TC selects BC3 rather than dropping to RGBA8.
+    const fakeGl1 = {
+      getExtension: (name: string) => (name === "WEBGL_compressed_texture_s3tc" ? {} : null),
+    } as unknown as WebGLRenderingContext;
+    expect(detectBestBlockFormat({ tier: "webgl1", gl: fakeGl1 })).toBe(BasisTranscoderFormat.BC3);
   });
 });

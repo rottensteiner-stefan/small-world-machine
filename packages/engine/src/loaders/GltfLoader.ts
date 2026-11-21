@@ -68,14 +68,14 @@ export class GltfLoader extends AbstractLoader<Object3D> {
   }
 
   private async _loadJson(url: string): Promise<GltfData> {
-    const json = (await this._assetManager.loadJson(url)) as GltfJson;
+    const json = (await this._assetManager.loadJson(url, undefined, this._signal)) as GltfJson;
     const folderPath = GltfLoader.getFolderPath(url);
 
     const bufferPromises = (json.buffers || []).map((buf) => {
       if (buf.uri?.startsWith("data:")) {
         return GltfBinaryParser.decodeBase64(buf.uri);
       }
-      return this._assetManager.loadBinary(folderPath + (buf.uri || ""));
+      return this._assetManager.loadBinary(folderPath + (buf.uri || ""), undefined, this._signal);
     });
 
     const buffers = await Promise.all(bufferPromises);
@@ -83,7 +83,7 @@ export class GltfLoader extends AbstractLoader<Object3D> {
   }
 
   private async _loadBinary(url: string): Promise<GltfData> {
-    const arrayBuffer = await this._assetManager.loadBinary(url);
+    const arrayBuffer = await this._assetManager.loadBinary(url, undefined, this._signal);
     return GltfBinaryParser.parseGlb(arrayBuffer);
   }
 
@@ -129,10 +129,12 @@ export class GltfLoader extends AbstractLoader<Object3D> {
       }
     }
 
+    const activeExtensions = this._gltfOptions.extensions ?? getGltfExtensions();
+
     // Fail-fast on unsupported required extensions
     if (json.extensionsRequired && json.extensionsRequired.length > 0) {
       const supportedExtensions = new Set<string>([
-        ...getGltfExtensions().map((p) => p.name),
+        ...activeExtensions.map((p) => p.name),
         "KHR_materials_variants",
         "KHR_materials_emissive_strength",
         "KHR_materials_clearcoat",
@@ -169,10 +171,15 @@ export class GltfLoader extends AbstractLoader<Object3D> {
       console.warn("[GltfLoader] Missing required `asset.version`; assuming glTF 2.0.");
     }
 
-    // 0. Initialize read context and let registered extension plugins pre-pass the document
+    // 0. Initialize read context and let active extension plugins pre-pass the document
     // (e.g. indexing KHR_lights_punctual.lights[] by node) -- see ADR 0017.
-    const readCtx: GltfReadContext = { json, state: new Map() };
-    for (const plugin of getGltfExtensions()) plugin.prepareRead?.(readCtx);
+    const readCtx: GltfReadContext = {
+      json,
+      state: new Map(),
+      extensions: activeExtensions,
+      ...(this._signal ? { signal: this._signal } : {}),
+    };
+    for (const plugin of activeExtensions) plugin.prepareRead?.(readCtx);
 
     // 1. Parse Materials
     const materials = await Promise.all(
@@ -219,14 +226,14 @@ export class GltfLoader extends AbstractLoader<Object3D> {
         if (jointNodeIndices.has(i)) {
           obj = new Bone(name);
         } else {
-          for (const plugin of getGltfExtensions()) {
+          for (const plugin of activeExtensions) {
             obj = plugin.readNode?.(i, nodeDef, name, readCtx);
             if (obj) break;
           }
         }
         obj ??= new Object3D(name);
         this._applyNodeTransforms(obj, nodeDef);
-        for (const plugin of getGltfExtensions()) plugin.applyNode?.(obj, nodeDef, readCtx);
+        for (const plugin of activeExtensions) plugin.applyNode?.(obj, nodeDef, readCtx);
         this._gltfOptions.onNodeParsed?.(obj, nodeDef as unknown as Record<string, unknown>);
         nodeObjects[i] = obj;
       }

@@ -50,6 +50,7 @@ export class GPUTextureResourceCache {
       mipLevelCount: number;
       width: number;
       height: number;
+      depth?: number;
     }
   >();
   private _cubeTextureViewCache = new Map<
@@ -153,7 +154,7 @@ export class GPUTextureResourceCache {
     // Block-compressed textures carry no `.image` -- they are uploaded from their
     // explicit mip chain instead of from a source image.
     if (tex.compressedImage) {
-      const entry = this._getOrCreateCompressedEntry(tex);
+      const entry = this._getOrCreateCompressedEntry(tex, quality);
       return entry.view;
     }
     if (!tex.image) return this._fallback.whiteTextureView;
@@ -193,7 +194,7 @@ export class GPUTextureResourceCache {
         }
         if (mipLevelCount > 1) this.generateArrayMipmaps(t, mipLevelCount, depth);
         v = t.createView({ dimension: "2d-array" });
-        entry = { texture: t, view: v, mipLevelCount, width, height };
+        entry = { texture: t, view: v, mipLevelCount, width, height, depth };
       } else {
         const mipLevelCount =
           quality?.mipmapping && tex.generateMipmaps
@@ -223,7 +224,60 @@ export class GPUTextureResourceCache {
         };
       }
       this._textureViewCache.set(tex, entry);
-    } else if (tex.needsUpdate && !isTextureArray(tex)) {
+    } else if (tex.needsUpdate && isTextureArray(tex)) {
+      const width = tex.image.width;
+      const height = tex.image.height;
+      const depth = tex.images.length;
+      if (width !== entry.width || height !== entry.height || depth !== entry.depth) {
+        entry.texture.destroy?.();
+        const mipLevelCount =
+          quality?.mipmapping && tex.generateMipmaps ? this.computeMipLevelCount(width, height) : 1;
+        const t = this._device.createTexture({
+          size: [width, height, depth],
+          format: "rgba8unorm",
+          mipLevelCount,
+          usage:
+            GPUTextureUsage.TEXTURE_BINDING |
+            GPUTextureUsage.COPY_DST |
+            GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        for (let i = 0; i < depth; i++) {
+          this._device.queue.copyExternalImageToTexture(
+            {
+              source: tex.images[i] as
+                ImageBitmap | HTMLImageElement | HTMLCanvasElement | OffscreenCanvas,
+            },
+            { texture: t, origin: [0, 0, i] },
+            [width, height],
+          );
+        }
+        if (mipLevelCount > 1) this.generateArrayMipmaps(t, mipLevelCount, depth);
+        entry = {
+          texture: t,
+          view: t.createView({ dimension: "2d-array" }),
+          mipLevelCount,
+          width,
+          height,
+          depth,
+        };
+        this._textureViewCache.set(tex, entry);
+      } else {
+        for (let i = 0; i < depth; i++) {
+          this._device.queue.copyExternalImageToTexture(
+            {
+              source: tex.images[i] as
+                ImageBitmap | HTMLImageElement | HTMLCanvasElement | OffscreenCanvas,
+            },
+            { texture: entry.texture, origin: [0, 0, i] },
+            [width, height],
+          );
+        }
+        if (entry.mipLevelCount > 1) {
+          this.generateArrayMipmaps(entry.texture, entry.mipLevelCount, depth);
+        }
+      }
+      tex.needsUpdate = false;
+    } else if (tex.needsUpdate) {
       // The source image may have been resized since first upload (e.g. a `TextTexture` whose
       // canvas grows/shrinks on `setText`). Copying the full current bounds into the original,
       // differently-sized GPU texture would exceed its dimensions and trigger a WebGPU validation
@@ -282,7 +336,10 @@ export class GPUTextureResourceCache {
    * texture-compression feature -- callers pre-check device support before assigning
    * `Texture.compressedImage`.
    */
-  private _getOrCreateCompressedEntry(tex: Texture): {
+  private _getOrCreateCompressedEntry(
+    tex: Texture,
+    quality: QualityConfig | undefined,
+  ): {
     texture: GPUTexture;
     view: GPUTextureView;
     mipLevelCount: number;
@@ -300,10 +357,16 @@ export class GPUTextureResourceCache {
         `[GPUTextureResourceCache] Device lacks "${requiredFeature}" feature required to upload compressed format ${compressed.format}`,
       );
     }
-    const mipLevelCount = compressed.mipData.length;
+
+    // WebGPU requires block-compressed texture dimensions to be multiples of the 4x4 block size.
+    const alignedWidth = (compressed.width + 3) & ~3;
+    const alignedHeight = (compressed.height + 3) & ~3;
+    const maxMipLevels = this.computeMipLevelCount(alignedWidth, alignedHeight);
+    const mipLevelCount =
+      quality?.mipmapping === false ? 1 : Math.min(compressed.mipData.length, maxMipLevels);
 
     const texture = this._device.createTexture({
-      size: [compressed.width, compressed.height],
+      size: [alignedWidth, alignedHeight],
       format,
       mipLevelCount,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
@@ -328,8 +391,8 @@ export class GPUTextureResourceCache {
       texture,
       view,
       mipLevelCount,
-      width: compressed.width,
-      height: compressed.height,
+      width: alignedWidth,
+      height: alignedHeight,
     };
     this._textureViewCache.set(tex, entry);
     return entry;
@@ -405,7 +468,10 @@ export class GPUTextureResourceCache {
     tex: Texture | undefined,
     quality: QualityConfig | undefined,
   ): GPUTextureView {
-    if (!tex || !tex.isLoaded || !tex.image) return this._fallback.flatNormalTextureView;
+    if (quality?.disableTextures) return this._fallback.flatNormalTextureView;
+    if (!tex || !tex.isLoaded || (!tex.image && !tex.compressedImage)) {
+      return this._fallback.flatNormalTextureView;
+    }
     // The quality config carries `mipmapping`: without it every normal map was uploaded with a
     // single mip level and aliased into per-pixel noise under minification (ADR 0051).
     return this.getTextureView(tex, quality);

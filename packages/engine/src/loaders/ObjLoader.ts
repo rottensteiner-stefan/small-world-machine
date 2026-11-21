@@ -38,6 +38,7 @@ export class ObjLoader extends AbstractLoader<Object3D> {
         (loaded: number, total: number): void => {
           this.dispatchEvent(EventType.LOADER_PROGRESS, { url: fullUrl, loaded, total });
         },
+        this._signal,
       );
 
       // Extract folder path to know where to look for the .mtl file
@@ -91,9 +92,11 @@ export class ObjLoader extends AbstractLoader<Object3D> {
           const mtlLoader: MtlLoader = new MtlLoader({
             basePath: folderPath,
             assetManager: this._assetManager,
+            ...(this._signal ? { signal: this._signal } : {}),
           });
           materials = await mtlLoader.load(parts[1]!);
         } catch (e) {
+          if (this._signal?.aborted) throw e;
           // A missing/broken `.mtl` (common with OBJ/MTL pairs from third-party exporters)
           // should not sink the whole `.obj` load -- fall back to neutral default materials so
           // the geometry still loads and renders, mirroring the tolerance MtlLoader already shows

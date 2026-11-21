@@ -4,6 +4,9 @@ import { Topology } from "../../src/enums/index.js";
 import { Matrix4, Quaternion } from "../../src/math/index.js";
 import type { StandardMaterial } from "../../src/core/materials/surface/StandardMaterial.js";
 import type { Object3D } from "../../src/core/Object3D.js";
+import { AssetManager } from "../../src/loaders/AssetManager.js";
+import type { GltfExtensionPlugin } from "../../src/loaders/gltf/GltfExtensionPlugin.js";
+import { WorldWriter } from "../../src/loaders/WorldWriter.js";
 
 describe("GltfLoader PBR Options", () => {
   it("should apply defaultMetallic and defaultRoughness when factors are omitted", async () => {
@@ -379,5 +382,86 @@ describe("GltfLoader asset.version", () => {
     await parse({ json: { scenes: [{ nodes: [] }], scene: 0 }, buffers: [] }, "x.gltf");
     expect(warn.mock.calls.some((c) => String(c[0]).includes("asset.version"))).toBe(true);
     warn.mockRestore();
+  });
+});
+
+describe("GltfLoader per-instance extensions and AbortSignal propagation (LD01/LD03)", () => {
+  it("isolates per-loader and per-writer extensions from the global registry (LD01)", async () => {
+    const customPlugin: GltfExtensionPlugin = {
+      name: "SWM_test_isolated",
+      applyNode(obj, nodeDef) {
+        if (nodeDef.extensions?.["SWM_test_isolated"]) {
+          obj.userData["isolated"] = true;
+        }
+      },
+      writeNode(obj, node) {
+        if (obj.userData["isolated"]) {
+          const exts = (node.extensions ?? {}) as Record<string, unknown>;
+          exts["SWM_test_isolated"] = { ok: true };
+          node.extensions = exts as NonNullable<typeof node.extensions>;
+        }
+      },
+    };
+
+    const doc = {
+      asset: { version: "2.0" },
+      extensionsRequired: ["SWM_test_isolated"],
+      scene: 0,
+      scenes: [{ nodes: [0] }],
+      nodes: [{ name: "IsoNode", extensions: { SWM_test_isolated: {} } }],
+    };
+
+    const isolatedLoader = new GltfLoader({ extensions: [customPlugin] });
+    const root = await isolatedLoader.parse({ json: doc, buffers: [] }, "");
+    const isoNode = root.getObjectByName("IsoNode");
+    expect(isoNode?.userData["isolated"]).toBe(true);
+
+    // Default loader without the plugin must still reject the unregistered required extension.
+    const defaultLoader = new GltfLoader();
+    await expect(defaultLoader.parse({ json: doc, buffers: [] }, "")).rejects.toThrow(
+      /SWM_test_isolated/,
+    );
+
+    const writer = new WorldWriter({ extensions: [customPlugin] });
+    const written = writer.write(root);
+    expect(written.extensionsUsed).toContain("SWM_test_isolated");
+  });
+
+  it("forwards AbortSignal to AssetManager sub-resource fetches (LD03)", async () => {
+    const controller = new AbortController();
+    const assetManager = new AssetManager();
+    const signals: (AbortSignal | undefined)[] = [];
+
+    assetManager.customFetch = vi
+      .fn()
+      .mockImplementation(async (url: string, init?: RequestInit) => {
+        signals.push(init?.signal ?? undefined);
+        if (url.endsWith(".gltf")) {
+          const json = JSON.stringify({
+            asset: { version: "2.0" },
+            buffers: [{ uri: "data.bin", byteLength: 4 }],
+            scenes: [{ nodes: [] }],
+            scene: 0,
+          });
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            body: null,
+            blob: async (): Promise<Blob> => new Blob([json]),
+          } as unknown as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: null,
+          blob: async (): Promise<Blob> => new Blob([new Uint8Array([1, 2, 3, 4])]),
+        } as unknown as Response;
+      });
+
+    const loader = new GltfLoader({ assetManager, signal: controller.signal });
+    await loader.load("https://example.com/model.gltf");
+    expect(signals).toEqual([controller.signal, controller.signal]);
   });
 });

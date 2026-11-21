@@ -158,12 +158,21 @@ export class WebGLTextureManager {
     if (!src) return;
     const isPOT = 0 === (src.width & (src.width - 1)) && 0 === (src.height & (src.height - 1));
     // K03/K01: a compressed upload supplies its mip pyramid explicitly (`mipData`) -- enabling
-    // mip filtering then must NOT re-run `generateMipmap`, which throws GL_INVALID_OPERATION on a
-    // non-color-renderable compressed source in WebGL1.
-    const hasExplicitMips =
-      tex.compressedImage !== undefined && tex.compressedImage.mipData.length > 1;
-    const useMipmaps = quality?.mipmapping && isPOT && (hasExplicitMips || tex.generateMipmaps);
-    if (useMipmaps && !hasExplicitMips) this._gl.generateMipmap(this._gl.TEXTURE_2D);
+    // mip filtering then must NOT re-run `generateMipmap` (GL_INVALID_OPERATION on compressed
+    // formats in WebGL1). Because WebGL1 lacks `TEXTURE_MAX_LEVEL`, mip filtering also requires
+    // the full pyramid down to 1x1; an incomplete chain falls back to LINEAR/NEAREST so the
+    // texture stays complete instead of sampling black.
+    const isCompressed = tex.compressedImage !== undefined;
+    const expectedMipLevels = Math.floor(Math.log2(Math.max(1, src.width, src.height))) + 1;
+    const hasCompleteCompressedMips =
+      isCompressed &&
+      tex.compressedImage!.mipData.length > 1 &&
+      tex.compressedImage!.mipData.length >= expectedMipLevels;
+    const useMipmaps =
+      quality?.mipmapping &&
+      isPOT &&
+      (isCompressed ? hasCompleteCompressedMips : tex.generateMipmaps);
+    if (useMipmaps && !isCompressed) this._gl.generateMipmap(this._gl.TEXTURE_2D);
     this._gl.texParameteri(
       this._gl.TEXTURE_2D,
       this._gl.TEXTURE_MAG_FILTER,
@@ -307,10 +316,8 @@ export class WebGLTextureManager {
         compressed.mipData[level]!,
       );
     }
-
-    // WebGL1 contexts expose no TEXTURE_MAX_LEVEL constant (it is WebGL2-only); the enumerant value
-    // is spec-fixed (0x813D). Declaring the explicit level count keeps the texture mip-complete.
-    this._gl.texParameteri(this._gl.TEXTURE_2D, 0x813d, compressed.mipData.length - 1);
+    // WebGL1 has no `TEXTURE_MAX_LEVEL` (0x813D raises GL_INVALID_ENUM); mip completeness is
+    // enforced in `_setSamplerParams100` by disabling mip filtering when the pyramid is partial.
   }
 
   /** Resolves a `CompressedTextureFormat` to its GL block-compressed internal format for this

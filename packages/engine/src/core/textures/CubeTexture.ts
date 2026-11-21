@@ -206,4 +206,22 @@ export class CubeTexture {
       console.error(`Error loading CubeTexture mipmaps`, e);
     }
   }
+
+  /**
+   * Closes any underlying `ImageBitmap` face/mipmap resources and resets load state.
+   */
+  public dispose(): void {
+    const closeBitmap = (img: ImageBitmap | HTMLImageElement): void => {
+      if ("close" in img && typeof img.close === "function") {
+        img.close();
+      }
+    };
+    for (const img of this.images) closeBitmap(img);
+    for (const level of this.mipmaps) {
+      for (const img of level) closeBitmap(img);
+    }
+    this.images = [];
+    this.mipmaps = [];
+    this.isLoaded = false;
+  }
 }

@@ -622,12 +622,13 @@ export class GltfMaterialParser {
     buffers: ArrayBuffer[],
     assetManager: AssetManager,
     defaultMimeType: string,
+    signal?: AbortSignal,
   ): Promise<ImageBitmap | HTMLImageElement | null> {
     if (imageDef.uri) {
       const url = imageDef.uri.startsWith("data:") ? imageDef.uri : folderPath + imageDef.uri;
       // glTF 2.0 defines texture coordinates with origin (0, 0) at the upper-left corner of the
       // image, so glTF textures must NOT be flipped on decode (flipY = false).
-      return assetManager.loadImage(url, undefined, false);
+      return assetManager.loadImage(url, undefined, false, signal);
     }
     const bv =
       imageDef.bufferView !== undefined && json.bufferViews
@@ -662,8 +663,9 @@ export class GltfMaterialParser {
       return null;
     }
 
-    // 1. Check if any registered extension resolves this texture (e.g. KHR_texture_basisu)
-    for (const plugin of getGltfExtensions()) {
+    // 1. Check if any active extension resolves this texture (e.g. KHR_texture_basisu)
+    const extensions = readCtx.extensions ?? getGltfExtensions();
+    for (const plugin of extensions) {
       if (plugin.resolveTexture) {
         const tex = await plugin.resolveTexture(
           textureDef,
@@ -699,6 +701,7 @@ export class GltfMaterialParser {
       buffers,
       assetManager,
       "image/jpeg",
+      readCtx.signal,
     );
     if (!img) {
       console.warn(

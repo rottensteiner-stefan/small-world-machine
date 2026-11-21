@@ -32,8 +32,9 @@ export class GltfGeometryParser {
       );
     }
 
-    // 1. Check if any registered extension decodes this geometry (e.g. KHR_draco_mesh_compression)
-    for (const plugin of getGltfExtensions()) {
+    // 1. Check if any active extension decodes this geometry (e.g. KHR_draco_mesh_compression)
+    const extensions = readCtx.extensions ?? getGltfExtensions();
+    for (const plugin of extensions) {
       if (plugin.decodeGeometry) {
         const decoded = await plugin.decodeGeometry(primitive, readCtx, buffers);
         if (decoded) return decoded;

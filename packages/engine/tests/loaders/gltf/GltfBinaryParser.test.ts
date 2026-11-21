@@ -396,7 +396,7 @@ describe("GltfBinaryParser.parseGlb (real .glb container bytes)", () => {
     dv.setUint32(0, 0x46546c67, true);
     dv.setUint32(4, 2, true);
     dv.setUint32(8, 28, true);
-    dv.setUint32(12, 16, true); // BIN chunk length (16 = 12 + 4 padding)
+    dv.setUint32(12, 8, true); // BIN chunk length (12 header + 8 chunk header + 8 payload = 28)
     dv.setUint32(16, 0x004e4942, true);
     const noJson = dv.buffer;
     expect(() => GltfBinaryParser.parseGlb(noJson)).toThrow(/No JSON chunk/);
@@ -569,5 +569,58 @@ describe("GltfBinaryParser.getBufferData edge branches", () => {
     expect(() => GltfBinaryParser.getBufferData(json.accessors[0], json, [bin.buffer])).toThrow(
       /outside count/,
     );
+  });
+
+  it("rejects truncated/out-of-bounds GLB headers and chunks and honors 4-byte chunk alignment (LD02)", () => {
+    expect(() => GltfBinaryParser.parseGlb(new ArrayBuffer(8))).toThrow(/truncated/);
+
+    // Declared totalLength > actual byteLength.
+    const badTotal = new ArrayBuffer(12);
+    const badTotalView = new DataView(badTotal);
+    badTotalView.setUint32(0, 0x46546c67, true);
+    badTotalView.setUint32(4, 2, true);
+    badTotalView.setUint32(8, 64, true);
+    expect(() => GltfBinaryParser.parseGlb(badTotal)).toThrow(/exceeds buffer bounds/);
+
+    // Chunk length exceeds totalLength.
+    const badChunk = new ArrayBuffer(20);
+    const badChunkView = new DataView(badChunk);
+    badChunkView.setUint32(0, 0x46546c67, true);
+    badChunkView.setUint32(4, 2, true);
+    badChunkView.setUint32(8, 20, true);
+    badChunkView.setUint32(12, 100, true);
+    badChunkView.setUint32(16, 0x4e4f534a, true);
+    expect(() => GltfBinaryParser.parseGlb(badChunk)).toThrow(/exceeds file bounds/);
+
+    // Unaligned JSON chunkLength (2 bytes "{}") followed by 2 padding bytes and a 4-byte BIN chunk.
+    const jsonBytes = new TextEncoder().encode("{}");
+    const binBytes = new Uint8Array([10, 20, 30, 40]);
+    const paddedJsonLen = 4;
+    const totalLen = 12 + 8 + paddedJsonLen + 8 + binBytes.byteLength;
+    const glb = new ArrayBuffer(totalLen);
+    const dv = new DataView(glb);
+    const u8 = new Uint8Array(glb);
+    dv.setUint32(0, 0x46546c67, true);
+    dv.setUint32(4, 2, true);
+    dv.setUint32(8, totalLen, true);
+    dv.setUint32(12, jsonBytes.byteLength, true);
+    dv.setUint32(16, 0x4e4f534a, true);
+    u8.set(jsonBytes, 20);
+    u8.set([0x20, 0x20], 22);
+    const binHeaderOffset = 12 + 8 + paddedJsonLen;
+    dv.setUint32(binHeaderOffset, binBytes.byteLength, true);
+    dv.setUint32(binHeaderOffset + 4, 0x004e4942, true);
+    u8.set(binBytes, binHeaderOffset + 8);
+
+    const parsed = GltfBinaryParser.parseGlb(glb);
+    expect(parsed.json).toEqual({});
+    expect(parsed.buffers).toHaveLength(1);
+    expect(Array.from(new Uint8Array(parsed.buffers[0]!))).toEqual([10, 20, 30, 40]);
+  });
+
+  it("handles non-base64 data URIs and rejects malformed data URIs without comma (LD05)", () => {
+    const plain = GltfBinaryParser.decodeBase64("data:text/plain,Hello%20World");
+    expect(new TextDecoder().decode(plain)).toBe("Hello World");
+    expect(() => GltfBinaryParser.decodeBase64("not-a-data-uri")).toThrow(/missing comma/);
   });
 });

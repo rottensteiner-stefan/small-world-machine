@@ -176,4 +176,31 @@ describe("AssetManager Cache-Poisoning Prevention [BLK-L1]", () => {
     expect(call).toBe(2);
     expect(receivedSignals[0]).toBe(controller.signal);
   });
+
+  it("delivers cached binary bytes to streamBinary onChunk even after loadBinary (LD04)", async () => {
+    const manager = new AssetManager();
+    const url = "https://example.com/shared.bin";
+    const payload = new Uint8Array([7, 8, 9, 10]);
+
+    let fetches = 0;
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      fetches++;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-length": "4" }),
+        body: null,
+        blob: async (): Promise<Blob> => new Blob([payload]),
+      } as unknown as Response;
+    });
+
+    await manager.loadBinary(url);
+
+    const chunks: Uint8Array[] = [];
+    const streamed = await manager.streamBinary(url, (chunk) => chunks.push(chunk));
+    expect(fetches).toBe(1);
+    expect(chunks).toHaveLength(1);
+    expect(Array.from(chunks[0]!)).toEqual([7, 8, 9, 10]);
+    expect(Array.from(new Uint8Array(streamed))).toEqual([7, 8, 9, 10]);
+  });
 });

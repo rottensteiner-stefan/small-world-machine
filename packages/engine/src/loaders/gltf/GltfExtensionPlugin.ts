@@ -26,6 +26,10 @@ export type GltfImageDef = NonNullable<GltfJson["images"]>[number];
 export interface GltfReadContext {
   readonly json: GltfJson;
   readonly state: Map<string, unknown>;
+  /** Optional per-loader extension list; falls back to the global registry when omitted. */
+  readonly extensions?: readonly GltfExtensionPlugin[];
+  /** Optional abort signal forwarded to sub-resource fetches during parsing. */
+  readonly signal?: AbortSignal;
 }
 
 /** Shared, per-write-call state passed to `writeNode` -- same rationale as `GltfReadContext`.

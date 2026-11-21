@@ -28,6 +28,7 @@ export const extTextureWebp: GltfExtensionPlugin = {
       buffers,
       assetManager,
       "image/webp",
+      ctx.signal,
     );
     return img ? Texture.fromImage(img) : null;
   },

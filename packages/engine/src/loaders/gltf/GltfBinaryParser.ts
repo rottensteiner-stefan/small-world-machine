@@ -8,6 +8,9 @@ export class GltfBinaryParser {
    * Parses a binary .glb container into its JSON description and binary buffer payload.
    */
   public static parseGlb(arrayBuffer: ArrayBuffer): GltfData {
+    if (arrayBuffer.byteLength < 12) {
+      throw new Error("Not a valid .glb file: header truncated.");
+    }
     const dataView = new DataView(arrayBuffer);
 
     // Check Magic: "glTF" (0x46546c67)
@@ -17,14 +20,26 @@ export class GltfBinaryParser {
     const version = dataView.getUint32(4, true);
     if (version !== 2) throw new Error("Only glTF 2.0 is supported.");
 
+    const totalLength = dataView.getUint32(8, true);
+    if (totalLength < 12 || totalLength > arrayBuffer.byteLength) {
+      throw new Error("Invalid .glb file: declared length exceeds buffer bounds.");
+    }
+
     let json: GltfJson | null = null;
     const buffers: ArrayBuffer[] = [];
     let offset = 12;
 
-    while (offset < arrayBuffer.byteLength) {
+    while (offset < totalLength) {
+      if (offset + 8 > totalLength) {
+        throw new Error("Invalid .glb file: chunk header truncated.");
+      }
       const chunkLength = dataView.getUint32(offset, true);
       const chunkType = dataView.getUint32(offset + 4, true);
       offset += 8;
+
+      if (offset + chunkLength > totalLength) {
+        throw new Error("Invalid .glb file: chunk exceeds file bounds.");
+      }
 
       if (chunkType === 0x4e4f534a) {
         // JSON chunk
@@ -36,7 +51,9 @@ export class GltfBinaryParser {
         // BIN chunk
         buffers.push(arrayBuffer.slice(offset, offset + chunkLength));
       }
-      offset += chunkLength;
+      // glTF 2.0 chunks are 4-byte aligned; advance past trailing padding when present.
+      const alignedLength = (chunkLength + 3) & ~3;
+      offset += Math.min(alignedLength, totalLength - offset);
     }
 
     if (!json) throw new Error("No JSON chunk found in .glb file.");
@@ -45,15 +62,27 @@ export class GltfBinaryParser {
   }
 
   /**
-   * Decodes a Base64-encoded Data URI into an ArrayBuffer.
+   * Decodes a Data URI (`;base64,` or percent-encoded) into an ArrayBuffer.
    */
   public static decodeBase64(uri: string): ArrayBuffer {
-    const base64 = uri.split(",")[1]!;
-    const binaryStr = atob(base64);
-    const buffer = new ArrayBuffer(binaryStr.length);
-    const view = new Uint8Array(buffer);
-    for (let i = 0; i < binaryStr.length; i++) view[i] = binaryStr.charCodeAt(i);
-    return buffer;
+    const commaIdx = uri.indexOf(",");
+    if (commaIdx < 0) {
+      throw new Error("Invalid data URI: missing comma separator.");
+    }
+    const header = uri.slice(0, commaIdx);
+    const payload = uri.slice(commaIdx + 1);
+
+    if (header.includes(";base64")) {
+      const binaryStr = atob(payload.replace(/\s+/g, ""));
+      const buffer = new ArrayBuffer(binaryStr.length);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < binaryStr.length; i++) view[i] = binaryStr.charCodeAt(i);
+      return buffer;
+    }
+
+    const decoded = decodeURIComponent(payload);
+    const bytes = new TextEncoder().encode(decoded);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   }
 
   /**

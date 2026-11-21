@@ -23,6 +23,7 @@ export class MtlLoader extends AbstractLoader<Map<string, PhongMaterial>> {
         (loaded: number, total: number): void => {
           this.dispatchEvent(EventType.LOADER_PROGRESS, { url: fullUrl, loaded, total });
         },
+        this._signal,
       );
 
       const folderPath: string = MtlLoader.getFolderPath(fullUrl);
@@ -82,12 +83,14 @@ export class MtlLoader extends AbstractLoader<Map<string, PhongMaterial>> {
             texUrl,
             undefined,
             true,
+            this._signal,
           );
           currentMat.diffuseMap = Texture.fromImage(image, {
             magFilter: TextureFilter.NEAREST,
             minFilter: TextureFilter.NEAREST,
           });
         } catch (e) {
+          if (this._signal?.aborted) throw e;
           console.error(`[MtlLoader] Failed to load texture: ${texUrl}`, e);
         }
       } else if (("map_Bump" === type || "bump" === type) && currentMat) {
@@ -99,12 +102,14 @@ export class MtlLoader extends AbstractLoader<Map<string, PhongMaterial>> {
             texUrl,
             undefined,
             true,
+            this._signal,
           );
           currentMat.normalMap = Texture.fromImage(image, {
             magFilter: TextureFilter.NEAREST,
             minFilter: TextureFilter.NEAREST,
           });
         } catch (e) {
+          if (this._signal?.aborted) throw e;
           console.error(`[MtlLoader] Failed to load bump texture: ${texUrl}`, e);
         }
       }

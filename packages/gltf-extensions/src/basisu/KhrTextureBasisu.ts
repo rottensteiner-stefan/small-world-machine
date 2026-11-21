@@ -49,7 +49,7 @@ export const khrTextureBasisu: GltfExtensionPlugin = {
     // Case 2: Image provided via external URI
     if (imageDef.uri) {
       const url = imageDef.uri.startsWith("data:") ? imageDef.uri : folderPath + imageDef.uri;
-      const arrayBuffer = await assetManager.loadBinary(url);
+      const arrayBuffer = await assetManager.loadBinary(url, undefined, ctx.signal);
       return BasisTranscoder.transcode(arrayBuffer, imageDef.mimeType ?? "image/ktx2");
     }
 

@@ -8,6 +8,20 @@ import type {
 } from "./basisTypes.js";
 import { BasisTranscoderFormat } from "./basisTypes.js";
 
+/** Official 12-byte KTX 2.0 file identifier (`«KTX 20»\r\n\x1A\n`). */
+const KTX2_IDENTIFIER = [
+  0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a,
+] as const;
+
+/** Returns true when `bytes` begins with the 12-byte KTX 2.0 magic header. */
+export function hasKtx2Identifier(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < KTX2_IDENTIFIER.length) return false;
+  for (let i = 0; i < KTX2_IDENTIFIER.length; i++) {
+    if (bytes[i] !== KTX2_IDENTIFIER[i]) return false;
+  }
+  return true;
+}
+
 export interface BasisWasmConfig {
   /** Optional alternate .wasm bytes to load instead of the vendored copy. */
   wasmBinary?: ArrayBuffer;
@@ -126,6 +140,9 @@ export class BasisWasmTranscoder {
     ktx2: Uint8Array,
     config?: BasisWasmConfig & { format?: BasisTranscoderFormatId },
   ): Promise<BasisDecodeResult> {
+    if (!hasKtx2Identifier(ktx2)) {
+      throw new Error("[BasisWasmTranscoder] Invalid or unsupported .ktx2 file");
+    }
     const module = await this.getModule(config);
     const { format = BasisTranscoderFormat.RGBA32 } = config ?? {};
     const file: KTX2File = new module.KTX2File(ktx2);

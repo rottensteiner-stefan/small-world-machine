@@ -4,6 +4,7 @@ import { WebGLTextureManager } from "../../src/renderers/gl/managers/WebGLTextur
 import { GPUTextureResourceCache } from "../../src/renderers/WebGPU/managers/GPUTextureResourceCache.js";
 import { GPUFallbackResources } from "../../src/renderers/WebGPU/managers/GPUFallbackResources.js";
 import { Texture } from "../../src/core/textures/Texture.js";
+import { TextureArray } from "../../src/core/textures/TextureArray.js";
 import { CompressedTextureFormat } from "../../src/enums/CompressedTextureFormat.js";
 
 // Node/vitest has no WebGPU global; @webgpu/types only provides ambient TS types,
@@ -67,10 +68,11 @@ function makeMockGl(): WebGL2RenderingContext {
 }
 
 function makeMockDevice(): GPUDevice {
-  const view = {};
-  const gpuTexture = { createView: vi.fn().mockReturnValue(view) };
   return {
-    createTexture: vi.fn().mockReturnValue(gpuTexture),
+    createTexture: vi.fn().mockImplementation(() => ({
+      createView: vi.fn().mockImplementation(() => ({})),
+      destroy: vi.fn(),
+    })),
     createBuffer: vi.fn(() => ({ destroy: vi.fn() })),
     createSampler: vi.fn(() => ({})),
     createBindGroupLayout: vi.fn(() => ({})),
@@ -199,5 +201,108 @@ describe("Texture GPU re-upload on needsUpdate", () => {
     });
 
     expect(() => textures.getTextureView(tex, undefined)).toThrow(/texture-compression-etc2/);
+  });
+
+  it("getNormalTextureView uploads compressed normal maps and returns flatNormalTextureView when disableTextures is set (TX01)", () => {
+    const device = makeMockDevice();
+    const fallback = new GPUFallbackResources(device);
+    const textures = new GPUTextureResourceCache(device, fallback);
+
+    const tex = Texture.fromCompressed({
+      format: CompressedTextureFormat.ETC2_RGBA8,
+      width: 8,
+      height: 8,
+      mipData: [new Uint8Array(64)],
+    });
+
+    const normalView = textures.getNormalTextureView(tex, undefined);
+    expect(normalView).not.toBe(fallback.flatNormalTextureView);
+
+    const disabledView = textures.getNormalTextureView(tex, {
+      disableTextures: true,
+    } as never);
+    expect(disabledView).toBe(fallback.flatNormalTextureView);
+  });
+
+  it("block-aligns non-multiple-of-4 compressed WebGPU textures and honors quality.mipmapping=false (TX02/TX05)", () => {
+    const device = makeMockDevice();
+    const fallback = new GPUFallbackResources(device);
+    const textures = new GPUTextureResourceCache(device, fallback);
+
+    vi.mocked(device.createTexture).mockClear();
+    vi.mocked(device.queue.writeTexture).mockClear();
+
+    const tex = Texture.fromCompressed({
+      format: CompressedTextureFormat.BC7_RGBA,
+      width: 50,
+      height: 30,
+      mipData: [new Uint8Array(13 * 8 * 16), new Uint8Array(7 * 4 * 16)],
+    });
+
+    textures.getTextureView(tex, { mipmapping: false } as never);
+    const createCall = vi.mocked(device.createTexture).mock.calls[0]![0] as {
+      size: number[];
+      mipLevelCount: number;
+    };
+    expect(createCall.size).toEqual([52, 32]);
+    expect(createCall.mipLevelCount).toBe(1);
+    expect(vi.mocked(device.queue.writeTexture)).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-uploads TextureArray on needsUpdate in GPUTextureResourceCache (TX04)", () => {
+    const device = makeMockDevice();
+    const fallback = new GPUFallbackResources(device);
+    const textures = new GPUTextureResourceCache(device, fallback);
+
+    const layerA = { width: 16, height: 16 } as HTMLImageElement;
+    const layerB = { width: 16, height: 16 } as HTMLImageElement;
+    const arr = TextureArray.fromImages([layerA, layerB], { generateMipmaps: false });
+
+    vi.mocked(device.createTexture).mockClear();
+    vi.mocked(device.queue.copyExternalImageToTexture).mockClear();
+
+    textures.getTextureView(arr, undefined);
+    expect(device.createTexture).toHaveBeenCalledTimes(1);
+    expect(device.queue.copyExternalImageToTexture).toHaveBeenCalledTimes(2);
+
+    // Same size & depth -> in-place re-upload of both layers.
+    arr.needsUpdate = true;
+    textures.getTextureView(arr, undefined);
+    expect(device.createTexture).toHaveBeenCalledTimes(1);
+    expect(device.queue.copyExternalImageToTexture).toHaveBeenCalledTimes(4);
+    expect(arr.needsUpdate).toBe(false);
+
+    // Depth change -> recreate GPU texture array.
+    arr.images.push({ width: 16, height: 16 } as HTMLImageElement);
+    arr.needsUpdate = true;
+    textures.getTextureView(arr, undefined);
+    expect(device.createTexture).toHaveBeenCalledTimes(2);
+    expect(device.queue.copyExternalImageToTexture).toHaveBeenCalledTimes(7);
+  });
+
+  it("WebGL1 compressed upload never calls TEXTURE_MAX_LEVEL (0x813D) and avoids mip filtering on partial chains (TX03)", () => {
+    const gl = makeMockGl();
+    (gl.getExtension as unknown as ReturnType<typeof vi.fn>).mockImplementation((name: string) =>
+      name === "WEBGL_compressed_texture_s3tc" ? { COMPRESSED_RGBA_S3TC_DXT5_EXT: 0x83f3 } : null,
+    );
+    const textures = new WebGLTextureManager(gl, new Map(), {} as never, {} as never, {
+      dialect: "glsl100",
+    });
+
+    // 16x16 texture with only 2 of 5 mip levels -> partial pyramid.
+    const tex = Texture.fromCompressed({
+      format: CompressedTextureFormat.BC3_RGBA,
+      width: 16,
+      height: 16,
+      mipData: [new Uint8Array(256), new Uint8Array(64)],
+    });
+
+    textures.getWebGLTexture(tex, { mipmapping: true } as never);
+    const paramCalls = vi.mocked(gl.texParameteri).mock.calls;
+    expect(paramCalls.some(([, pname]) => pname === 0x813d)).toBe(false);
+    expect(
+      paramCalls.some(([, pname, param]) => pname === gl.TEXTURE_MIN_FILTER && param === gl.LINEAR),
+    ).toBe(true);
+    expect(vi.mocked(gl.generateMipmap)).not.toHaveBeenCalled();
   });
 });

@@ -26,6 +26,7 @@ export class SkyboxLoader extends AbstractLoader<CubeTexture> {
         (loaded: number, total: number) =>
           this.dispatchEvent(EventType.LOADER_PROGRESS, { url: fullUrl, loaded, total }),
         false,
+        this._signal,
       );
 
       const tileSize: number = sourceImage.width / 4;
