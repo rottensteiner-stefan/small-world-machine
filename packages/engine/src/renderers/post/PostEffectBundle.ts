@@ -3,6 +3,7 @@ import type { PostProcessingGroup } from "./index.js";
 import type {
   BloomElement,
   ColorGradingElement,
+  ContactShadowsElement,
   FlashElement,
   GrainElement,
   GravitationalLensingElement,
@@ -36,6 +37,7 @@ export interface PostEffectBundle {
   flash: FlashElement | undefined;
   lensing: GravitationalLensingElement | undefined;
   lutGrading: LutGradingElement | undefined;
+  contactShadows: ContactShadowsElement | undefined;
 }
 
 /** An empty bundle, the reusable target of {@link decodeBundleInto}. */
@@ -54,6 +56,7 @@ export function createEmptyBundle(): PostEffectBundle {
     flash: undefined,
     lensing: undefined,
     lutGrading: undefined,
+    contactShadows: undefined,
   };
 }
 
@@ -77,6 +80,7 @@ export function decodeBundleInto(
     PostProcessingEffectType.GRAVITATIONAL_LENSING,
   );
   out.lutGrading = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
+  out.contactShadows = group.get<ContactShadowsElement>(PostProcessingEffectType.CONTACT_SHADOWS);
   return out;
 }
 

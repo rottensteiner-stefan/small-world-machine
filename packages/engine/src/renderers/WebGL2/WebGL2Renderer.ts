@@ -425,6 +425,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       near: this._frameNear,
       far: this._frameFar,
       projMatrixData: this._frameProjMatrix!,
+      viewMatrixData: this._frameViewMatrix,
       lights: this._frameLights,
       fogVolumes: this._fogVolumes,
       frameInfo: this.frameInfo,

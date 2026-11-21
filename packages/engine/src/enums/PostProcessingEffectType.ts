@@ -19,4 +19,5 @@ export enum PostProcessingEffectType {
   DEPTH_OF_FIELD = "DepthOfField",
   AUTO_EXPOSURE = "AutoExposure",
   LUT_GRADING = "LutGrading",
+  CONTACT_SHADOWS = "ContactShadows",
 }

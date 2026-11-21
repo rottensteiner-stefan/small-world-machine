@@ -7,6 +7,7 @@
 // Adapted exposure multiplier in .r (ADR 0061); a white 1x1 stand-in while auto exposure is off.
 @group(0) @binding(7) var autoExposureTexture: texture_2d<f32>;
 @group(0) @binding(8) var lutTexture: texture_3d<f32>;
+@group(0) @binding(9) var contactShadowsTexture: texture_2d<f32>;
 
 // Structural constants (overwritten at compilation time) -- these gate real code paths (branch
 // taken / sample count), unlike the continuous tuning values below, which live in `dyn` instead
@@ -20,6 +21,7 @@ const u_vignetteEnabled: u32 = 0u;
 const u_grainEnabled: u32 = 0u;
 const u_bloomEnabled: u32 = 0u;
 const u_hbaoEnabled: u32 = 0u;
+const u_contactShadowsEnabled: u32 = 0u;
 const u_lightShaftsEnabled: u32 = 0u;
 const u_volumetricFogEnabled: u32 = 0u;
 const u_quantizeEnabled: u32 = 0u;
@@ -293,6 +295,19 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         // clamp() is unspecified for NaN input, so skip the multiply on non-finite values.
         if (isFiniteF32(hbaoVal)) {
             hdr *= clamp(hbaoVal, 0.0, 1.0);
+        }
+    }
+
+    // Screen-space contact shadows (Bend Studio method / Days Gone): 4-tap filter averages noise
+    if (1u == u_contactShadowsEnabled) {
+        let csTexel = 1.0 / dims;
+        let cs0 = textureSample(contactShadowsTexture, hdrSampler, distortUv + vec2f(-0.5, -0.5) * csTexel).r;
+        let cs1 = textureSample(contactShadowsTexture, hdrSampler, distortUv + vec2f( 1.5, -0.5) * csTexel).r;
+        let cs2 = textureSample(contactShadowsTexture, hdrSampler, distortUv + vec2f(-0.5,  1.5) * csTexel).r;
+        let cs3 = textureSample(contactShadowsTexture, hdrSampler, distortUv + vec2f( 1.5,  1.5) * csTexel).r;
+        let csVal = (cs0 + cs1 + cs2 + cs3) * 0.25;
+        if (isFiniteF32(csVal)) {
+            hdr *= clamp(csVal, 0.0, 1.0);
         }
     }
 

@@ -17,6 +17,7 @@ import {
   DepthOfFieldElement,
   AutoExposureElement,
   LutGradingElement,
+  ContactShadowsElement,
 } from "./elements/index.js";
 import { PostProcessingEffectType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
@@ -72,6 +73,7 @@ export class PostProcessingGroup {
     this.add(new DepthOfFieldElement());
     this.add(new AutoExposureElement());
     this.add(new LutGradingElement());
+    this.add(new ContactShadowsElement());
   }
 
   /**

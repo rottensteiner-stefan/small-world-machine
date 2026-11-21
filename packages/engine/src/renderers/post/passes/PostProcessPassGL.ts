@@ -10,6 +10,7 @@ import type { PostProcessingGroup } from "../PostProcessingGroup.js";
 import type {
   BloomElement,
   ColorGradingElement,
+  ContactShadowsElement,
   FlashElement,
   GrainElement,
   GravitationalLensingElement,
@@ -77,6 +78,7 @@ export class PostProcessPassGL {
   private _uLensingRingGlow: WebGLUniformLocation | null = null;
   private _uFlashColor: WebGLUniformLocation | null = null;
   private _uFlashIntensity: WebGLUniformLocation | null = null;
+  private _uContactShadowsTexture: WebGLUniformLocation | null = null;
   private _uLutTexture: WebGLUniformLocation | null = null;
   private _uLutSize: WebGLUniformLocation | null = null;
   private _uLutIntensity: WebGLUniformLocation | null = null;
@@ -88,7 +90,7 @@ export class PostProcessPassGL {
   private readonly _bloomTint: Color = new Color();
   private _compiledSignature: number | undefined;
   /**
-   * Whether this frame's upstream passes actually produced HBAO / light-shafts / fog textures. The
+   * Whether this frame's upstream passes actually produced HBAO / light-shafts / fog / contact-shadow textures. The
    * matching `#define`s are baked from these (not from `element.enabled` alone): a pass can return
    * no texture (e.g. a sun without shadows), and an enabled define with nothing bound would sample
    * the HDR colour (unit 0) as if it were shafts/fog.
@@ -96,6 +98,7 @@ export class PostProcessPassGL {
   private _hasHbaoTexture = false;
   private _hasShaftsTexture = false;
   private _hasFogTexture = false;
+  private _hasContactShadowsTexture = false;
 
   private readonly _shaderRegistry: ShaderRegistry;
 
@@ -126,6 +129,9 @@ export class PostProcessPassGL {
     const outline = group.get<OutlineElement>(PostProcessingEffectType.OUTLINE);
     const flash = group.get<FlashElement>(PostProcessingEffectType.FLASH);
     const lut = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
+    const contactShadows = group.get<ContactShadowsElement>(
+      PostProcessingEffectType.CONTACT_SHADOWS,
+    );
 
     // Only structural flags/modes trigger a shader rebuild (matching WebGPU).
     // Continuous tuning values (exposure, gamma, vignette darkness/offset, grain intensity,
@@ -134,6 +140,11 @@ export class PostProcessPassGL {
     // frame.
     const tmOn = tm !== undefined && tm.enabled;
     const lutOn = lut !== undefined && lut.enabled && lut.lut !== null && this._isWebGL2;
+    const csOn =
+      contactShadows !== undefined &&
+      contactShadows.enabled &&
+      this._hasContactShadowsTexture &&
+      this._isWebGL2;
     return (
       (group.filterMode & 0xf) |
       ((tmOn ? 1 : 0) << 4) |
@@ -148,7 +159,8 @@ export class PostProcessPassGL {
       ((volFog && volFog.enabled && this._hasFogTexture ? 1 : 0) << 16) |
       ((outline && outline.enabled ? 1 : 0) << 17) |
       ((flash && flash.enabled ? 1 : 0) << 18) |
-      ((lutOn ? 1 : 0) << 19)
+      ((lutOn ? 1 : 0) << 19) |
+      ((csOn ? 1 : 0) << 20)
     );
   }
 
@@ -198,6 +210,14 @@ export class PostProcessPassGL {
     const flashEnabled = flash && flash.enabled;
     const lut = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
     const lutEnabled = this._isWebGL2 && lut !== undefined && lut.enabled && lut.lut !== null;
+    const contactShadows = group.get<ContactShadowsElement>(
+      PostProcessingEffectType.CONTACT_SHADOWS,
+    );
+    const csEnabled =
+      this._isWebGL2 &&
+      contactShadows !== undefined &&
+      contactShadows.enabled &&
+      this._hasContactShadowsTexture;
 
     // Inject ONLY structural feature flags as compile-time macros
     frag = frag.replace(
@@ -224,6 +244,10 @@ export class PostProcessPassGL {
     frag = frag.replace(
       "uniform int u_lutGradingEnabled;",
       `#define u_lutGradingEnabled ${lutEnabled ? 1 : 0}`,
+    );
+    frag = frag.replace(
+      "uniform int u_contactShadowsEnabled;",
+      `#define u_contactShadowsEnabled ${csEnabled ? 1 : 0}`,
     );
     frag = frag.replace(
       "uniform int u_quantizeEnabled;",
@@ -262,6 +286,7 @@ export class PostProcessPassGL {
     this._uLightShaftsIntensity = gl.getUniformLocation(p, "u_lightShaftsIntensity");
     this._uVolumetricFogTexture = gl.getUniformLocation(p, "u_volumetricFogTexture");
     this._uAutoExposureTexture = gl.getUniformLocation(p, "u_autoExposureTexture");
+    this._uContactShadowsTexture = gl.getUniformLocation(p, "u_contactShadowsTexture");
     this._uLutTexture = gl.getUniformLocation(p, "u_lutTexture");
     this._uLutSize = gl.getUniformLocation(p, "u_lutSize");
     this._uLutIntensity = gl.getUniformLocation(p, "u_lutIntensity");
@@ -320,10 +345,12 @@ export class PostProcessPassGL {
     const hbaoTexture = ctx.hbaoTexture;
     const lightShaftsTexture = ctx.lightShaftsTexture;
     const volumetricFogTexture = ctx.volumetricFogTexture;
+    const contactShadowsTexture = ctx.contactShadowsTexture;
     const realTime = ctx.realTime;
     this._hasHbaoTexture = Boolean(hbaoTexture);
     this._hasShaftsTexture = Boolean(lightShaftsTexture);
     this._hasFogTexture = Boolean(volumetricFogTexture);
+    this._hasContactShadowsTexture = Boolean(contactShadowsTexture);
     const sig = this._getSignature(group);
     if (!this._prog || sig !== this._compiledSignature) {
       this._build(gl, group);
@@ -401,6 +428,13 @@ export class PostProcessPassGL {
       gl.uniform1i(this._uLutTexture, 6);
       if (this._uLutSize) gl.uniform1f(this._uLutSize, lut.lut.size);
       if (this._uLutIntensity) gl.uniform1f(this._uLutIntensity, lut.intensity);
+    }
+
+    // Screen-Space Contact Shadows (WebGL2 only)
+    if (this._isWebGL2 && this._uContactShadowsTexture) {
+      gl.activeTexture(gl.TEXTURE7);
+      gl.bindTexture(gl.TEXTURE_2D, contactShadowsTexture ?? this._white());
+      gl.uniform1i(this._uContactShadowsTexture, 7);
     }
 
     // Continuous Uniform Updates

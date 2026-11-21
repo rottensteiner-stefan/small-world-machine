@@ -32,6 +32,7 @@ uniform int u_flashEnabled;
 uniform vec3 u_flashColor;
 uniform float u_flashIntensity;
 uniform int u_lutGradingEnabled;
+uniform int u_contactShadowsEnabled;
 
 // Random noise
 float random(vec2 st) {

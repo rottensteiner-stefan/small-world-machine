@@ -5,6 +5,7 @@ import type { LightDataInterface } from "../../../interfaces/index.js";
 import type {
   AutoExposureElement,
   BloomElement,
+  ContactShadowsElement,
   DepthOfFieldElement,
   HbaoElement,
   LightShaftsElement,
@@ -16,6 +17,7 @@ import {
   AOPassGPU,
   AutoExposurePassGPU,
   BloomPassGPU,
+  ContactShadowPassGPU,
   DepthOfFieldPassGPU,
   HistoryBlendPassGPU,
   LightShaftsPassGPU,
@@ -87,6 +89,7 @@ export class PostFxChain {
   private _lightShaftsTextureView: GPUTextureView | undefined = undefined;
   private _volumetricFogTextureView: GPUTextureView | undefined = undefined;
   private _autoExposureView: GPUTextureView | undefined = undefined;
+  private _contactShadowsTextureView: GPUTextureView | undefined = undefined;
 
   constructor(private readonly _host: WebGPURenderer) {
     // Parameter properties are assigned *after* field initializers run (ES2022
@@ -137,6 +140,10 @@ export class PostFxChain {
    * undefined while the `AutoExposureElement` is disabled or its pipeline is still validating. */
   public get autoExposureView(): GPUTextureView | undefined {
     return this._autoExposureView;
+  }
+
+  public get contactShadowsTextureView(): GPUTextureView | undefined {
+    return this._contactShadowsTextureView;
   }
 
   /** Lazily creates (once) or returns the effect pass registered under `type`. The same pass
@@ -276,6 +283,26 @@ export class PostFxChain {
       this._hbaoTextureView = p.execute(ctx) ?? undefined;
     } else {
       this._hbaoTextureView = undefined;
+    }
+
+    const contactShadowsNode = group.get<ContactShadowsElement>(
+      PostProcessingEffectType.CONTACT_SHADOWS,
+    );
+    if (
+      contactShadowsNode &&
+      contactShadowsNode.enabled &&
+      renderer.opaqueDepthView &&
+      projMatrix &&
+      lights.dLight
+    ) {
+      ctx.element = contactShadowsNode;
+      const p = this._getOrCreatePass(
+        PostProcessingEffectType.CONTACT_SHADOWS,
+        ContactShadowPassGPU,
+      );
+      this._contactShadowsTextureView = p.execute(ctx) ?? undefined;
+    } else {
+      this._contactShadowsTextureView = undefined;
     }
 
     const shaftsNode = group.get<LightShaftsElement>(PostProcessingEffectType.LIGHT_SHAFTS);

@@ -3,6 +3,7 @@ import type { ShaderRegistry } from "../../shaders/index.js";
 import type {
   AutoExposureElement,
   BloomElement,
+  ContactShadowsElement,
   DepthOfFieldElement,
   HbaoElement,
   LightShaftsElement,
@@ -14,6 +15,7 @@ import type { GLPostEffectPass, GLPostEffectPassContext } from "./GLPostEffectPa
 import { AOPassGL } from "./AOPassGL.js";
 import { AutoExposurePassGL } from "./AutoExposurePassGL.js";
 import { BloomPassGL } from "./BloomPassGL.js";
+import { ContactShadowPassGL } from "./ContactShadowPassGL.js";
 import { DepthOfFieldPassGL } from "./DepthOfFieldPassGL.js";
 import { HistoryBlendPassGL } from "./HistoryBlendPassGL.js";
 import { LightShaftsPassGL } from "./LightShaftsPassGL.js";
@@ -53,6 +55,7 @@ export class GLPostEffects {
       this._passes.set(PostProcessingEffectType.VOLUMETRIC_FOG, new VolumetricFogPassGL(gl, true));
       this._passes.set(PostProcessingEffectType.DEPTH_OF_FIELD, new DepthOfFieldPassGL(gl, true));
       this._passes.set(PostProcessingEffectType.AUTO_EXPOSURE, new AutoExposurePassGL(gl2));
+      this._passes.set(PostProcessingEffectType.CONTACT_SHADOWS, new ContactShadowPassGL(gl2));
     } else {
       // WebGL1 legacy fallback: the reduced GL1 chain (no TAA/HBAO/volumetric fog, tilt-shift DoF).
       this._passes.set(PostProcessingEffectType.BLOOM, new BloomPassGL(gl, false));
@@ -134,6 +137,20 @@ export class GLPostEffects {
         if (hbaoNode && hbaoNode.enabled) {
           ctx.element = hbaoNode;
           ctx.hbaoTexture = hbao.execute(ctx);
+        }
+      }
+    }
+
+    ctx.contactShadowsTexture = null;
+    if (ctx.depthTexture && ctx.projMatrixData && ctx.viewMatrixData && ctx.lights?.dLight) {
+      const contactShadows = this._passes.get(PostProcessingEffectType.CONTACT_SHADOWS);
+      if (contactShadows) {
+        const csNode = ctx.group.get<ContactShadowsElement>(
+          PostProcessingEffectType.CONTACT_SHADOWS,
+        );
+        if (csNode && csNode.enabled) {
+          ctx.element = csNode;
+          ctx.contactShadowsTexture = contactShadows.execute(ctx);
         }
       }
     }

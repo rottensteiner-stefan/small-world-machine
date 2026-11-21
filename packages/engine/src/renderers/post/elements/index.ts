@@ -15,3 +15,4 @@ export * from "./VolumetricFogElement.js";
 export * from "./DepthOfFieldElement.js";
 export * from "./AutoExposureElement.js";
 export * from "./LutGradingElement.js";
+export * from "./ContactShadowsElement.js";

@@ -422,6 +422,9 @@ export class WebGPURenderer
   public get hbaoTextureView(): GPUTextureView | undefined {
     return this._postFxChain.hbaoTextureView;
   }
+  public get contactShadowsTextureView(): GPUTextureView | undefined {
+    return this._postFxChain.contactShadowsTextureView;
+  }
   public get lightShaftsTextureView(): GPUTextureView | undefined {
     return this._postFxChain.lightShaftsTextureView;
   }

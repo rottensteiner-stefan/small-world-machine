@@ -80,6 +80,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   protected _frameNear: number = 0.1;
   protected _frameFar: number = 1000;
   protected _frameProjMatrix: Float32Array | undefined = undefined;
+  protected _frameViewMatrix: Float32Array | undefined = undefined;
   protected _frameCamPos: Vector3D = Vector3D.ZERO;
   protected _frameLights?: LightDataInterface;
   /** The scene of the current frame, for post passes that need scene-level data (e.g. IBL). */
@@ -292,6 +293,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._frameNear = near ?? 0.1;
     this._frameFar = far ?? 1000;
     this._frameProjMatrix = projMatrix;
+    this._frameViewMatrix = vMat;
     this._frameCamPos = camPos;
     this._frameViewProj.data.set(vp);
     Matrix4.invert(this._frameViewProj, this._frameInvViewProj);

@@ -56,6 +56,7 @@ export class PostProcessPass implements RenderPass {
   private _builtVolumetricFogTextureView?: GPUTextureView;
   private _builtAutoExposureView?: GPUTextureView;
   private _builtLutView?: GPUTextureView;
+  private _builtContactShadowsTextureView?: GPUTextureView;
   /** Signature of the most recently REQUESTED pipeline build (may still be validating). */
   private _requestedSignature?: string;
   /** Monotonic build id: a validation verdict for a superseded build is dropped. */
@@ -100,6 +101,7 @@ export class PostProcessPass implements RenderPass {
       e.outline ? e.outline.structuralKey() : "0",
       e.flash ? e.flash.structuralKey() : "0",
       e.lutGrading ? e.lutGrading.structuralKey() : "0|0",
+      e.contactShadows ? e.contactShadows.structuralKey() : "0|16",
     ].join("|");
   }
 
@@ -145,6 +147,11 @@ export class PostProcessPass implements RenderPass {
           visibility: GPUShaderStage.FRAGMENT,
           texture: { sampleType: "float", viewDimension: "3d" },
         },
+        {
+          binding: 9,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: "float" },
+        },
       ],
     });
 
@@ -174,6 +181,7 @@ export class PostProcessPass implements RenderPass {
     const volFogEnabled = e.volFog && e.volFog.enabled;
     const lutEnabled = e.lutGrading && e.lutGrading.enabled && e.lutGrading.lut !== null;
     const lutSize = e.lutGrading && e.lutGrading.lut ? e.lutGrading.lut.size : 32;
+    const contactShadowsEnabled = e.contactShadows && e.contactShadows.enabled;
 
     // Inject only STRUCTURAL parameters as WGSL constants -- these gate real code paths (branch
     // taken, sample count), so changing them legitimately needs a rebuild. Continuous tuning
@@ -215,6 +223,10 @@ export class PostProcessPass implements RenderPass {
         `const u_quantizeEnabled: u32 = ${quantEnabled ? 1 : 0}u;`,
       ],
       ["const u_hbaoEnabled: u32 = 0u;", `const u_hbaoEnabled: u32 = ${hbaoEnabled ? 1 : 0}u;`],
+      [
+        "const u_contactShadowsEnabled: u32 = 0u;",
+        `const u_contactShadowsEnabled: u32 = ${contactShadowsEnabled ? 1 : 0}u;`,
+      ],
       [
         "const u_lightShaftsEnabled: u32 = 0u;",
         `const u_lightShaftsEnabled: u32 = ${shaftsEnabled ? 1 : 0}u;`,
@@ -275,6 +287,7 @@ export class PostProcessPass implements RenderPass {
     volumetricFogActiveView: GPUTextureView,
     autoExposureView: GPUTextureView,
     lutActiveView: GPUTextureView,
+    contactShadowsActiveView: GPUTextureView,
   ): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
@@ -291,6 +304,7 @@ export class PostProcessPass implements RenderPass {
         { binding: 6, resource: volumetricFogActiveView },
         { binding: 7, resource: autoExposureView },
         { binding: 8, resource: lutActiveView },
+        { binding: 9, resource: contactShadowsActiveView },
       ],
     });
   }
@@ -441,6 +455,11 @@ export class PostProcessPass implements RenderPass {
     // Multiplicative like AO: white (1.0) is the neutral exposure while auto exposure is off.
     const autoExposureView = renderer.autoExposureView ?? renderer.whiteTextureView;
     const lutActiveView = this._lutView(device, e.lutGrading);
+    const contactShadowsActiveView = this._activeViewOrWhite(
+      renderer,
+      e.contactShadows,
+      renderer.contactShadowsTextureView,
+    );
 
     // Rebuild bind group ONLY if the bound texture views changed
     if (
@@ -451,7 +470,8 @@ export class PostProcessPass implements RenderPass {
       this._builtShaftsTextureView !== shaftsActiveView ||
       this._builtVolumetricFogTextureView !== volFogActiveView ||
       this._builtAutoExposureView !== autoExposureView ||
-      this._builtLutView !== lutActiveView
+      this._builtLutView !== lutActiveView ||
+      this._builtContactShadowsTextureView !== contactShadowsActiveView
     ) {
       this._buildBindGroup(
         renderer,
@@ -462,6 +482,7 @@ export class PostProcessPass implements RenderPass {
         volFogActiveView,
         autoExposureView,
         lutActiveView,
+        contactShadowsActiveView,
       );
       this._builtTextureView = colorView;
       this._builtBloomTextureView = bloomActiveView;
@@ -470,6 +491,7 @@ export class PostProcessPass implements RenderPass {
       this._builtVolumetricFogTextureView = volFogActiveView;
       this._builtAutoExposureView = autoExposureView;
       this._builtLutView = lutActiveView;
+      this._builtContactShadowsTextureView = contactShadowsActiveView;
     }
 
     // Write the continuous tuning values every frame, independent of the rebuild guard above --
@@ -497,6 +519,7 @@ export class PostProcessPass implements RenderPass {
     e.flash?.packUniforms?.(d, 0);
     e.shafts?.packUniforms?.(d, 0);
     e.lutGrading?.packUniforms?.(d, 0);
+    e.contactShadows?.packUniforms?.(d, 0);
 
     renderer.gpuDevice!.queue.writeBuffer(this._uniformBuffer!, 0, d);
 

@@ -15,3 +15,5 @@ export * from "./DepthOfFieldPassGL.js";
 export * from "./DepthOfFieldPassGPU.js";
 export * from "./AutoExposurePassGPU.js";
 export * from "./AutoExposurePassGL.js";
+export * from "./ContactShadowPassGPU.js";
+export * from "./ContactShadowPassGL.js";

@@ -52,6 +52,8 @@ export interface GLPostEffectPassContext {
   far: number;
   /** Frame projection matrix data (HBAO samples it to reconstruct view-space positions). */
   projMatrixData: Float32Array | undefined;
+  /** Frame view matrix data. */
+  viewMatrixData: Float32Array | undefined;
   /** Extracted per-frame lights, when a light list was provided this frame. */
   lights: LightDataInterface | undefined;
   /** Directional-light shadow texture matching `lights.dLight`, if any. */
@@ -81,6 +83,8 @@ export interface GLPostEffectPassContext {
   volumetricFogTexture: WebGLTexture | null;
   /** 1x1 adapted exposure (r = multiplier, ADR 0061), null while auto exposure is off. */
   autoExposureTexture: WebGLTexture | null;
+  /** Single-channel contact shadows texture (Bend Studio screen-space shadows). */
+  contactShadowsTexture: WebGLTexture | null;
 }
 
 /**
@@ -121,6 +125,7 @@ export function createGLPostEffectContext(): GLPostEffectPassContext {
     near: 0,
     far: 0,
     projMatrixData: undefined,
+    viewMatrixData: undefined,
     lights: undefined,
     dirShadowTexture: null,
     spotShadowTextures: [],
@@ -138,5 +143,6 @@ export function createGLPostEffectContext(): GLPostEffectPassContext {
     lightShaftsTexture: null,
     volumetricFogTexture: null,
     autoExposureTexture: null,
+    contactShadowsTexture: null,
   };
 }

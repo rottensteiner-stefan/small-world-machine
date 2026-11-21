@@ -21,6 +21,7 @@ export interface WebGL2PostFrameParams {
   near: number;
   far: number;
   projMatrixData: Float32Array;
+  viewMatrixData?: Float32Array | undefined;
   lights: LightDataInterface | undefined;
   fogVolumes: FogVolume[];
   frameInfo: FrameInfo;
@@ -325,6 +326,7 @@ export class WebGL2RenderTargetManager {
     ctx.near = p.near;
     ctx.far = p.far;
     ctx.projMatrixData = p.projMatrixData;
+    ctx.viewMatrixData = p.viewMatrixData;
     ctx.lights = p.lights;
     ctx.fogVolumes = p.fogVolumes;
     ctx.time = p.frameInfo.time;

@@ -10,6 +10,8 @@ uniform sampler2D u_bloomTexture;
 uniform int u_bloomEnabled;
 uniform sampler2D u_hbaoTexture;
 uniform int u_hbaoEnabled;
+uniform sampler2D u_contactShadowsTexture;
+uniform int u_contactShadowsEnabled;
 uniform sampler2D u_lightShaftsTexture;
 uniform int u_lightShaftsEnabled;
 uniform float u_lightShaftsIntensity;
@@ -270,6 +272,19 @@ void main() {
         float hbaoVal = (ao0 + ao1 + ao2 + ao3) * 0.25;
         if (!isnan(hbaoVal) && !isinf(hbaoVal)) {
             hdr *= clamp(hbaoVal, 0.0, 1.0);
+        }
+    }
+
+    // Screen-Space Contact Shadows (Bend Studio method / Days Gone)
+    if (u_contactShadowsEnabled == 1) {
+        vec2 csTexel = 1.0 / vec2(textureSize(u_hdrTexture, 0));
+        float cs0 = texture(u_contactShadowsTexture, distortUv + vec2(-0.5, -0.5) * csTexel).r;
+        float cs1 = texture(u_contactShadowsTexture, distortUv + vec2( 1.5, -0.5) * csTexel).r;
+        float cs2 = texture(u_contactShadowsTexture, distortUv + vec2(-0.5,  1.5) * csTexel).r;
+        float cs3 = texture(u_contactShadowsTexture, distortUv + vec2( 1.5,  1.5) * csTexel).r;
+        float csVal = (cs0 + cs1 + cs2 + cs3) * 0.25;
+        if (!isnan(csVal) && !isinf(csVal)) {
+            hdr *= clamp(csVal, 0.0, 1.0);
         }
     }
 
