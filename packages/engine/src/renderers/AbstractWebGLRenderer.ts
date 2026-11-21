@@ -111,10 +111,18 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
     this._fieldShadowViewIndex.set(field, 1);
   }
 
-  /** Unregisters a field. The field's own VBOs are released by the field's `dispose()`, not here. */
+  /** Unregisters a field and releases any backend-held resources (such as material texture holdings);
+   * the field's own VBOs are released by `field.dispose()`. */
   public unregisterInstanceField(field: InstanceFieldGL): void {
-    this._instanceFields.delete(field);
+    if (this._instanceFields.delete(field)) {
+      this.releaseFieldResources(field);
+    }
     this._fieldShadowViewIndex.delete(field);
+  }
+
+  /** Subclass hook invoked when a field is unregistered to drop renderer-held resources (e.g. GL texture holdings). */
+  protected releaseFieldResources(_field: InstanceFieldGL): void {
+    // Subclasses with texture managers override this.
   }
 
   /**

@@ -1,4 +1,4 @@
-import type { Object3D, Texture, TextureArray } from "../../../core/index.js";
+import type { Texture, TextureArray } from "../../../core/index.js";
 import { CubeTexture, isTextureArray } from "../../../core/index.js";
 import { RenderTarget, RenderTargetCube } from "../../../core/textures/index.js";
 import { TextureHoldings } from "../../TextureHoldings.js";
@@ -753,21 +753,21 @@ export class WebGLTextureManager {
    * is created once and mutated in place on every `getRenderManifest()` call.
    */
   public acquireTextures(
-    obj: Object3D,
+    holder: object,
     textures: Record<string, Texture | CubeTexture | undefined>,
     setVersion = -1,
   ): void {
-    this._holdings.acquire(obj, textures, setVersion);
+    this._holdings.acquire(holder, textures, setVersion);
   }
 
-  /** Version of `textures`' current contents for `acquireTextures(obj, textures, version)`:
+  /** Version of `textures`' current contents for `acquireTextures(holder, textures, version)`:
    * call once per batch so each object of the batch skips the per-key diff (`TextureHoldings`). */
   public textureSetVersion(textures: Record<string, Texture | CubeTexture | undefined>): number {
     return this._holdings.setVersion(textures);
   }
 
-  public releaseObjectTextures(obj: Object3D): void {
-    this._holdings.releaseObject(obj);
+  public releaseObjectTextures(holder: object): void {
+    this._holdings.releaseObject(holder);
   }
 
   private _acquireTexture(tex: Texture | CubeTexture): void {

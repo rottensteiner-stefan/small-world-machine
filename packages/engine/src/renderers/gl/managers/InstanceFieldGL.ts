@@ -169,6 +169,8 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     readonly material: AbstractMaterial;
     readonly alphaTest: number;
   }>;
+  /** Pre-allocated holder tokens (one per material slot) for GL texture refcounting (D6). */
+  private readonly _materialTokens: readonly object[];
 
   // --- Population-derived run map (build/rebuild-time, static) ---
   private _runProto: Uint8Array = new Uint8Array(0);
@@ -363,6 +365,7 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     }
     this._geometryTable = flat;
     this._materials = setup.materials;
+    this._materialTokens = Array.from({ length: setup.materials.length }, (): object => ({}));
 
     // Pool per-view cull-params + plane storage (bounded by the authored view cap).
     this._cullParams = [];
@@ -865,6 +868,16 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     materialSlot: number,
   ): { readonly material: AbstractMaterial; readonly alphaTest: number } | undefined {
     return this._materials[materialSlot];
+  }
+
+  /** Number of material slots registered on this field. */
+  public get materialCount(): number {
+    return this._materials.length;
+  }
+
+  /** Stable holder token for `materialSlot`, used by GL renderers to refcount shared textures. */
+  public getMaterialToken(materialSlot: number): object | undefined {
+    return this._materialTokens[materialSlot];
   }
 
   /** The single cell-sorted 16-byte-record instance VBO (STATIC_DRAW, engine-owned bytes). */

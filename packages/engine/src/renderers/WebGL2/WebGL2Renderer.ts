@@ -694,6 +694,14 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const material = field.getMaterial(cmd.materialSlot);
       if (!material) continue;
       const manifest = material.material.getRenderManifest();
+      const texToken = field.getMaterialToken(cmd.materialSlot);
+      if (texToken) {
+        this._textures.acquireTextures(
+          texToken,
+          manifest.textures,
+          this._textures.textureSetVersion(manifest.textures),
+        );
+      }
 
       let cache: WebGLProgramCacheEntry;
       if (pass === "opaque") {
@@ -1538,6 +1546,15 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       this.gl.canvas.height,
       this._quality.clusteredLighting,
     );
+  }
+
+  /** @inheritdoc */
+  protected override releaseFieldResources(field: InstanceFieldGL): void {
+    const count = field.materialCount;
+    for (let i = 0; i < count; i++) {
+      const token = field.getMaterialToken(i);
+      if (token) this._textures.releaseObjectTextures(token);
+    }
   }
 
   /** @inheritdoc */

@@ -1073,6 +1073,14 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         this._bindFieldGlobalUniforms(cache, ctx);
       }
 
+      const texToken = field.getMaterialToken(cmd.materialSlot);
+      if (texToken) {
+        this._textures.acquireTextures(
+          texToken,
+          manifest.textures,
+          this._textures.textureSetVersion(manifest.textures),
+        );
+      }
       this._bindMaterialState(manifest.state);
       this._bindGenericMaterialProperties(cache.uniforms, manifest.properties, true);
       this._bindFieldTextures(cache, manifest, ctx.scene);
@@ -1521,6 +1529,15 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
     gl.deleteBuffer(entry.vbo);
     if (entry.nbo) gl.deleteBuffer(entry.nbo);
     if (entry.tanbo) gl.deleteBuffer(entry.tanbo);
+  }
+
+  /** @inheritdoc */
+  protected override releaseFieldResources(field: InstanceFieldGL): void {
+    const count = field.materialCount;
+    for (let i = 0; i < count; i++) {
+      const token = field.getMaterialToken(i);
+      if (token) this._textures.releaseObjectTextures(token);
+    }
   }
 
   /** @inheritdoc */

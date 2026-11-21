@@ -59,6 +59,8 @@ import {
   type InstanceFieldDrawPass,
 } from "../../src/renderers/AbstractWebGLRenderer.js";
 import { RendererType } from "../../src/enums/index.js";
+import { Texture } from "../../src/core/textures/Texture.js";
+import { WebGLTextureManager } from "../../src/renderers/gl/managers/WebGLTextureManager.js";
 import type { Mesh } from "../../src/renderers/Mesh.js";
 import type { AbstractMaterial } from "../../src/core/materials/index.js";
 
@@ -774,5 +776,63 @@ describe("IF-REACH-GROWTH — 400 reachable cells exceed the 256-cell scratch wi
     // Fixture sanity: the pin must ACTUALLY instrument past-256 reach, else it is vacuous.
     expect(mirror.size, "fixture must keep >256 cells (full-keep coverage)").toBeGreaterThan(256);
     expect(emitted).toEqual(mirror);
+  });
+});
+
+describe("D6 — GL field texture refcount retention and release on unregisterInstanceField", () => {
+  it("retains shared textures across regular object release and deletes them once unregistered", () => {
+    const field = makeGlField(2, 1_000_000);
+    const deleted: WebGLTexture[] = [];
+    const gl = {
+      deleteTexture: (t: WebGLTexture | null): void => {
+        if (t) deleted.push(t);
+      },
+    } as unknown as WebGLRenderingContext;
+    const texCache = new Map<Texture, WebGLTexture>();
+    const texManager = new WebGLTextureManager(
+      gl,
+      texCache,
+      {} as WebGLTexture,
+      {} as WebGLTexture,
+      { dialect: "glsl300" },
+    );
+
+    const sharedTex = Texture.empty();
+    const glTex = {} as WebGLTexture;
+    texCache.set(sharedTex, glTex);
+    const meshObj = {};
+    const texturesRec = { u_diffuseMap: sharedTex };
+    const token = field.getMaterialToken(0);
+    expect(token).toBeDefined();
+
+    // Both a regular mesh object and the field material token acquire the same texture.
+    texManager.acquireTextures(meshObj, texturesRec, texManager.textureSetVersion(texturesRec));
+    texManager.acquireTextures(token!, texturesRec, texManager.textureSetVersion(texturesRec));
+
+    // Releasing the regular mesh drops refcount 2 -> 1: texture MUST remain cached and alive.
+    texManager.releaseObjectTextures(meshObj);
+    expect(deleted).toHaveLength(0);
+    expect(texCache.has(sharedTex)).toBe(true);
+
+    class RefcountingRenderer extends TestIFGLRenderer {
+      public releasedCount = 0;
+      protected override releaseFieldResources(f: InstanceFieldGL): void {
+        this.releasedCount++;
+        for (let i = 0; i < f.materialCount; i++) {
+          const slotToken = f.getMaterialToken(i);
+          if (slotToken) texManager.releaseObjectTextures(slotToken);
+        }
+      }
+    }
+
+    const renderer = new RefcountingRenderer();
+    renderer.registerInstanceField(field);
+    renderer.unregisterInstanceField(field);
+    // Duplicate unregister must be a no-op.
+    renderer.unregisterInstanceField(field);
+
+    expect(renderer.releasedCount).toBe(1);
+    expect(deleted).toEqual([glTex]);
+    expect(texCache.has(sharedTex)).toBe(false);
   });
 });
