@@ -162,10 +162,16 @@
 - Wind (vertex sway) is a `vegetation-extras` concern; impostors get a cheap global sway only.
 - **Deliberate deviation from the reference:** the reference author explicitly avoids impostors and uses voxels instead (typical impostor weaknesses: frame-blend ghosting, parallax error up close, lighting/GI mismatch against real geometry, atlas memory per species). We keep impostors because they work on every tier incl. WebGL1 and cost one quad per tree; the WebGPU-only alternative is a per-prototype **voxel LOD** (prefiltered sparse brick volume, raymarched in the fragment shader) as a later replacement for the impostor bucket if A/B shows impostor artefacts. Decide after step 3 measurement, not before.
 
+##### Step 3 result — LANDED (V1, 2026-11-21)
+- `@small-world-machine/vegetation-extras` ships `OctahedralImpostor` (`packages/vegetation-extras/src/impostors/OctahedralImpostor.ts`): Cigolle et al. 2014 hemi- & full-octahedral direction encoding/decoding (`encodeOctahedral`, `decodeOctahedral`, `sampleOctahedralTriangle` 3-corner barycentric blend), deterministic/callback atlas generator (`generateProceduralImpostorAtlas`, `bakeOctahedralImpostorAtlas`), `OctahedralImpostorManifest` metadata, and 3-tier `OctahedralImpostorMaterial` (`webgl1` / `webgl2` / `webgpu` with camera-facing quad orientation, depth-parallax UV offset, stored normal lighting, alpha cutout, and global wind sway).
+
 #### Step 4 — Far field without instances
 - Beyond the impostor ring, cells drop their instances entirely. V1 = **canopy shell**: terrain-following mesh offset by a per-cell canopy height/density map baked from the instance population, shaded with a canopy material (noise normals, density-driven AO and color variation), one draw per terrain chunk; dithered handover to impostors; existing fog/aerial perspective hides the seam.
 - Alternatives kept for later: per-cell aggregate impostors (HLOD, Unreal HLOD style) if the shell looks flat from low altitude; WebGPU-only voxel canopy volume (3D density texture, raymarched, re-using froxel infrastructure) — closest to the referenced demo, highest cost.
 - Reference video check: from aerial views the distant forest reads as a fused canopy mass with per-crown silhouettes only near the horizon line and heavy aerial perspective — the shell + fog is plausible for that look; silhouettes against the sky are the weak point and get a dedicated A/B shot in showcase 51.
+
+##### Step 4 result — LANDED (V1, 2026-11-21)
+- `@small-world-machine/vegetation-extras` ships `CanopyShell` (`packages/vegetation-extras/src/canopy/CanopyShell.ts`): `buildCanopyShellGeometry()` emits an $O(1)$-draw terrain-following crown mesh from `CanopyCoverageMap` (auto-stride clamped inside WebGL1 `Uint16Array` limits, empty meadow pruning, analytical skirt & dome relief normals), paired with 3-tier `CanopyShellMaterial` (Bayer 4×4 distance handover `handoverStart..handoverEnd`, procedural clump lighting, `ambientFloor` shading, and horizon fog integration).
 
 #### Step 5 — Clustered LOD (Nanite-like), WebGPU only
 - Offline (`tools`): split mesh into clusters (≤128 tris / ≤64 verts), group neighbours, simplify groups with locked group borders, re-split, repeat → DAG with per-cluster error bounds (Karis, "A Deep Dive into Nanite Virtualized Geometry", SIGGRAPH 2021; meshoptimizer clusterizer + simplifier).
