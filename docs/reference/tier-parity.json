@@ -100,6 +100,11 @@
       "webgpu": { "state": "present", "file": "packages/engine/src/renderers/WebGPU/WebGPURenderer.ts", "pattern": "GPUMorphTargetSystem" },
       "webgl2": { "state": "present", "file": "packages/engine/src/renderers/WebGL2/WebGL2Renderer.ts", "pattern": "WebGL2MorphTargetManager" },
       "webgl1": { "state": "present", "file": "packages/engine/src/renderers/WebGL1/WebGL1Renderer.ts", "pattern": "MorphTargetBlender" }
+    },
+    "contact_shadows": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/post/shaders/ContactShadow.comp.wgsl", "pattern": "fn cs_main" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl", "pattern": "u_contactShadowsEnabled" },
+      "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/post/shaders/PostProcess100.frag.glsl", "pattern": "u_contactShadowsTexture", "reason": "ADR 0043 tier fallback: WebGL1 omits scene depth-texture raymarching and falls back cleanly without crash (u_contactShadowsEnabled remains 0)" }
     }
   }
 }

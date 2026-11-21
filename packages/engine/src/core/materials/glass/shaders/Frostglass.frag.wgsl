@@ -1,9 +1,9 @@
 @fragment fn fs(i: Out) -> @location(0) vec4f {
-    let blurRadius = obj.liquidParams.x;
-    let transmission = obj.liquidParams.y;
-    
-    let pulseCenter = obj.extraParams.xyz;
-    let pulseRadius = obj.extraParams.w;
+    let blurRadius = obj.matParam0.x;
+    let transmission = obj.matParam0.y;
+
+    let pulseCenter = obj.matParam1.xyz;
+    let pulseRadius = obj.matParam1.w;
     
     let tintColor = sRGBToLinear(obj.color.rgb);
     let metallic = obj.metallic;
@@ -74,8 +74,7 @@
     
     let finalRefraction = refractedColor * tintColor * transmission;
     
-    // extraParams is fully repurposed for the clarity pulse (center.xyz, radius) on this
-    // material, so it can't double as an AO term here -- match the GLSL paths' fixed factor.
+    // Fixed ambient factor (0.5) matching the GLSL paths; clarity pulse lives on obj.matParam1.
     let ambient = global.ambientColor.rgb * diffuseColor * 0.5;
     
     let F_refr = F_Schlick(dotNV, F0);

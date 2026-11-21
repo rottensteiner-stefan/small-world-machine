@@ -13,6 +13,24 @@ import type { Texture } from "../../textures/index.js";
 import type { RenderManifest, ShaderDefinition } from "../../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../../renderers/shaders/index.js";
 import { Vector3D } from "../../../math/index.js";
+import { writeLane4, type MaterialLaneTable } from "../MaterialLanes.js";
+
+/**
+ * Typed semantic material-lane table for {@link FrostglassMaterial} (ADR 0027 / ADR 0039).
+ * Keeps generic `u_extraParams` (`[ao, alphaTest, normalScale.x, normalScale.y]`) and `u_liquidParams` untouched.
+ */
+export const FROSTGLASS_LANES = [
+  {
+    semantic: "frostParameters",
+    lane: "u_matParam0",
+    note: "x=blurRadius, y=transmission, z/w=0",
+  },
+  {
+    semantic: "clarityPulse",
+    lane: "u_matParam1",
+    note: "xyz=clarityPulseCenter, w=clarityPulseRadius",
+  },
+] as const satisfies MaterialLaneTable;
 
 export interface FrostglassMaterialOptions {
   color?: Color;
@@ -72,15 +90,15 @@ export class FrostglassMaterial extends AbstractMaterial {
     props["u_metallic"] = this.metallic;
     props["u_roughness"] = this.roughness;
 
-    // We repurpose liquidParams for frostglass parameters
-    (props["u_liquidParams"] as number[])[0] = this.blurRadius;
-    (props["u_liquidParams"] as number[])[1] = this.transmission;
-
-    // We repurpose extraParams for clarity pulse (x, y, z, radius)
-    (props["u_extraParams"] as number[])[0] = this.clarityPulseCenter.x;
-    (props["u_extraParams"] as number[])[1] = this.clarityPulseCenter.y;
-    (props["u_extraParams"] as number[])[2] = this.clarityPulseCenter.z;
-    (props["u_extraParams"] as number[])[3] = this.clarityPulseRadius;
+    writeLane4(this._renderManifest, FROSTGLASS_LANES[0], this.blurRadius, this.transmission, 0, 0);
+    writeLane4(
+      this._renderManifest,
+      FROSTGLASS_LANES[1],
+      this.clarityPulseCenter.x,
+      this.clarityPulseCenter.y,
+      this.clarityPulseCenter.z,
+      this.clarityPulseRadius,
+    );
 
     this._renderManifest.textures["u_normalMap"] = this.normalMap;
 

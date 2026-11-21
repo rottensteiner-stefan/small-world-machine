@@ -67,7 +67,7 @@ import {
   type SpeciesManifest,
   type VegetationPart,
 } from "@small-world-machine/vegetation-extras";
-import { getCameraPath, type CameraPath, type PathName } from "./CameraPaths.js";
+import { getCameraPath, type CameraPath, type CameraSample, type PathName } from "./CameraPaths.js";
 import { Hud, hudFreeMode, type HudGpuTimings, type VegHudStats } from "./Hud.js";
 import { GoldenSession, lookupOwn, parseGoldenSpec } from "../shared/GoldenCapture.js";
 
@@ -475,6 +475,10 @@ export class Showcase extends AbstractShowcase {
   private _path: PathName | undefined = undefined;
   private _pathCam: CameraPath | undefined = undefined;
   private _pathT = 0;
+  private readonly _pathSampleScratch: CameraSample = {
+    position: [0, 0, 0],
+    target: [0, 0, 0],
+  };
   /** `?pausedAt=<t>`: freeze the active path loop at `sample(t)` for stable keyframe/truth shots. */
   private _pausedAt: number | undefined = undefined;
   /** `?truth=1`: ground-truth mode signals `window.__vegTruthReady` after the first frame. */
@@ -823,7 +827,7 @@ export class Showcase extends AbstractShowcase {
   private _applyPathPose(): void {
     const cam = this._pathCam;
     if (cam === undefined) return;
-    const sample = cam.sample(this._pathT);
+    const sample = cam.sampleInto(this._pathT, this._pathSampleScratch);
     this._externalCameraPos.set(sample.position[0], sample.position[1], sample.position[2]);
     this._externalCameraTarget.set(sample.target[0], sample.target[1], sample.target[2]);
   }

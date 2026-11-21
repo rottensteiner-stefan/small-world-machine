@@ -44,9 +44,7 @@ const fileContents = new Map<string, string>(
  * cannot be found by the source scan). Each entry names that consumer; remove the entry as soon as an
  * in-repo showcase or engine call site instantiates the material.
  */
-const EXTERNAL_CONSUMERS: ReadonlyMap<string, string> = new Map([
-  ["FluidSurfaceMaterial", "YAD (github.com/rottensteiner-stefan/yad): wave-animated lava pools"],
-]);
+const EXTERNAL_CONSUMERS: ReadonlyMap<string, string> = new Map();
 
 const materials = Object.values(MaterialType)
   .filter((className) => !EXTERNAL_CONSUMERS.has(className))

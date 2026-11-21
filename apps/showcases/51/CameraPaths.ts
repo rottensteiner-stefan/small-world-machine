@@ -1,15 +1,17 @@
+import { mulberry32 } from "@small-world-machine/engine/utils/SeededRandom.js";
+
 /**
  * Seeded, reproducible camera paths for Showcase 51 (vegetation measurement rig, ADR 0059 step 0).
  *
- * Pure module, intentionally engine-free: no imports, no DOM, no `Math.random`. Every path is a
- * LOOPED sequence of seeded keyframes, interpolated with CENTRIPETAL Catmull-Rom (alpha = 0.5),
- * which is derivative-continuous, has no per-segment self-intersections and no overshoot spikes —
- * exactly what the measurement rig needs (no teleports, bounded to the scatter area, comparable
- * across tiers and across runs).
+ * Every path is a LOOPED sequence of seeded keyframes, interpolated with CENTRIPETAL Catmull-Rom
+ * (alpha = 0.5), which is derivative-continuous, has no per-segment self-intersections and no
+ * overshoot spikes — exactly what the measurement rig needs (no teleports, bounded to the
+ * scatter area, comparable across tiers and across runs).
  *
  * Contract (bind for every consumer, incl. `.agents/scripts/veg-bench.mjs`):
- *   `sample(t)`: `t` is normalized [0, 1] and LOOPED (any `t` incl. outside [0,1]); returns the
- *   camera pose in engine world units, right-handed, +Y up: `position` = eye, `target` = look-at.
+ *   `sample(t)` / `sampleInto(t, out)`: `t` is normalized [0, 1] and LOOPED (any `t` incl. outside
+ *   [0,1]); returns the camera pose in engine world units, right-handed, +Y up: `position` = eye,
+ *   `target` = look-at.
  *
  * Path guarantees (constraints documented per path; enforced by
  * `apps/showcases/51/tests/CameraPaths.test.ts` against the fixed seed):
@@ -40,6 +42,10 @@ export interface CameraPath {
    * Returns a fresh object every call; callers that need the previous sample must copy it.
    */
   sample(t: number): CameraSample;
+  /**
+   * Zero-allocation variant of {@link sample} writing directly into `out` (hot-path frame loop).
+   */
+  sampleInto(t: number, out: CameraSample): CameraSample;
 }
 
 export const CAMERA_PATH_NAMES: readonly PathName[] = ["walk", "flight", "aerial"];
@@ -47,16 +53,8 @@ export const CAMERA_PATH_NAMES: readonly PathName[] = ["walk", "flight", "aerial
 /** Deterministic master seed the paths are derived from. Changing it changes every path. */
 export const PATH_SEED = 0x5eed51; // "seed51" -- fixed; see the unit test for enforced guarantees.
 
-/** Local mulberry32 PRNG (exported for reproducibility checks; deterministic, no `Math.random`). */
-export function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return (): number => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/** Re-exported deterministic PRNG from engine utils (no local duplicate). */
+export { mulberry32 };
 
 interface PathSpec {
   readonly seed: number;
@@ -148,41 +146,41 @@ function weight(c: number, a: number, b: number): number {
   return (c - a) / den;
 }
 
-/**
- * Closed-loop control points for segment `i` of `n` keyframes (indices wrap).
- * Returns four tuples; no temporary arrays are allocated per sample.
- */
-type Control4 = [
-  [number, number, number],
-  [number, number, number],
-  [number, number, number],
-  [number, number, number],
-];
+function mixCoord(c0: number, c1: number, u0: number, u1: number, tv: number): number {
+  const w = weight(tv, u0, u1);
+  return c0 * (1 - w) + c1 * w;
+}
 
-function controlPoints(pts: readonly V3[], i: number): Control4 {
-  const n = pts.length;
-  const im1 = (i - 1 + n) % n;
-  const ip1 = (i + 1) % n;
-  const ip2 = (i + 2) % n;
-  return [pts[im1]!, pts[i]!, pts[ip1]!, pts[ip2]!];
+function evalCatmullRomScalar(
+  a0: number,
+  a1: number,
+  a2: number,
+  a3: number,
+  t0: number,
+  t1: number,
+  t2: number,
+  t3: number,
+  tc: number,
+): number {
+  const A1 = mixCoord(a0, a1, t0, t1, tc);
+  const A2 = mixCoord(a1, a2, t1, t2, tc);
+  const A3 = mixCoord(a2, a3, t2, t3, tc);
+  const B1 = mixCoord(A1, A2, t0, t2, tc);
+  const B2 = mixCoord(A2, A3, t1, t3, tc);
+  return mixCoord(B1, B2, t1, t2, tc);
 }
 
 /**
- * Evaluates the closed-loop centripetal Catmull-Rom at segment `i`, local parameter `s` in [0,1).
- *
- * Reference (B. B. Clark, "Centripetal Catmull-Rom spline"; standard nested evaluation):
- *   t0..t3 are chord-length knot times of the four control points (alpha 0.5), the curve passes
- *   through p1..p2 for tc in [t1, t2], and per-coordinate
- *     A1 = mix(p0, p1, tc, t1..t0)   A2 = mix(p1, p2, tc, t2..t1)   A3 = mix(p2, p3, tc, t3..t2)
- *     B1 = mix(A1, A2, tc, t2..t0)   B2 = mix(A2, A3, tc, t3..t1)
- *     C  = mix(B1, B2, tc, t2..t1).
+ * Evaluates the closed-loop centripetal Catmull-Rom at segment `i`, local parameter `s` in [0,1)
+ * directly into `out` without allocating temporary arrays or closures.
  */
-function sampleSegment(
+function sampleSegmentInto(
   pts: readonly V3[],
   bases: readonly number[][],
   segment: number,
   s: number,
-): V3 {
+  out: V3,
+): void {
   const n = pts.length;
   const i = segment % n;
   const basis = bases[i]!;
@@ -191,25 +189,14 @@ function sampleSegment(
   const t2 = basis[2]!;
   const t3 = basis[3]!;
   const tc = t1 + (t2 - t1) * s;
-  const [p0, p1, p2, p3] = controlPoints(pts, i);
+  const p0 = pts[(i - 1 + n) % n]!;
+  const p1 = pts[i]!;
+  const p2 = pts[(i + 1) % n]!;
+  const p3 = pts[(i + 2) % n]!;
 
-  const mix = (c0: number, c1: number, u0: number, u1: number, tv: number): number =>
-    c0 * (1 - weight(tv, u0, u1)) + c1 * weight(tv, u0, u1);
-
-  const evalCoord = (a0: number, a1: number, a2: number, a3: number): number => {
-    const A1 = mix(a0, a1, t0, t1, tc);
-    const A2 = mix(a1, a2, t1, t2, tc);
-    const A3 = mix(a2, a3, t2, t3, tc);
-    const B1 = mix(A1, A2, t0, t2, tc);
-    const B2 = mix(A2, A3, t1, t3, tc);
-    return mix(B1, B2, t1, t2, tc);
-  };
-
-  return [
-    evalCoord(p0[0], p1[0], p2[0], p3[0]),
-    evalCoord(p0[1], p1[1], p2[1], p3[1]),
-    evalCoord(p0[2], p1[2], p2[2], p3[2]),
-  ];
+  out[0] = evalCatmullRomScalar(p0[0], p1[0], p2[0], p3[0], t0, t1, t2, t3, tc);
+  out[1] = evalCatmullRomScalar(p0[1], p1[1], p2[1], p3[1], t0, t1, t2, t3, tc);
+  out[2] = evalCatmullRomScalar(p0[2], p1[2], p2[2], p3[2], t0, t1, t2, t3, tc);
 }
 
 /** Precomputes the per-segment knot times of a closed loop (static geometry -> static bases). */
@@ -217,7 +204,10 @@ function buildBases(pts: readonly V3[]): readonly number[][] {
   const n = pts.length;
   const bases: number[][] = [];
   for (let i = 0; i < n; i++) {
-    const [p0, p1, p2, p3] = controlPoints(pts, i);
+    const p0 = pts[(i - 1 + n) % n]!;
+    const p1 = pts[i]!;
+    const p2 = pts[(i + 1) % n]!;
+    const p3 = pts[(i + 2) % n]!;
     const d01 = knotDelta(distance(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2]));
     const d12 = knotDelta(distance(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]));
     const d23 = knotDelta(distance(p2[0], p2[1], p2[2], p3[0], p3[1], p3[2]));
@@ -285,7 +275,7 @@ class SeededCameraPath implements CameraPath {
     this._spec = spec;
   }
 
-  public sample(t: number): CameraSample {
+  public sampleInto(t: number, out: CameraSample): CameraSample {
     // Loop the normalized parameter; guard NaN/infinite inputs (treat as 0) so a broken timer can
     // never propagate NaN into the camera pose.
     const wrapped = Number.isFinite(t) && !Number.isNaN(t) ? t - Math.floor(t) : 0;
@@ -298,9 +288,13 @@ class SeededCameraPath implements CameraPath {
       segment = count - 1;
     }
     const local = scaled - segment;
-    const position = sampleSegment(geometry.positions, geometry.positionBases, segment, local);
-    const target = sampleSegment(geometry.targets, geometry.targetBases, segment, local);
-    return { position, target };
+    sampleSegmentInto(geometry.positions, geometry.positionBases, segment, local, out.position);
+    sampleSegmentInto(geometry.targets, geometry.targetBases, segment, local, out.target);
+    return out;
+  }
+
+  public sample(t: number): CameraSample {
+    return this.sampleInto(t, { position: [0, 0, 0], target: [0, 0, 0] });
   }
 }
 

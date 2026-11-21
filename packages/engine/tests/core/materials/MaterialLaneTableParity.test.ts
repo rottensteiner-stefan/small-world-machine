@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest";
 import {
   Color,
   FluidSurfaceMaterial,
+  FrostglassMaterial,
   OceanMaterial,
   OpenWaterMaterial,
   StandardMaterial,
   StylizedWaterMaterial,
 } from "../../../src/index.js";
 import type { RenderManifest } from "../../../src/index.js";
+import { Vector3D } from "../../../src/math/index.js";
 import { writeLane } from "../../../src/core/materials/MaterialLanes.js";
 
 const SHADER_DIR = join(__dirname, "../../../src/core/materials");
@@ -26,6 +28,9 @@ const MIGRATED_SHADER_FILES: ReadonlyArray<[string, string]> = [
   ["Standard.frag.glsl100", join(SHADER_DIR, "surface/shaders/Standard.frag.glsl100")],
   ["Standard.frag.wgsl", join(SHADER_DIR, "surface/shaders/Standard.frag.wgsl")],
   ["Decal.frag.glsl", join(SHADER_DIR, "surface/shaders/Decal.frag.glsl")],
+  ["Frostglass.frag.glsl", join(SHADER_DIR, "glass/shaders/Frostglass.frag.glsl")],
+  ["Frostglass.frag.glsl100", join(SHADER_DIR, "glass/shaders/Frostglass.frag.glsl100")],
+  ["Frostglass.frag.wgsl", join(SHADER_DIR, "glass/shaders/Frostglass.frag.wgsl")],
   ["FluidSurface.frag.glsl", join(SHADER_DIR, "liquid/shaders/FluidSurface.frag.glsl")],
   ["FluidSurface.frag.glsl100", join(SHADER_DIR, "liquid/shaders/FluidSurface.frag.glsl100")],
   ["FluidSurface.frag.wgsl", join(SHADER_DIR, "liquid/shaders/FluidSurface.frag.wgsl")],
@@ -99,6 +104,20 @@ describe("typed material lane tables reach the render manifest", () => {
     const props = mat.getRenderManifest().properties;
     expect(props["u_matParam0"]).toEqual([0.42, 0, 0, 0]);
     expect(props).not.toHaveProperty("u_pad1");
+  });
+
+  it("FrostglassMaterial: blur/transmission ride u_matParam0 and clarity pulse rides u_matParam1", () => {
+    const mat = new FrostglassMaterial({
+      blurRadius: 0.06,
+      transmission: 0.85,
+      clarityPulseCenter: new Vector3D(4, 5, 6),
+      clarityPulseRadius: 3.2,
+    });
+    const props = mat.getRenderManifest().properties;
+    expect(props["u_matParam0"]).toEqual([0.06, 0.85, 0, 0]);
+    expect(props["u_matParam1"]).toEqual([4, 5, 6, 3.2]);
+    expect(props["u_extraParams"]).toEqual([1, 0, 1, 1]);
+    expect(props["u_liquidParams"]).toEqual([0, 0, 0, 0]);
   });
 
   it("FluidSurfaceMaterial: every look parameter rides a dedicated u_matParamN lane", () => {

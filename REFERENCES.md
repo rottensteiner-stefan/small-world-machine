@@ -937,6 +937,24 @@ This document serves to record external sources, algorithms, mathematical deriva
   - Two-phase (`cullMode == 2`): Phase 1 appends prev-frame HZB rejects to `fieldPhase2.indices`; after `DepthPrePassGPU` + current-frame HZB pyramid rebuild (`FieldHzbBuildPassGPU`), `finalizePhase2Args` + `cullInstancesPhase2` re-test rejects against the current-frame HZB (`global.vp`), depth-patch rescued survivors (`depthLoadOp: "load"`, `depthCompare: "less-equal"`), and draw rescued color in `MainRenderPass` (`depthCompare: "equal"`).
 - **Usage:** Eliminates single-phase HZB disocclusion popping on camera movement without CPU readback (`InstanceField` ADR 0059 Step 3 S3) and tightens bounding-footprint coverage for elongated vegetation canopies and `BoundingType.BOX` objects (`HzbOcclusionSystem`).
 
+### Continuous Distance-Dependent LOD (CDLOD) Quadtree Mesh
+
+- **File:** `packages/engine/src/geometry/WaterQuadtree.ts`
+- **Authors/Gurus:** Filip Strugar (2009 / *Journal of Graphics, GPU, and Game Tools* 2010)
+- **Source:** [Continuous Distance-Dependent Level of Detail for Rendering Heightmaps (CDLOD)](https://aggrobird.com/files/cdlod_latest.pdf)
+- **Formulas / Architecture:** Subdivides a root XZ tile hierarchy recursively when the Euclidean distance from `(cameraX, cameraZ)` to a node's nearest 2D XZ point drops below `lodRanges[level]` (`level > 0`), enforcing a strict 2:1 neighbor-level delta across shared tile boundaries and collapsing T-junctions deterministically at coarse-to-fine seams (`WaterQuadtree.buildForCamera()`).
+- **Usage:** Generates watermarked, zero-T-junction, camera-adaptive horizontal surface meshes within `Uint16Array` index limits for `WEB_GL1`/`WEB_GL2`/`WEB_GPU` water planes.
+
+### Octahedral Impostors & Multi-View Atlas Baking
+
+- **File:** `packages/vegetation-extras/src/impostors/OctahedralImpostor.ts`
+- **Authors/Gurus:** Ryan Brucks (Epic Games, *ImpostorBaker*, 2018); Zina H. Cigolle et al. (*JCGT* 2014)
+- **Source:** [ShaderBits — Octahedral Impostors (Ryan Brucks, 2018)](https://shaderbits.com/blog/octahedral-impostors); [A Survey of Efficient Representations for Independent Unit Vectors (JCGT 2014)](https://jcgt.org/published/0003/02/01/)
+- **Formulas / Architecture:**
+  - Hemi-octahedral projection maps the upper hemisphere $y \ge 0$ cleanly onto $[0,1]^2$ via $(u', v') = (x + z, x - z)$, while full-octahedral folds negative-$Y$ directions identically to Cigolle et al. (2014).
+  - Runtime fragment reconstruction finds the enclosing simplex cell corners, computes 3-tap barycentric weights (`sampleOctahedralTriangle`), applies depth-channel parallax correction along the local view ray, and evaluates stored object-space normals against directional/ambient lighting (`OctahedralImpostorMaterial`, ADR 0059 Step 3).
+- **Usage:** Renders mid-distance vegetation trees as single quads across WebGPU, WebGL2, and WebGL1 before handing off to `CanopyShell` (ADR 0059 Step 4).
+
 ## Graphics APIs (WebGPU / WebGL)
 
 ### W3C WebGPU Specification

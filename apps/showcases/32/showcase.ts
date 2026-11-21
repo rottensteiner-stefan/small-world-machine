@@ -14,6 +14,8 @@ import {
   Cube,
   Cylinder,
   DirectionalLight,
+  Disk,
+  FluidSurfaceMaterial,
   Fog,
   FogMode,
   InstancedMesh,
@@ -26,6 +28,9 @@ import {
   RendererType,
   Sphere,
   StandardMaterial,
+  Texture,
+  TextureFilter,
+  TextureWrap,
   Torus,
   Vector3D,
   WeatherEmitter,
@@ -48,6 +53,7 @@ const HOT_ZONE_Z = -16;
  */
 export class Showcase extends AbstractShowcase {
   private _hotZoneLight!: PointLight;
+  private _hotZoneFluid!: FluidSurfaceMaterial;
   private _ashfall!: WeatherEmitter;
   private _groundDust!: WeatherEmitter;
   private _time = 0;
@@ -249,6 +255,37 @@ export class Showcase extends AbstractShowcase {
     this.scene.add(debrisMesh);
   }
 
+  private _createFalloutNoiseTexture(): Texture {
+    const size = 64;
+    const data = new Uint8Array(size * size * 4);
+    const tau = MathUtils.TWO_PI;
+    for (let y = 0; y < size; y++) {
+      const v = (y / size) * tau;
+      for (let x = 0; x < size; x++) {
+        const u = (x / size) * tau;
+        const f1 = Math.sin(u * 2 + Math.cos(v * 2)) * 0.5 + 0.5;
+        const f2 = Math.cos(v * 3 - Math.sin(u * 3)) * 0.5 + 0.5;
+        const f3 = Math.sin(u * 5 + v * 5) * 0.5 + 0.5;
+        const val = Math.round((f1 * 0.5 + f2 * 0.35 + f3 * 0.15) * 255);
+        const idx = (y * size + x) * 4;
+        data[idx] = val;
+        data[idx + 1] = val;
+        data[idx + 2] = val;
+        data[idx + 3] = 255;
+      }
+    }
+    return Texture.fromRawMipChain(
+      { width: size, height: size, mipData: [data] },
+      {
+        addressModeU: TextureWrap.REPEAT,
+        addressModeV: TextureWrap.REPEAT,
+        magFilter: TextureFilter.LINEAR,
+        minFilter: TextureFilter.LINEAR,
+        generateMipmaps: false,
+      },
+    );
+  }
+
   private _buildHotZone(): void {
     const craterMat = new StandardMaterial({
       color: new Color(0.317, 0.317, 0.299),
@@ -279,6 +316,29 @@ export class Showcase extends AbstractShowcase {
     crater.material = craterMat;
     crater.receiveShadow = true;
     this.scene.add(crater);
+
+    this._hotZoneFluid = new FluidSurfaceMaterial({
+      color: new Color(0.12, 0.36, 0.08),
+      edgeColor: new Color(0.62, 0.96, 0.45),
+      emissiveColor: new Color(0.45, 0.95, 0.3),
+      emissiveStrength: 1.35,
+      emissiveMask: 0.7,
+      emissivePulse: 0.35,
+      emissivePulseSpeed: 2.4,
+      flowSpeed: 0.65,
+      distortion: 1.8,
+      viscosity: 8.0,
+      waveAmplitude: 0.015,
+      rimStrength: 0.45,
+      specularStrength: 0.35,
+      absorption: 1.8,
+      noiseMap: this._createFalloutNoiseTexture(),
+    });
+    const hotZonePool = new Object3D("HotZoneCoolantPool");
+    hotZonePool.geometry = new Disk({ radius: 2.55, segments: 32, rings: 8 }).getGeometryData();
+    hotZonePool.position.set(0, 0.21, HOT_ZONE_Z);
+    hotZonePool.material = this._hotZoneFluid;
+    this.scene.add(hotZonePool);
 
     const rimGlow = new Object3D("CraterGlow");
     rimGlow.geometry = new Torus({
@@ -385,6 +445,7 @@ export class Showcase extends AbstractShowcase {
 
   protected override update(deltaTime: number): void {
     this._time += deltaTime;
+    this._hotZoneFluid.time = this._time;
 
     this._ashfall.update(deltaTime);
     this._groundDust.update(deltaTime);

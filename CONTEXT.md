@@ -52,6 +52,10 @@ _Avoid_: Controller — a Controller is a Behavior that drives input; Strategy i
 A CPU-baked top-down sky-occlusion grid (`buildCanopyCoverage`, `FieldCanopy`, `@small-world-machine/vegetation-extras`, ADR 0059 step 6a) computed from tree crown discs to darken ambient light below forest canopies (trees, ground cover, ground `aoMap`) and drive canopy-weighted `ForestLookBlender` transitions.
 _Avoid_: Global ambient dimming, voxel GI — Canopy Coverage is a static 2D top-down crown density map.
 
+**Canopy Shell (`buildCanopyShellGeometry` & `CanopyShellMaterial`)**:
+The far-field O(1)-draw forest envelope beyond the impostor ring (`@small-world-machine/vegetation-extras`, ADR 0059 step 4): builds a terrain-following, vertex-capped (`<= 65k` WebGL1 `Uint16Array`-safe) crown mesh over `CanopyCoverageMap` with procedural dome relief and cross-tier Bayer-dithered distance handover (`handoverStart..handoverEnd`) blending smoothly into horizon fog.
+_Avoid_: Per-tree instances beyond mid-range or WebGPU-only sparse voxel volumes for V1.
+
 **Capture-Frame-Rate (`captureFrameRate`)**:
 A deterministic simulation mode (`SmallWorldMachine.captureFrameRate`) in which the main loop advances gameplay and animation by an exact fixed timestep $\Delta t = 1.0 / \text{captureFrameRate}$ per frame, completely decoupled from wall-clock execution duration (analogous to Unity's `Time.captureFramerate` or Godot's `--fixed-fps`). Makes recordings and screenshot baselines reproducible on the same device and driver; temporal effects (fog history, TAA) additionally need a few warm-up `step()` frames to converge.
 _Avoid_: Fixed Timestep (ambiguous: physics has an internal fixed sub-step, whereas capture frame rate locks the outer engine step and frame clock for recording).
@@ -212,6 +216,10 @@ _Avoid_: Null normal, empty normal.
 The per-pipeline variant that says how a draw treats the Normal-Buffer: `none` (no target), `write`, `masked` (attached but write-masked, e.g. transparents, skybox), `blend` (alpha-blended, used by Decals).
 _Avoid_: Normal pass mode — it selects a pipeline variant, not a render pass.
 
+**Octahedral Impostor (`OctahedralImpostor` & `OctahedralImpostorMaterial`)**:
+A 3-tier billboarded mid-distance tree/prop representation (`@small-world-machine/vegetation-extras`, ADR 0059 step 3): encodes view directions onto a hemi- or full-octahedral grid (`encodeOctahedral` / `decodeOctahedral`) baked into albedo+alpha and normal+depth atlases, blending the 3 enclosing corners (`sampleOctahedralTriangle`) with depth-parallax UV offset, stored normal lighting, alpha cutout, and global wind sway across `WEB_GPU`, `WEB_GL2`, and `WEB_GL1`.
+_Avoid_: Crossed flat billboard cards with popping angle snaps or WebGPU-only voxel LODs for V1.
+
 **Open Ocean (`OceanGridGeometry` & `OceanMaterial`)**:
 The core 3-tier ocean subsystem (`MaterialType.OCEAN`, ADR 0062): combines a radially warped concentric ring mesh (`OceanGridGeometry`, $\le 65{,}535$ vertices reaching the horizon with dense near-field resolution) and an opaque depth-writing `OceanMaterial` rendered in its own `"main:ocean"` sub-phase (reads pre-ocean solid depth for shoreline surf & Beer-Lambert absorption, writes wave surface depth & `g_shadingNormal` for HBAO/VolumetricFog/decals) featuring 5-octave swell displacement faded smoothly toward the horizon, a 3-layer seamless periodic normal cascade, Tokuyoshi Specular AA, Schlick Fresnel IBL + planar reflection, wave-crest backlight SSS, and organic wind whitecaps.
 _Avoid_: Stretching pool-scale `OpenWaterMaterial` on small `Ground` planes for horizon-scale seas.
@@ -223,6 +231,10 @@ _Avoid_: Per-particle `PointLight` allocation, unbounded light counts.
 **Per-Cell Light List**:
 The stored data a Cluster reads at lookup time: an offset+count into a flat list of light indices. The read-side counterpart to Light Coverage, which is the write-side view (from a light's perspective, which cells it reaches).
 _Avoid_: Light Grid (ambiguous with "Cluster grid", the whole 3D structure, rather than one cell's list)
+
+**Performance Governor (`PerformanceGovernor`)**:
+The ADR 0035 Phase 4 runtime closed-loop frame-time regulator (`core/quality/PerformanceGovernor.ts`): filters frame durations via EMA and adjusts `Renderer.setRenderScale()` monotonically within configured `[minScale, maxScale]` bounds with hysteresis cooldowns when `quality.dynamicScale` is active.
+_Avoid_: Frame-to-frame resolution oscillation without hysteresis or bypassing `QualityConfigResolver`.
 
 **Post-Processing (Pipeline)**:
 The fixed, hardcoded pass and uber-shader sequence (`GLPostEffects` / `PostFxChain`): pre-uber passes run `TAA -> MotionTrail -> DepthOfField -> Bloom -> AutoExposure -> HBAO -> LightShafts -> VolumetricFog`, followed by the terminal uber pass (`GravitationalLensing / Filter-Distortion -> Bloom -> LightShafts -> VolumetricFog -> HBAO -> AutoExposure -> Tonemapping -> sRGB Encode -> ColorGrading -> Vignette -> Grain -> Filter-Color-Grading -> Quantize -> Outline -> Flash`). Light Shafts and Volumetric Fog composite in linear HDR before AutoExposure and Tonemapping; Flash is always last as a full-screen overlay.
@@ -303,6 +315,10 @@ _Avoid_: "TAA" unqualified when precision matters — the missing reprojection s
 **Tone Mapping (`ToneMappingMode`)**:
 The single shared HDR-to-display operator table (`TONE_OPERATORS` / `WGSL_TONE_OPERATORS`) consumed identically by the forward pass (`quality.toneMapping`) and the post-processing uber pass (`ToneMappingElement`), with `ToneMappingMode.PBR_NEUTRAL` as `DEFAULT` (alongside `AGX`, `ACES_HILL`, `ACES_HILL_EXPOSURE_BOOST`, `REINHARD_EXTENDED`, `ACES_FILMIC`, `CINEON`, `REINHARD`, `NONE`).
 _Avoid_: Hardcoded per-shader Reinhard curves or the removed string enum `ToneMapping`.
+
+**Water Quadtree (`WaterQuadtree`)**:
+The continuous distance-dependent LOD (CDLOD) XZ quadtree surface mesh (`geometry/WaterQuadtree.ts`): subdivides recursively around `(cameraX, cameraZ)` with strict 2:1 neighbor balance and stitched T-junction seams inside WebGL1 `Uint16Array` index limits.
+_Avoid_: Cracking uniform grids or overflowing 16-bit indices at wide horizontal water extents.
 
 **Weather Heightfield Collider (`WeatherHeightfieldCollider`)**:
 The roof-heightfield collider for weather particles (`@small-world-machine/engine`): a caller-supplied roof oracle baked into a 256×256 (≥2) grid; `roofY(x,z)` is a bilinear-interpolated oracle (clamped to footprint, never NaN); `isCulled` is true exactly when `y < roofY + cullEpsilon` (`@invariant HEIGHTFIELD-ROOF-CULL`). Zero-allocation queries; bake cadence is caller-governed.

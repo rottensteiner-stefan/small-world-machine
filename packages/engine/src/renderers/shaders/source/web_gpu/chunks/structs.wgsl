@@ -97,7 +97,7 @@ struct ObjectUniforms {
     roughness: f32,
 
     // --- 3. Pipeline, Surface Tuning & Animation (128 bytes) ---
-    extraParams: vec4f,   // [ao, time, flowSpeed, noiseScale]
+    extraParams: vec4f,   // [ao, alphaTest, normalScale.x, normalScale.y]
     liquidParams: vec4f,  // [waveFreq, waveAmp, 0, 0]
     thresholds: vec4f,    // [sandToGrass, grassToRock, rockToSnow, softness]
     useEnvMap: f32,

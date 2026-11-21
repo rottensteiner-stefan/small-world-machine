@@ -472,15 +472,16 @@ describe("DeadOptionLint (G3/G9)", () => {
       });
 
       const manifest = mat.getRenderManifest();
-      const liquidParams = manifest.properties["u_liquidParams"] as number[];
-      expect(liquidParams[0]).toBe(0.08);
-      expect(liquidParams[1]).toBe(0.9);
+      const matParam0 = manifest.properties["u_matParam0"] as number[];
+      expect(matParam0[0]).toBe(0.08);
+      expect(matParam0[1]).toBe(0.9);
 
-      const extraParams = manifest.properties["u_extraParams"] as number[];
-      expect(extraParams[0]).toBe(1);
-      expect(extraParams[1]).toBe(2);
-      expect(extraParams[2]).toBe(3);
-      expect(extraParams[3]).toBe(2.5);
+      const matParam1 = manifest.properties["u_matParam1"] as number[];
+      expect(matParam1[0]).toBe(1);
+      expect(matParam1[1]).toBe(2);
+      expect(matParam1[2]).toBe(3);
+      expect(matParam1[3]).toBe(2.5);
+      expect(manifest.properties["u_extraParams"]).toEqual([1, 0, 1, 1]);
     });
 
     it("RetroScreenMaterial consumes all options", () => {

@@ -5,15 +5,16 @@
 
 uniform float u_metallic;
 uniform float u_roughness;
-uniform vec4 u_liquidParams;
+uniform vec4 u_matParam0;
+uniform vec4 u_matParam1;
 uniform sampler2D u_opaqueMap;
 
 void main() {
-    float blurRadius = u_liquidParams.x;
-    float transmission = u_liquidParams.y;
-    
-    vec3 pulseCenter = u_extraParams.xyz;
-    float pulseRadius = u_extraParams.w;
+    float blurRadius = u_matParam0.x;
+    float transmission = u_matParam0.y;
+
+    vec3 pulseCenter = u_matParam1.xyz;
+    float pulseRadius = u_matParam1.w;
     
     vec3 tintColor = sRGBToLinear(u_color.rgb);
     float metallic = u_metallic;
