@@ -1,5 +1,6 @@
 #version 300 es
 precision mediump float;
+precision mediump sampler3D;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -52,6 +53,11 @@ uniform float u_lensingRingGlow;
 uniform int u_flashEnabled;
 uniform vec3 u_flashColor;
 uniform float u_flashIntensity;
+
+uniform sampler3D u_lutTexture;
+uniform int u_lutGradingEnabled;
+uniform float u_lutSize;
+uniform float u_lutIntensity;
 
 uniform int u_filterMode;
 
@@ -292,6 +298,13 @@ void main() {
 
     // Gamma correction
     vec3 srgb = linearToSRGB(tonemapped, u_gamma);
+
+    // 3D LUT Color Grading
+    if (u_lutGradingEnabled == 1) {
+        vec3 lutCoord = clamp(srgb, 0.0, 1.0) * ((u_lutSize - 1.0) / u_lutSize) + (0.5 / u_lutSize);
+        vec3 lutColor = texture(u_lutTexture, lutCoord).rgb;
+        srgb = mix(srgb, lutColor, u_lutIntensity);
+    }
 
     // Apply Vignette
     if (u_vignetteEnabled == 1) {

@@ -31,6 +31,7 @@ uniform float u_quantizeSteps;
 uniform int u_flashEnabled;
 uniform vec3 u_flashColor;
 uniform float u_flashIntensity;
+uniform int u_lutGradingEnabled;
 
 // Random noise
 float random(vec2 st) {

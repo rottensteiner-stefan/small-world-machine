@@ -15,12 +15,14 @@ import type {
   GravitationalLensingElement,
   HbaoElement,
   LightShaftsElement,
+  LutGradingElement,
   OutlineElement,
   QuantizeElement,
   ToneMappingElement,
   VignetteElement,
   VolumetricFogElement,
 } from "../elements/index.js";
+import type { Lut3D } from "../../../core/textures/Lut3D.js";
 import type { GLPostEffectPassContext } from "./GLPostEffectPass.js";
 import { requireGlObject } from "../../gl/requireGlObject.js";
 import { Color } from "../../../core/colors/index.js";
@@ -75,6 +77,10 @@ export class PostProcessPassGL {
   private _uLensingRingGlow: WebGLUniformLocation | null = null;
   private _uFlashColor: WebGLUniformLocation | null = null;
   private _uFlashIntensity: WebGLUniformLocation | null = null;
+  private _uLutTexture: WebGLUniformLocation | null = null;
+  private _uLutSize: WebGLUniformLocation | null = null;
+  private _uLutIntensity: WebGLUniformLocation | null = null;
+  private readonly _lutTextures: Map<Lut3D, WebGLTexture> = new Map();
 
   private _aPos: number = -1;
   private readonly _gl: WebGLRenderingContext | WebGL2RenderingContext;
@@ -119,6 +125,7 @@ export class PostProcessPassGL {
     const volFog = group.get<VolumetricFogElement>(PostProcessingEffectType.VOLUMETRIC_FOG);
     const outline = group.get<OutlineElement>(PostProcessingEffectType.OUTLINE);
     const flash = group.get<FlashElement>(PostProcessingEffectType.FLASH);
+    const lut = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
 
     // Only structural flags/modes trigger a shader rebuild (matching WebGPU).
     // Continuous tuning values (exposure, gamma, vignette darkness/offset, grain intensity,
@@ -126,6 +133,7 @@ export class PostProcessPassGL {
     // quantize steps, outline thickness/color, flash color/intensity) are set via uniforms per
     // frame.
     const tmOn = tm !== undefined && tm.enabled;
+    const lutOn = lut !== undefined && lut.enabled && lut.lut !== null && this._isWebGL2;
     return (
       (group.filterMode & 0xf) |
       ((tmOn ? 1 : 0) << 4) |
@@ -139,7 +147,8 @@ export class PostProcessPassGL {
       ((shafts && shafts.enabled && this._hasShaftsTexture ? 1 : 0) << 15) |
       ((volFog && volFog.enabled && this._hasFogTexture ? 1 : 0) << 16) |
       ((outline && outline.enabled ? 1 : 0) << 17) |
-      ((flash && flash.enabled ? 1 : 0) << 18)
+      ((flash && flash.enabled ? 1 : 0) << 18) |
+      ((lutOn ? 1 : 0) << 19)
     );
   }
 
@@ -187,6 +196,8 @@ export class PostProcessPassGL {
     const volFogEnabled = volFog && volFog.enabled && this._hasFogTexture;
     const outlineEnabled = outline && outline.enabled;
     const flashEnabled = flash && flash.enabled;
+    const lut = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
+    const lutEnabled = this._isWebGL2 && lut !== undefined && lut.enabled && lut.lut !== null;
 
     // Inject ONLY structural feature flags as compile-time macros
     frag = frag.replace(
@@ -209,6 +220,10 @@ export class PostProcessPassGL {
     frag = frag.replace(
       "uniform int u_colorGradingEnabled;",
       `#define u_colorGradingEnabled ${gradeEnabled ? 1 : 0}`,
+    );
+    frag = frag.replace(
+      "uniform int u_lutGradingEnabled;",
+      `#define u_lutGradingEnabled ${lutEnabled ? 1 : 0}`,
     );
     frag = frag.replace(
       "uniform int u_quantizeEnabled;",
@@ -247,6 +262,9 @@ export class PostProcessPassGL {
     this._uLightShaftsIntensity = gl.getUniformLocation(p, "u_lightShaftsIntensity");
     this._uVolumetricFogTexture = gl.getUniformLocation(p, "u_volumetricFogTexture");
     this._uAutoExposureTexture = gl.getUniformLocation(p, "u_autoExposureTexture");
+    this._uLutTexture = gl.getUniformLocation(p, "u_lutTexture");
+    this._uLutSize = gl.getUniformLocation(p, "u_lutSize");
+    this._uLutIntensity = gl.getUniformLocation(p, "u_lutIntensity");
     this._uTime = gl.getUniformLocation(p, "u_time");
 
     this._uBloomIntensity = gl.getUniformLocation(p, "u_bloomIntensity");
@@ -372,6 +390,17 @@ export class PostProcessPassGL {
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, ctx.autoExposureTexture ?? this._white());
       gl.uniform1i(this._uAutoExposureTexture, 5);
+    }
+
+    // 3D LUT Color Grading (WebGL2 only)
+    const lut = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
+    if (this._isWebGL2 && this._uLutTexture && lut && lut.enabled && lut.lut) {
+      const glTex = this._ensureLutGpu(gl as WebGL2RenderingContext, lut.lut);
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture((gl as WebGL2RenderingContext).TEXTURE_3D, glTex);
+      gl.uniform1i(this._uLutTexture, 6);
+      if (this._uLutSize) gl.uniform1f(this._uLutSize, lut.lut.size);
+      if (this._uLutIntensity) gl.uniform1f(this._uLutIntensity, lut.intensity);
     }
 
     // Continuous Uniform Updates
@@ -518,11 +547,50 @@ export class PostProcessPassGL {
     return texture;
   }
 
+  private _ensureLutGpu(gl2: WebGL2RenderingContext, lut: Lut3D): WebGLTexture {
+    let glTex = this._lutTextures.get(lut);
+    if (!glTex) {
+      glTex = requireGlObject(gl2.createTexture(), "3D LUT texture");
+      this._lutTextures.set(lut, glTex);
+      lut.needsUpdate = true;
+    }
+    if (lut.needsUpdate) {
+      gl2.bindTexture(gl2.TEXTURE_3D, glTex);
+      const bytes = new Uint8Array(lut.data.length);
+      for (let i = 0; i < lut.data.length; i++) {
+        bytes[i] = Math.round(Math.min(Math.max(lut.data[i]!, 0), 1) * 255);
+      }
+      gl2.texImage3D(
+        gl2.TEXTURE_3D,
+        0,
+        gl2.RGBA8,
+        lut.size,
+        lut.size,
+        lut.size,
+        0,
+        gl2.RGBA,
+        gl2.UNSIGNED_BYTE,
+        bytes,
+      );
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_MIN_FILTER, gl2.LINEAR);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_MAG_FILTER, gl2.LINEAR);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_S, gl2.CLAMP_TO_EDGE);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_T, gl2.CLAMP_TO_EDGE);
+      gl2.texParameteri(gl2.TEXTURE_3D, gl2.TEXTURE_WRAP_R, gl2.CLAMP_TO_EDGE);
+      lut.needsUpdate = false;
+    }
+    return glTex;
+  }
+
   /** Releases GPU resources (contract shape: `destroy(): void`, ADR 0037). */
   public destroy(): void {
     const gl = this._gl;
     if (this._whiteTexture) gl.deleteTexture(this._whiteTexture);
     this._whiteTexture = undefined;
+    for (const tex of this._lutTextures.values()) {
+      gl.deleteTexture(tex);
+    }
+    this._lutTextures.clear();
     if (this._prog) gl.deleteProgram(this._prog);
     if (this._vb) gl.deleteBuffer(this._vb);
     if (this._isWebGL2 && this._vao) {

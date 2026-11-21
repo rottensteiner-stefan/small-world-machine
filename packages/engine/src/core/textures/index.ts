@@ -6,3 +6,4 @@ export * from "./VolumetricTexture.js";
 export * from "./RenderTarget.js";
 export * from "./RenderTargetCube.js";
 export * from "./RampLUT.js";
+export * from "./Lut3D.js";

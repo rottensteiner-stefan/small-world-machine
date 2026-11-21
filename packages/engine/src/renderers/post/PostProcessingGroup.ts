@@ -16,6 +16,7 @@ import {
   VolumetricFogElement,
   DepthOfFieldElement,
   AutoExposureElement,
+  LutGradingElement,
 } from "./elements/index.js";
 import { PostProcessingEffectType } from "../../enums/index.js";
 import { Vector3D } from "../../math/index.js";
@@ -70,6 +71,7 @@ export class PostProcessingGroup {
     this.add(new VolumetricFogElement());
     this.add(new DepthOfFieldElement());
     this.add(new AutoExposureElement());
+    this.add(new LutGradingElement());
   }
 
   /**

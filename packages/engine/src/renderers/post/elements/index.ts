@@ -14,3 +14,4 @@ export * from "./LightShaftsElement.js";
 export * from "./VolumetricFogElement.js";
 export * from "./DepthOfFieldElement.js";
 export * from "./AutoExposureElement.js";
+export * from "./LutGradingElement.js";

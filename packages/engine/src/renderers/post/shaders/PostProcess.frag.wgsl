@@ -6,6 +6,7 @@
 @group(0) @binding(6) var volumetricFogTexture: texture_2d<f32>;
 // Adapted exposure multiplier in .r (ADR 0061); a white 1x1 stand-in while auto exposure is off.
 @group(0) @binding(7) var autoExposureTexture: texture_2d<f32>;
+@group(0) @binding(8) var lutTexture: texture_3d<f32>;
 
 // Structural constants (overwritten at compilation time) -- these gate real code paths (branch
 // taken / sample count), unlike the continuous tuning values below, which live in `dyn` instead
@@ -13,6 +14,8 @@
 const u_toneMappingMode: u32 = 0u;
 const u_toneMappingWhite: f32 = 4.0;
 const u_colorGradingEnabled: u32 = 0u;
+const u_lutGradingEnabled: u32 = 0u;
+const u_lutSize: f32 = 32.0;
 const u_vignetteEnabled: u32 = 0u;
 const u_grainEnabled: u32 = 0u;
 const u_bloomEnabled: u32 = 0u;
@@ -316,6 +319,13 @@ fn fs_main(@location(0) uv: vec2f, @builtin(position) coord: vec4f) -> @location
         graded = graded * u_gainColor + u_liftColor * (1.0 - graded);
         graded = pow(clamp(graded, vec3f(0.0), vec3f(1.0)), 1.0 / max(u_gammaColor, vec3f(0.01)));
         srgb = linearToSRGB(graded, u_inverseGamma);
+    }
+
+    // 3D LUT Color Grading
+    if (1u == u_lutGradingEnabled) {
+        let lutCoord = clamp(srgb, vec3f(0.0), vec3f(1.0)) * ((u_lutSize - 1.0) / u_lutSize) + (0.5 / u_lutSize);
+        let lutColor = textureSample(lutTexture, hdrSampler, lutCoord).rgb;
+        srgb = mix(srgb, lutColor, dyn.shaftsParams.z);
     }
 
     // Apply Vignette if enabled

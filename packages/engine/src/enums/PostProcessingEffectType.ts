@@ -18,4 +18,5 @@ export enum PostProcessingEffectType {
   VOLUMETRIC_FOG = "VolumetricFog",
   DEPTH_OF_FIELD = "DepthOfField",
   AUTO_EXPOSURE = "AutoExposure",
+  LUT_GRADING = "LutGrading",
 }

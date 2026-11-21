@@ -13,6 +13,8 @@ import {
 import type { PostEffectBundle } from "../post/PostEffectBundle.js";
 import { createEmptyBundle, decodeBundleInto } from "../post/PostEffectBundle.js";
 import { PostEffectPipelineGate } from "../post/PostEffectPipelineGate.js";
+import type { Lut3D } from "../../core/textures/Lut3D.js";
+import type { LutGradingElement } from "../post/elements/LutGradingElement.js";
 
 /**
  * Full-screen post-processing pass (Uber-Shader).
@@ -53,6 +55,7 @@ export class PostProcessPass implements RenderPass {
   private _builtShaftsTextureView?: GPUTextureView;
   private _builtVolumetricFogTextureView?: GPUTextureView;
   private _builtAutoExposureView?: GPUTextureView;
+  private _builtLutView?: GPUTextureView;
   /** Signature of the most recently REQUESTED pipeline build (may still be validating). */
   private _requestedSignature?: string;
   /** Monotonic build id: a validation verdict for a superseded build is dropped. */
@@ -63,6 +66,11 @@ export class PostProcessPass implements RenderPass {
   /** Neutral 1x1 (0,0,0,1) stand-in for fog/shafts/bloom: additive 0 radiance, fog transmittance 1. */
   private _blackTexture: GPUTexture | undefined = undefined;
   private _blackTextureView: GPUTextureView | undefined = undefined;
+  /** Neutral 1x1x1 identity 3D LUT stand-in for the post pass. */
+  private _identityLutTexture?: GPUTexture;
+  private _identityLutView?: GPUTextureView;
+  private readonly _lutTextures: Map<Lut3D, { texture: GPUTexture; view: GPUTextureView }> =
+    new Map();
 
   constructor() {
     // Identity baseline. The group registers every effect by default, so element slices are
@@ -91,6 +99,7 @@ export class PostProcessPass implements RenderPass {
       e.volFog ? e.volFog.structuralKey() : "0",
       e.outline ? e.outline.structuralKey() : "0",
       e.flash ? e.flash.structuralKey() : "0",
+      e.lutGrading ? e.lutGrading.structuralKey() : "0|0",
     ].join("|");
   }
 
@@ -131,6 +140,11 @@ export class PostProcessPass implements RenderPass {
         { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
         { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "float" } },
+        {
+          binding: 8,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: "float", viewDimension: "3d" },
+        },
       ],
     });
 
@@ -158,6 +172,8 @@ export class PostProcessPass implements RenderPass {
     const outlineEnabled = e.outline && e.outline.enabled;
     const flashEnabled = e.flash && e.flash.enabled;
     const volFogEnabled = e.volFog && e.volFog.enabled;
+    const lutEnabled = e.lutGrading && e.lutGrading.enabled && e.lutGrading.lut !== null;
+    const lutSize = e.lutGrading && e.lutGrading.lut ? e.lutGrading.lut.size : 32;
 
     // Inject only STRUCTURAL parameters as WGSL constants -- these gate real code paths (branch
     // taken, sample count), so changing them legitimately needs a rebuild. Continuous tuning
@@ -188,6 +204,11 @@ export class PostProcessPass implements RenderPass {
         "const u_colorGradingEnabled: u32 = 0u;",
         `const u_colorGradingEnabled: u32 = ${gradeEnabled ? 1 : 0}u;`,
       ],
+      [
+        "const u_lutGradingEnabled: u32 = 0u;",
+        `const u_lutGradingEnabled: u32 = ${lutEnabled ? 1 : 0}u;`,
+      ],
+      ["const u_lutSize: f32 = 32.0;", `const u_lutSize: f32 = ${lutSize.toFixed(1)};`],
       ["const u_bloomEnabled: u32 = 0u;", `const u_bloomEnabled: u32 = ${bloomEnabled ? 1 : 0}u;`],
       [
         "const u_quantizeEnabled: u32 = 0u;",
@@ -253,6 +274,7 @@ export class PostProcessPass implements RenderPass {
     shaftsActiveView: GPUTextureView,
     volumetricFogActiveView: GPUTextureView,
     autoExposureView: GPUTextureView,
+    lutActiveView: GPUTextureView,
   ): void {
     const device = renderer.gpuDevice!;
     this._ensureResources(device);
@@ -268,8 +290,64 @@ export class PostProcessPass implements RenderPass {
         { binding: 5, resource: shaftsActiveView },
         { binding: 6, resource: volumetricFogActiveView },
         { binding: 7, resource: autoExposureView },
+        { binding: 8, resource: lutActiveView },
       ],
     });
+  }
+
+  /** Lazily creates the 1x1x1 identity fallback 3D texture owned by this pass. */
+  private _identityLut(device: GPUDevice): GPUTextureView {
+    if (!this._identityLutView) {
+      this._identityLutTexture = device.createTexture({
+        size: [1, 1, 1],
+        dimension: "3d",
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      device.queue.writeTexture(
+        { texture: this._identityLutTexture },
+        new Uint8Array([128, 128, 128, 255]),
+        { bytesPerRow: 4, rowsPerImage: 1 },
+        [1, 1, 1],
+      );
+      this._identityLutView = this._identityLutTexture.createView({ dimension: "3d" });
+    }
+    return this._identityLutView;
+  }
+
+  /** Resolves the 3D LUT GPU texture view, uploading/updating if needed. */
+  private _lutView(device: GPUDevice, elem: LutGradingElement | undefined): GPUTextureView {
+    if (!elem || !elem.enabled || !elem.lut) {
+      return this._identityLut(device);
+    }
+    const lut = elem.lut;
+    let entry = this._lutTextures.get(lut);
+    if (!entry) {
+      const texture = device.createTexture({
+        size: [lut.size, lut.size, lut.size],
+        dimension: "3d",
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      const view = texture.createView({ dimension: "3d" });
+      entry = { texture, view };
+      this._lutTextures.set(lut, entry);
+      lut.needsUpdate = true;
+    }
+    if (lut.needsUpdate) {
+      const bytes = new Uint8Array(lut.data.length);
+      for (let i = 0; i < lut.data.length; i++) {
+        bytes[i] = Math.round(Math.min(Math.max(lut.data[i]!, 0), 1) * 255);
+      }
+      device.queue.writeTexture(
+        { texture: entry.texture },
+        bytes,
+        { bytesPerRow: lut.size * 4, rowsPerImage: lut.size },
+        [lut.size, lut.size, lut.size],
+      );
+      lut.needsUpdate = false;
+    }
+    return entry.view;
   }
 
   /** Lazily creates the 1x1 (0,0,0,1) fallback texture owned by this pass. */
@@ -362,6 +440,7 @@ export class PostProcessPass implements RenderPass {
     );
     // Multiplicative like AO: white (1.0) is the neutral exposure while auto exposure is off.
     const autoExposureView = renderer.autoExposureView ?? renderer.whiteTextureView;
+    const lutActiveView = this._lutView(device, e.lutGrading);
 
     // Rebuild bind group ONLY if the bound texture views changed
     if (
@@ -371,7 +450,8 @@ export class PostProcessPass implements RenderPass {
       this._builtHbaoTextureView !== hbaoActiveView ||
       this._builtShaftsTextureView !== shaftsActiveView ||
       this._builtVolumetricFogTextureView !== volFogActiveView ||
-      this._builtAutoExposureView !== autoExposureView
+      this._builtAutoExposureView !== autoExposureView ||
+      this._builtLutView !== lutActiveView
     ) {
       this._buildBindGroup(
         renderer,
@@ -381,6 +461,7 @@ export class PostProcessPass implements RenderPass {
         shaftsActiveView,
         volFogActiveView,
         autoExposureView,
+        lutActiveView,
       );
       this._builtTextureView = colorView;
       this._builtBloomTextureView = bloomActiveView;
@@ -388,6 +469,7 @@ export class PostProcessPass implements RenderPass {
       this._builtShaftsTextureView = shaftsActiveView;
       this._builtVolumetricFogTextureView = volFogActiveView;
       this._builtAutoExposureView = autoExposureView;
+      this._builtLutView = lutActiveView;
     }
 
     // Write the continuous tuning values every frame, independent of the rebuild guard above --
@@ -414,6 +496,7 @@ export class PostProcessPass implements RenderPass {
     e.lensing?.packUniforms?.(d, 0);
     e.flash?.packUniforms?.(d, 0);
     e.shafts?.packUniforms?.(d, 0);
+    e.lutGrading?.packUniforms?.(d, 0);
 
     renderer.gpuDevice!.queue.writeBuffer(this._uniformBuffer!, 0, d);
 

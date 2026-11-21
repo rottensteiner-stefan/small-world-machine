@@ -8,6 +8,7 @@ import type {
   GravitationalLensingElement,
   HbaoElement,
   LightShaftsElement,
+  LutGradingElement,
   OutlineElement,
   QuantizeElement,
   ToneMappingElement,
@@ -34,6 +35,7 @@ export interface PostEffectBundle {
   outline: OutlineElement | undefined;
   flash: FlashElement | undefined;
   lensing: GravitationalLensingElement | undefined;
+  lutGrading: LutGradingElement | undefined;
 }
 
 /** An empty bundle, the reusable target of {@link decodeBundleInto}. */
@@ -51,6 +53,7 @@ export function createEmptyBundle(): PostEffectBundle {
     outline: undefined,
     flash: undefined,
     lensing: undefined,
+    lutGrading: undefined,
   };
 }
 
@@ -73,6 +76,7 @@ export function decodeBundleInto(
   out.lensing = group.get<GravitationalLensingElement>(
     PostProcessingEffectType.GRAVITATIONAL_LENSING,
   );
+  out.lutGrading = group.get<LutGradingElement>(PostProcessingEffectType.LUT_GRADING);
   return out;
 }
 
