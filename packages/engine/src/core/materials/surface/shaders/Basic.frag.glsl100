@@ -8,9 +8,11 @@ void main() {
   albedo *= v_instanceColor.rgb;
   finalAlpha *= v_instanceColor.a;
 #endif
+#ifdef USE_ALPHA_TEST
   if (finalAlpha < u_extraParams.y) {
     discard;
   }
+#endif
   gl_FragColor = vec4(albedo, finalAlpha);
   [FOG_CALC]
 }

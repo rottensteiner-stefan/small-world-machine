@@ -3,6 +3,12 @@
 [FOG_DEFS]
 void main() {
   vec4 texColor = texture(u_diffuseMap, v_uv);
+  float finalAlpha = u_color.a * texColor.a;
+#ifdef USE_ALPHA_TEST
+  if (finalAlpha < u_extraParams.y) {
+    discard;
+  }
+#endif
 #ifdef USE_SPECULAR_MAP
   float specMapValue = texture(u_specularMap, v_uv).r;
 #else
@@ -41,11 +47,6 @@ void main() {
 
   // Gamma Correction
   finalColor = linearToSRGB(finalColor);
-
-  float finalAlpha = u_color.a * texColor.a;
-  if (finalAlpha < u_extraParams.y) {
-    discard;
-  }
 
   fragColor = vec4(finalColor, finalAlpha);
   [FOG_CALC]

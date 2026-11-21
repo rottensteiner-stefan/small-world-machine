@@ -708,6 +708,7 @@ export class StandardMaterial extends AbstractMaterial {
     if (this.aoMap) flags.push(ShaderFlag.AO_MAP);
     if (this.emissiveMap) flags.push(ShaderFlag.EMISSIVE_MAP);
     if (this.alphaMap) flags.push(ShaderFlag.ALPHA_MAP);
+    if (this.alphaTest > 0) flags.push(ShaderFlag.ALPHA_TEST);
     if (this.envMap) flags.push(ShaderFlag.ENV_MAP);
     if (this.normalMap) flags.push(ShaderFlag.NORMAL_MAP);
     if (this.reflectionMap) flags.push(ShaderFlag.REFLECTION_MAP);

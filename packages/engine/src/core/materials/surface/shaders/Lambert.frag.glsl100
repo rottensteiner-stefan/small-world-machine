@@ -10,9 +10,11 @@ void main() {
   vec3 N = normalize(v_tbn * rawNormal);
 
   float finalAlpha = u_color.a * texColor.a;
+#ifdef USE_ALPHA_TEST
   if (finalAlpha < u_extraParams.y) {
     discard;
   }
+#endif
 
   [LIGHT_CALC]
 

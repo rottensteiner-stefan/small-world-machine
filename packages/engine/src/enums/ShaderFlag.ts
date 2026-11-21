@@ -22,6 +22,8 @@ export const ShaderFlag = {
   EMISSIVE_MAP: "USE_EMISSIVE_MAP",
   /** Alpha map present. */
   ALPHA_MAP: "USE_ALPHA_MAP",
+  /** Alpha-test cutout active (alphaTest > 0). When absent, shaders omit the cutout discard for full hardware early-Z. */
+  ALPHA_TEST: "USE_ALPHA_TEST",
   /** Per-material environment cube map present. */
   ENV_MAP: "USE_ENV_MAP",
   /** Normal map present. */

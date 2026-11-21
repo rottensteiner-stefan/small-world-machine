@@ -3,6 +3,12 @@
     // transformed i.uv as the diffuse map. Dividing by texRepeat only undid the scale and broke under
     // rotation/offset.
     let diffuseTex = textureSample(u_diffuseMap, s, i.uv);
+    let finalAlpha = obj.color.a * diffuseTex.a * textureSample(u_alphaMap, s, i.uv).r;
+    if (USE_ALPHA_TEST) {
+        if (finalAlpha < obj.extraParams.y) {
+            discard;
+        }
+    }
     let albedo = sRGBToLinear(diffuseTex.rgb) * sRGBToLinear(obj.color.rgb);
     let metallic = obj.metallic * textureSample(u_metallicMap, s, i.uv).b;
     var roughness = clamp(obj.roughness * textureSample(u_roughnessMap, s, i.uv).g, 0.05, 1.0);
@@ -42,11 +48,7 @@
     // KHR_materials_transmission/volume is resolved inside the PBR lighting chunk (USE_TRANSMISSION),
     // mirroring the WebGL2 light_calc_pbr chunk: the BTDF replaces the diffuse lobe there.
 #endif
-    let finalAlpha = obj.color.a * diffuseTex.a * textureSample(u_alphaMap, s, i.uv).r;
-    if (finalAlpha < obj.extraParams.y) {
-        discard;
-    }
-    
+
     // Exposure
     color *= global.exposure;
 

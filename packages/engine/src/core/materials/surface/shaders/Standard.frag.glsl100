@@ -70,9 +70,11 @@ void main() {
     vec4 texColor = texture2D(u_diffuseMap, v_uv);
     texColor.a *= texture2D(u_alphaMap, v_uv).r;
 
+#ifdef USE_ALPHA_TEST
     if (texColor.a < u_extraParams.y) {
         discard;
     }
+#endif
 
     vec3 albedo = sRGBToLinear(texColor.rgb) * sRGBToLinear(u_color.rgb);
     

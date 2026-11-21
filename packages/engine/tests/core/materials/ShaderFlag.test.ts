@@ -83,6 +83,12 @@ describe("ShaderFlag", () => {
 
     expect([...(material.getRenderManifest().flags ?? [])]).toEqual([ShaderFlag.METALLIC_MAP]);
   });
+
+  it("StandardMaterial with alphaTest > 0 pushes ALPHA_TEST", () => {
+    const material = new StandardMaterial({ alphaTest: 0.5 });
+
+    expect([...(material.getRenderManifest().flags ?? [])]).toEqual([ShaderFlag.ALPHA_TEST]);
+  });
 });
 
 describe("no magic flag strings", () => {

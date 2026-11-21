@@ -126,6 +126,7 @@ export class PhongMaterial extends AbstractMaterial {
     flags.length = 0;
     if (this.normalMap) flags.push(ShaderFlag.NORMAL_MAP);
     if (this.specularMap) flags.push(ShaderFlag.SPECULAR_MAP);
+    if (this.alphaTest > 0) flags.push(ShaderFlag.ALPHA_TEST);
     this._commitFlags();
 
     if (this._renderManifest.state) {

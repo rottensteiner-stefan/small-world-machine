@@ -1,5 +1,11 @@
 @fragment fn fs(i: Out) -> @location(0) vec4f {
     let texCol = textureSample(u_diffuseMap, s, i.uv);
+    let finalAlpha = obj.color.a * texCol.a;
+    if (USE_ALPHA_TEST) {
+        if (finalAlpha < obj.extraParams.y) {
+            discard;
+        }
+    }
     let specMap = textureSample(u_specularMap, s, i.uv).r;
 
     [WGSL_LIGHTING]
@@ -22,10 +28,6 @@
     // re-reads it in linear space via sRGBToLinear before tonemapping. No double-correction.
     color = linearToSRGB(color);
 
-    let finalAlpha = obj.color.a * texCol.a;
-    if (finalAlpha < obj.extraParams.y) {
-        discard;
-    }
     [WGSL_FOG_CALC]
     return vec4f(color, finalAlpha);
 }

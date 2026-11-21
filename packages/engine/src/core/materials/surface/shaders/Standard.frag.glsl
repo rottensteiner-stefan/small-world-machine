@@ -130,9 +130,11 @@ void main() {
     texColor.a *= texture(u_alphaMap, v_uv).r;
 #endif
 
+#ifdef USE_ALPHA_TEST
     if (texColor.a < u_extraParams.y) {
         discard;
     }
+#endif
 
     vec3 albedo = sRGBToLinear(texColor.rgb) * sRGBToLinear(u_color.rgb);
     

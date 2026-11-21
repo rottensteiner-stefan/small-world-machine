@@ -3,6 +3,12 @@
 [FOG_DEFS]
 void main() {
   vec4 texColor = texture2D(u_diffuseMap, v_uv);
+  float finalAlpha = u_color.a * texColor.a;
+#ifdef USE_ALPHA_TEST
+  if (finalAlpha < u_extraParams.y) {
+    discard;
+  }
+#endif
   float specMapValue = texture2D(u_specularMap, v_uv).r;
   vec3 normalMapValue = texture2D(u_normalMap, v_uv).rgb;
   
@@ -14,11 +20,6 @@ void main() {
 
   vec3 albedo = texColor.rgb * u_color.rgb;
   vec3 finalColor = finalLight * albedo + specular * u_specColor.rgb * specMapValue;
-  
-  float finalAlpha = u_color.a * texColor.a;
-  if (finalAlpha < u_extraParams.y) {
-    discard;
-  }
 
   gl_FragColor = vec4(finalColor, finalAlpha);
   [FOG_CALC]

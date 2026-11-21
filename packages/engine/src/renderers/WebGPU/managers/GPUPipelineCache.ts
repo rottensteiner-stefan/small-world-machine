@@ -454,6 +454,7 @@ const ALWAYS_DECLARED_FLAGS: ReadonlySet<string> = new Set<string>([
   ShaderFlag.INSTANCE_COLOR,
   ShaderFlag.DECAL_GRADIENTS,
   ShaderFlag.DECAL_UNLIT,
+  ShaderFlag.ALPHA_TEST,
 ]);
 
 /** WGSL module-scope constant for a shader flag, declared either way so fragments can `select` on it. */
@@ -965,6 +966,10 @@ export class GPUPipelineCache {
       wgslConstants += declareWgslFlag(
         ShaderFlag.DECAL_GRADIENTS,
         flags.includes(ShaderFlag.DECAL_GRADIENTS),
+      );
+      wgslConstants += declareWgslFlag(
+        ShaderFlag.ALPHA_TEST,
+        flags.includes(ShaderFlag.ALPHA_TEST),
       );
       // Inject any arbitrary user/material flags (e.g. STYLE_TOON, STYLE_BOLD, STYLE_SPARKLE, etc.)
       for (const flag of flags) {

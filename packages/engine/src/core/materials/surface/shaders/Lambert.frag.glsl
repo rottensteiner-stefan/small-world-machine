@@ -4,6 +4,12 @@
 
 void main() {
   vec4 texColor = texture(u_diffuseMap, v_uv);
+  float finalAlpha = u_color.a * texColor.a;
+#ifdef USE_ALPHA_TEST
+  if (finalAlpha < u_extraParams.y) {
+    discard;
+  }
+#endif
 
 #ifdef USE_NORMAL_MAP
   vec3 rawNormal = texture(u_normalMap, v_uv).rgb * 2.0 - 1.0;
@@ -30,11 +36,6 @@ void main() {
   
   finalColor *= u_exposure;
   finalColor = linearToSRGB(finalColor);
-
-  float finalAlpha = u_color.a * texColor.a;
-  if (finalAlpha < u_extraParams.y) {
-    discard;
-  }
 
   fragColor = vec4(finalColor, finalAlpha);
   [FOG_CALC]
