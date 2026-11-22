@@ -107,3 +107,9 @@ Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
   - Live quadtree telemetry display (visible leaves, nodes rendered, camera distance, memory overhead)
 * **Preservation:** Default showcase runs remain strictly on individual 4x4 pool grid; golden baselines remain 100% byte-identical (`__golden` runs keep quadtree disabled).
 * **Verification:** `SHOWCASE_TEST_CONCURRENCY=1 node .agents/scripts/check-showcases.js 10` passes all 3 tiers (`WEB_GL1`, `WEB_GL2`, `WEB_GPU`, 0 failures).
+
+## 2026-11-22 · WaterQuadtree Removal (Relocated to Showcase 53)
+
+* **Relocation:** Removed `WaterQuadtree` and `Hud.ts` from Showcase 10. The continuous CDLOD quadtree ocean was relocated to Showcase 53 (Dark Fortress / Wassermond) where it serves as a full-featured ocean geometry backend alongside `OceanGridGeometry`.
+* **State:** Restored Showcase 10 to its clean, lightweight 16-pool gallery baseline.
+
