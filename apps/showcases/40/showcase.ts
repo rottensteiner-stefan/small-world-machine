@@ -144,7 +144,7 @@ export class Showcase extends AbstractShowcase {
   private _hbaoRadius: number = 0.5;
   private _hbaoIntensity: number = 1.5;
   private _authoredSun: number = 1.1;
-  private _authoredAmbient: number = 0.25;
+  private _authoredAmbient: number = 0.25 * Math.PI;
   private _authoredBump: BumpLevel = 0;
   private _authoredOpacity: number = 128 / 255;
   private _authoredEdgeFade: number = 0.1;
@@ -200,7 +200,7 @@ export class Showcase extends AbstractShowcase {
 
     const spotShadows: boolean = new URLSearchParams(location.search).get("spot") === "1";
     this._authoredSun = spotShadows ? 0 : 1.1;
-    this._authoredAmbient = spotShadows ? 0.05 : 0.25;
+    this._authoredAmbient = (spotShadows ? 0.05 : 0.25) * Math.PI;
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: this._authoredSun });
     sun.direction.set(-0.4, -1, -0.3);
     this._sun = sun;

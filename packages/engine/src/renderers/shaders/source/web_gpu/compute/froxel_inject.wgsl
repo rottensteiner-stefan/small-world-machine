@@ -387,9 +387,9 @@ fn injectFog(
         // the composite pass. maskCell.g replaces the global albedo baked into scatterTint per cell.
         inScatter += lightScatter * froxel.scatterTint.rgb * maskCell.g * extinction;
 
-        // Ambient inject: scene ambient colour plus the IBL irradiance from above, scaled by density.
+        // Ambient inject: spherical average of hemisphere/ambient colour plus the IBL irradiance, scaled by density.
         if (froxel.phase.y > 0.0) {
-            let ambient = global.ambientColor.rgb + ambientSky * global.envIntensity;
+            let ambient = (global.ambientColor.rgb + global.ambientGround.rgb) * (0.5 / 3.14159265359) + ambientSky * global.envIntensity;
             inScatter += ambient * froxel.scatterTint.rgb * maskCell.g * (froxel.phase.y * extinction);
         }
     }

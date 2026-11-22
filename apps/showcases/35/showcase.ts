@@ -52,7 +52,7 @@ export class Showcase extends AbstractShowcase {
 
     // Deliberately dim ambient plus one directional key light so metallic/roughness differences
     // stay legible -- a bright ambient term would wash the whole grid to a flat grey.
-    this.scene.add(new AmbientLight({ color: new Color(0.73, 0.73, 0.762), intensity: 0.25 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.73, 0.73, 0.762), intensity: 0.79 }));
 
     const key = new DirectionalLight({ color: new Color(1, 0.986, 0.953), intensity: 2.2 });
     key.direction.set(-0.4, -0.6, -0.7);

@@ -1,8 +1,15 @@
 // WGSL PBR Lighting calculation (Logic only)
 
 let V = normalize(global.viewPos.xyz - i.wp);
-let TBN = mat3x3f(normalize(i.t), normalize(i.b), normalize(i.n));
+let baseTbn = mat3x3f(normalize(i.t), normalize(i.b), normalize(i.n));
+#ifdef USE_UV_TRANSFORMS
+let uvNormal = swmTransformUv(1u, i.uv0, swmUv1);
+let TBN = swmTransformTbn(1u, uvNormal, i.wp, baseTbn);
+var rawNormal = sampleNormalMap(uvNormal).rgb * 2.0 - 1.0;
+#else
+let TBN = baseTbn;
 var rawNormal = sampleNormalMap(i.uv).rgb * 2.0 - 1.0;
+#endif
 let normalMapLength = length(rawNormal);
 rawNormal.x *= obj.extraParams.z;
 rawNormal.y *= obj.extraParams.w;
@@ -21,14 +28,26 @@ let specularEnabled = obj.matParam12.w > 0.5;
 var specularTint = obj.matParam12.xyz;
 var specularWeight = obj.matParam13.x;
 #ifdef USE_SPECULAR_COLOR_MAP
+#ifdef USE_UV_TRANSFORMS
+specularTint *= sRGBToLinear(textureSample(u_specularColorMap, s, swmTransformUv(8u, i.uv0, swmUv1)).rgb);
+#else
 specularTint *= sRGBToLinear(textureSample(u_specularColorMap, s, i.uv).rgb);
+#endif
 #endif
 #ifdef USE_SPECULAR_WEIGHT_MAP
 #ifndef USE_SPECULAR_MAPS_SHARED
+#ifdef USE_UV_TRANSFORMS
+specularWeight *= textureSample(u_specularWeightMap, s, swmTransformUv(7u, i.uv0, swmUv1)).a;
+#else
 specularWeight *= textureSample(u_specularWeightMap, s, i.uv).a;
+#endif
 #else
 // Packed layout: the strength rides in the tint map's alpha channel (one unit, not two).
+#ifdef USE_UV_TRANSFORMS
+specularWeight *= textureSample(u_specularColorMap, s, swmTransformUv(7u, i.uv0, swmUv1)).a;
+#else
 specularWeight *= textureSample(u_specularColorMap, s, i.uv).a;
+#endif
 #endif
 #endif
 let dielectricF0 = select(vec3f(f0_dielectric), min(specularTint, vec3f(1.0)), specularEnabled);
@@ -42,7 +61,11 @@ var transmissionWeight = 0.0;
 #ifdef USE_TRANSMISSION
 transmissionWeight = obj.liquidParams.z;
 #ifdef USE_TRANSMISSION_MAP
+#ifdef USE_UV_TRANSFORMS
+transmissionWeight *= textureSample(u_transmissionMap, s, swmTransformUv(14u, i.uv0, swmUv1)).r;
+#else
 transmissionWeight *= textureSample(u_transmissionMap, s, i.uv).r;
+#endif
 #endif
 #endif
 let diffuseAlbedo = albedo * (1.0 - transmissionWeight);
@@ -58,15 +81,27 @@ let diffuseAlbedo = albedo * (1.0 - transmissionWeight);
 {
     var iridescenceStrength = obj.matParam14.x;
 #ifdef USE_IRIDESCENCE_MAP
+#ifdef USE_UV_TRANSFORMS
+    iridescenceStrength *= textureSample(u_iridescenceMap, s, swmTransformUv(17u, i.uv0, swmUv1)).r;
+#else
     iridescenceStrength *= textureSample(u_iridescenceMap, s, i.uv).r;
+#endif
 #endif
     var iridescenceThickness = obj.matParam14.w;
 #ifdef USE_IRIDESCENCE_THICKNESS_MAP
 #ifdef USE_IRIDESCENCE_MAPS_SHARED
     // Same texture as the intensity map: read the green channel through that sampler (one unit, not two).
+#ifdef USE_UV_TRANSFORMS
+    iridescenceThickness = mix(obj.matParam14.z, obj.matParam14.w, textureSample(u_iridescenceMap, s, swmTransformUv(18u, i.uv0, swmUv1)).g);
+#else
     iridescenceThickness = mix(obj.matParam14.z, obj.matParam14.w, textureSample(u_iridescenceMap, s, i.uv).g);
+#endif
+#else
+#ifdef USE_UV_TRANSFORMS
+    iridescenceThickness = mix(obj.matParam14.z, obj.matParam14.w, textureSample(u_iridescenceThicknessMap, s, swmTransformUv(18u, i.uv0, swmUv1)).g);
 #else
     iridescenceThickness = mix(obj.matParam14.z, obj.matParam14.w, textureSample(u_iridescenceThicknessMap, s, i.uv).g);
+#endif
 #endif
 #endif
 #ifdef USE_IRIDESCENCE_CHEAP
@@ -85,9 +120,19 @@ let diffuseAlbedo = albedo * (1.0 - transmissionWeight);
 // multiplies the strength with its blue channel; without it the default texel is direction +X at full strength.
 var anisotropyStrength = obj.matParam15.x;
 var anisotropyDirection = vec2f(obj.matParam15.y, obj.matParam15.z);
+#ifdef USE_UV_TRANSFORMS
+let uvAniso = swmTransformUv(16u, i.uv0, swmUv1);
+let anisoTbn = swmTransformTbn(16u, uvAniso, i.wp, baseTbn);
+#else
+let anisoTbn = TBN;
+#endif
 #ifdef USE_ANISOTROPY_MAP
 {
+#ifdef USE_UV_TRANSFORMS
+    let anisotropySample = textureSample(u_anisotropyMap, s, uvAniso).rgb;
+#else
     let anisotropySample = textureSample(u_anisotropyMap, s, i.uv).rgb;
+#endif
     var texelDirection = anisotropySample.rg * 2.0 - 1.0;
     texelDirection = select(vec2f(1.0, 0.0), normalize(texelDirection), dot(texelDirection, texelDirection) > 1e-8);
     anisotropyDirection = vec2f(
@@ -99,23 +144,40 @@ var anisotropyDirection = vec2f(obj.matParam15.y, obj.matParam15.z);
 #endif
 let anisoAlpha = max(roughness * roughness, 0.002);
 let anisoAlphaT = mix(anisoAlpha, 1.0, anisotropyStrength * anisotropyStrength);
-let anisoT = normalize(TBN * vec3f(anisotropyDirection.x, anisotropyDirection.y, 0.0));
+let anisoT = normalize(anisoTbn * vec3f(anisotropyDirection.x, anisotropyDirection.y, 0.0));
 let anisoB = normalize(cross(normalize(i.n), anisoT));
 #endif
 
 var clearcoat = obj.liquidParams.w;
 #ifdef USE_CLEARCOAT_MAP
+#ifdef USE_UV_TRANSFORMS
+clearcoat *= textureSample(u_clearcoatMap, s, swmTransformUv(9u, i.uv0, swmUv1)).r;
+#else
 clearcoat *= textureSample(u_clearcoatMap, s, i.uv).r;
+#endif
 #endif
 var clearcoatRoughness = clamp(obj.thresholds.x, 0.05, 1.0);
 #ifdef USE_CLEARCOAT_ROUGHNESS_MAP
+#ifdef USE_UV_TRANSFORMS
+clearcoatRoughness = clamp(clearcoatRoughness * textureSample(u_clearcoatRoughnessMap, s, swmTransformUv(10u, i.uv0, swmUv1)).g, 0.05, 1.0);
+#else
 clearcoatRoughness = clamp(clearcoatRoughness * textureSample(u_clearcoatRoughnessMap, s, i.uv).g, 0.05, 1.0);
 #endif
+#endif
 #ifdef USE_CLEARCOAT_NORMAL_MAP
+#ifdef USE_UV_TRANSFORMS
+let uvCcNormal = swmTransformUv(11u, i.uv0, swmUv1);
+let ccTbn = swmTransformTbn(11u, uvCcNormal, i.wp, baseTbn);
+var rawCcNormal = textureSample(u_clearcoatNormalMap, s, uvCcNormal).rgb * 2.0 - 1.0;
+rawCcNormal.x *= obj.extraParams.z;
+rawCcNormal.y *= obj.extraParams.w;
+let N_cc = normalize(ccTbn * rawCcNormal);
+#else
 var rawCcNormal = textureSample(u_clearcoatNormalMap, s, i.uv).rgb * 2.0 - 1.0;
 rawCcNormal.x *= obj.extraParams.z;
 rawCcNormal.y *= obj.extraParams.w;
 let N_cc = normalize(TBN * rawCcNormal);
+#endif
 #else
 let N_cc = N;
 #endif
@@ -124,11 +186,19 @@ let dotNV_cc = max(dot(N_cc, V), 0.0001);
 // (ADR 0039 sheen decision); the runtime w-flag mirrors WebGL2's USE_SHEEN compile gate.
 var sheenColor = sRGBToLinear(obj.matParam10.rgb);
 #ifdef USE_SHEEN_COLOR_MAP
+#ifdef USE_UV_TRANSFORMS
+sheenColor *= sRGBToLinear(textureSample(u_sheenColorMap, s, swmTransformUv(12u, i.uv0, swmUv1)).rgb);
+#else
 sheenColor *= sRGBToLinear(textureSample(u_sheenColorMap, s, i.uv).rgb);
+#endif
 #endif
 var sheenRoughness = clamp(obj.thresholds.y, 0.05, 1.0);
 #ifdef USE_SHEEN_ROUGHNESS_MAP
+#ifdef USE_UV_TRANSFORMS
+sheenRoughness = clamp(sheenRoughness * textureSample(u_sheenRoughnessMap, s, swmTransformUv(13u, i.uv0, swmUv1)).a, 0.05, 1.0);
+#else
 sheenRoughness = clamp(sheenRoughness * textureSample(u_sheenRoughnessMap, s, i.uv).a, 0.05, 1.0);
+#endif
 #endif
 let sheenOn = obj.matParam10.w > 0.5;
 // KHR_materials_sheen albedo scaling: the layer under the sheen loses the share the sheen reflects.
@@ -467,20 +537,12 @@ for(var j=0u; j<u32(global.numAreaLights); j++) {
 
 // -- Ambient IBL --
 let kS_ambient = F_SchlickRoughness90(dotNV, F0, F90, roughness);
-var kD_ambient = vec3f(1.0) - kS_ambient;
-kD_ambient *= 1.0 - metallic;
+let hemiAmbient = mix(global.ambientGround.rgb, global.ambientColor.rgb, clamp(N.y * 0.5 + 0.5, 0.0, 1.0)) * (1.0 / 3.14159265359);
 
 // The baked irradiance/prefilter cubes are 8-bit sRGB-encoded like u_envMap (ADR 0048).
-let irradiance = sRGBToLinear(textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb) * global.envIntensity;
-let noIrradiance = dot(irradiance, irradiance) < 1e-6;
-var diffuseAmbient: vec3f;
-if (noIrradiance) {
-    let f_fallback = F_Schlick90(dotNV, F0, F90);
-    let kD_fallback = (vec3f(1.0) - f_fallback) * (1.0 - metallic);
-    diffuseAmbient = kD_fallback * global.ambientColor.rgb * diffuseAlbedo;
-} else {
-    diffuseAmbient = kD_ambient * irradiance * diffuseAlbedo;
-}
+let iblIrradiance = sRGBToLinear(textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb) * global.envIntensity;
+let irradiance = iblIrradiance + hemiAmbient;
+let diffuseAmbient = irradiance * diffuseAlbedo;
 
 // A per-object dynamic reflection probe (u_envMap, e.g. DynamicReflectionProbe) is a sharp,
 // real-time capture of this object's actual surroundings, while the scene's prefilter map is a
@@ -496,38 +558,45 @@ let RSpec = reflect(-V, anisotropyBentNormal(anisoB, V, N, anisotropyStrength, r
 let RSpec = R;
 #endif
 let MAX_REFLECTION_LOD = 4.0;
-var specularAmbient: vec3f;
+let envBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV, 0.0), roughness), 0.0).rg;
+
+// Multi-scattering IBL (Fdez-Aguera 2019, JCGT 8(1)): compensates single-scattering energy loss on rough surfaces.
+// @invariant PBR-ENERGY-CONSERVATION
+let FssEss = kS_ambient * envBRDF.x + F90 * envBRDF.y;
+let Ess = envBRDF.x + envBRDF.y;
+let Ems = max(1.0 - Ess, 0.0);
+let Favg = F0 + (vec3f(F90) - F0) * (1.0 / 21.0);
+let Fms = FssEss * Favg / max(vec3f(1.0) - Ems * Favg, vec3f(1e-5));
+let FmsEms = Fms * Ems;
+let kD_ambient = max(vec3f(1.0) - (FssEss + FmsEms), vec3f(0.0)) * (1.0 - metallic);
+
+var specularRadiance: vec3f;
 if (obj.useEnvMap > 0.5) {
     let lod = roughness * 5.0;
     // useEnvMap 2 = a RenderTargetCube probe written through the output lane, 1 = an sRGB asset cube.
     let envRaw = textureSampleLevel(u_envMap, s, RSpec, lod).rgb;
-    let envColor = select(sRGBToLinear(envRaw), targetToLinear(envRaw), obj.useEnvMap > 1.5) * global.envIntensity;
-    // G01: same split-sum BRDF integration as the WebGL2 probe path (light_calc_pbr.frag.glsl).
-    // Without the BRDF-LUT term rough dielectrics were overbright and rough metals nearly black
-    // (specularAmbient = envColor * F only drops the kS*envBRDF.x + envBRDF.y energy split).
-    let envBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV, 0.0), roughness), 0.0).rg;
-    specularAmbient = envColor * (kS_ambient * envBRDF.x + envBRDF.y);
+    specularRadiance = select(sRGBToLinear(envRaw), targetToLinear(envRaw), obj.useEnvMap > 1.5) * global.envIntensity;
 } else {
-    let prefilteredColor = sRGBToLinear(textureSampleLevel(u_prefilterMap, globalSampler, RSpec, roughness * MAX_REFLECTION_LOD).rgb) * global.envIntensity;
-    let envBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV, 0.0), roughness), 0.0).rg;
-    specularAmbient = prefilteredColor * (kS_ambient * envBRDF.x + envBRDF.y);
+    specularRadiance = sRGBToLinear(textureSampleLevel(u_prefilterMap, globalSampler, RSpec, roughness * MAX_REFLECTION_LOD).rgb) * global.envIntensity;
 }
+let specularAmbient = specularRadiance * FssEss + iblIrradiance * FmsEms;
 
-var ambient = (kD_ambient * diffuseAmbient + specularAmbient) * ao;
+let specularAO = computeSpecularOcclusion(dotNV, ao, roughness);
+var ambient = kD_ambient * diffuseAmbient * ao + specularAmbient * specularAO;
 
 // KHR_materials_sheen under IBL: base scaled by the sheen albedo; the rough Charlie lobe reads the diffuse
 // irradiance through the analytic directional-albedo fit (Estevez & Kulla 2017, three.js IBLSheenBRDF).
 // Added before the clearcoat block so the coat attenuates it (layer order: coat > sheen > base).
 if (sheenOn) {
-    let sheenIrradiance = select(irradiance, global.ambientColor.rgb, noIrradiance);
-    ambient = ambient * sheenEnergyComp + sheenIrradiance * sheenColor * IBLSheenBRDF(dotNV, sheenRoughness) * ao;
+    ambient = ambient * sheenEnergyComp + irradiance * sheenColor * IBLSheenBRDF(dotNV, sheenRoughness) * ao;
 }
 
 if (clearcoat > 0.0) {
     let R_cc = reflect(-V, N_cc);
     let ccPrefilter = sRGBToLinear(textureSampleLevel(u_prefilterMap, globalSampler, R_cc, clearcoatRoughness * MAX_REFLECTION_LOD).rgb) * global.envIntensity;
     let ccEnvBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV_cc, 0.0), clearcoatRoughness), 0.0).rg;
-    let ccSpecular = ccPrefilter * (vec3f(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat;
+    let ccSpecularAO = computeSpecularOcclusion(dotNV_cc, ao, clearcoatRoughness);
+    let ccSpecular = ccPrefilter * (vec3f(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat * ccSpecularAO;
     ambient = ambient * (1.0 - clearcoat * F_Schlick(dotNV_cc, vec3f(0.04)).x) + ccSpecular;
 }
 
@@ -540,7 +609,11 @@ if (clearcoat > 0.0) {
 if (transmissionWeight > 0.0) {
     var thickness = obj.liquidParams.y;
     #ifdef USE_THICKNESS_MAP
+    #ifdef USE_UV_TRANSFORMS
+    thickness *= textureSample(u_thicknessMap, s, swmTransformUv(15u, i.uv0, swmUv1)).g;
+    #else
     thickness *= textureSample(u_thicknessMap, s, i.uv).g;
+    #endif
     #endif
     let attenuationDist = obj.thresholds.z;
 
@@ -572,5 +645,9 @@ if (transmissionWeight > 0.0) {
 var color = ambient + Lo;
 
 // Emissive
+#ifdef USE_UV_TRANSFORMS
+let emissive = sRGBToLinear(sampleEmissiveMap(swmTransformUv(5u, i.uv0, swmUv1)).rgb) * sRGBToLinear(obj.specColor.rgb) * obj.specColor.a;
+#else
 let emissive = sRGBToLinear(sampleEmissiveMap(i.uv).rgb) * sRGBToLinear(obj.specColor.rgb) * obj.specColor.a;
+#endif
 color += emissive;

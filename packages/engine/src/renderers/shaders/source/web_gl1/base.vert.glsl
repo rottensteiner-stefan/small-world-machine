@@ -46,9 +46,15 @@ uniform vec2 u_texOffset;
 uniform vec2 u_texRepeat;
 uniform float u_texRotation;
 
+#ifdef USE_UV1
+attribute vec2 a_uv1;
+varying vec2 v_uv1;
+#endif
+
 varying vec3 v_worldPos;
 varying vec3 v_normal;
 varying vec2 v_uv;
+varying vec2 v_uv0;
 varying mat3 v_tbn;
 varying vec4 v_clipPos;
 
@@ -122,6 +128,10 @@ void main() {
         uvSin = sin(u_texRotation);
     }
     v_uv = vec2(uvCos * uvScaled.x - uvSin * uvScaled.y, uvSin * uvScaled.x + uvCos * uvScaled.y) + u_texOffset;
+    v_uv0 = a_uv;
+#ifdef USE_UV1
+    v_uv1 = a_uv1;
+#endif
 
     vec3 tangent = localTangent;
     // Bitangent handedness w = ±1, folded into B in the vertex stage. Defaults to +1

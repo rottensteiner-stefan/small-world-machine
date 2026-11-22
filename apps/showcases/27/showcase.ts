@@ -92,7 +92,7 @@ export class Showcase extends AbstractShowcase {
     // 1. Ambient Light (balanced for display variance)
     this._ambientLight = new AmbientLight({
       color: new Color(0.317, 0.335, 0.381),
-      intensity: 0.75,
+      intensity: 2.36,
     });
     this.scene.add(this._ambientLight);
 

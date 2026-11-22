@@ -25,6 +25,8 @@ export abstract class AbstractGeometry implements Geometry {
   protected _tangents: Float32Array = new Float32Array();
   /** The UV coordinates of the geometry (u, v). */
   protected _uvs: Float32Array = new Float32Array();
+  /** Optional secondary UV coordinates (`TEXCOORD_1`: u1, v1). */
+  protected _uvs1?: Float32Array | undefined = undefined;
   /** Optional per-vertex color data (r, g, b, a). */
   protected _colors?: Float32Array | undefined = undefined;
   /** Optional skinning joints (4 IDs per vertex). */
@@ -74,6 +76,7 @@ export abstract class AbstractGeometry implements Geometry {
       normals: this._normals,
       tangents: this._tangents,
       uvs: this._uvs,
+      ...(this._uvs1 ? { uvs1: this._uvs1 } : {}),
       colors: this._colors,
       joints: this._joints,
       weights: this._weights,

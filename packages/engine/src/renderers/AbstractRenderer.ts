@@ -66,6 +66,7 @@ export abstract class AbstractRenderer implements Renderer {
   /** Cached light data to avoid GC pressure. */
   protected _lightData: LightDataInterface = {
     aCol: new Color(0, 0, 0),
+    aGroundCol: new Color(0, 0, 0),
     aIntensity: 0,
     dDir: new Vector3D(0, 1, 0),
     dCol: new Color(0, 0, 0),
@@ -238,6 +239,7 @@ export abstract class AbstractRenderer implements Renderer {
     this._lightData.sLights.length = 0;
     this._lightData.aLights.length = 0;
     this._lightData.aCol.set(0, 0, 0);
+    this._lightData.aGroundCol?.set(0, 0, 0);
     this._lightData.aIntensity = 0;
     this._lightData.dCol.set(0, 0, 0);
     this._lightData.dIntensity = 0;

@@ -8,6 +8,8 @@ export const LightType = {
   AREA: "AreaLight",
   /** Directional light. */
   DIRECTIONAL: "DirectionalLight",
+  /** Hemisphere light (sky-to-ground gradient). */
+  HEMISPHERE: "HemisphereLight",
   /** Point light. */
   POINT: "PointLight",
   /** Spot light. */

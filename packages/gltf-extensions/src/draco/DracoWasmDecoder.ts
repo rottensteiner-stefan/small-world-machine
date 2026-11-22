@@ -151,6 +151,10 @@ export class DracoWasmDecoder {
       if (uv !== undefined) {
         decoded.uvs = this._readAttribute(module, decoder, mesh, uv, numPoints, Float32Array);
       }
+      const uv1 = attributeIds["TEXCOORD_1"];
+      if (uv1 !== undefined) {
+        decoded.uvs1 = this._readAttribute(module, decoder, mesh, uv1, numPoints, Float32Array);
+      }
       const joints = attributeIds[`${JOINTS_PREFIX}0`];
       if (joints !== undefined) {
         decoded.joints = this._readAttribute(module, decoder, mesh, joints, numPoints, Uint16Array);

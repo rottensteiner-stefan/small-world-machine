@@ -268,10 +268,9 @@ describe("GltfMaterialParser", () => {
       resolve.mockRestore();
 
       expect(mat.iridescenceMap).toBe(intensity);
-      // The transform lives on a per-transform sibling; the shared texture stays untouched.
-      expect(mat.iridescenceThicknessMap).not.toBe(thickness);
-      expect(mat.iridescenceThicknessMap!.image).toBe(thickness.image);
-      expect(mat.iridescenceThicknessMap!.repeat).toEqual({ x: 2, y: 2 });
+      // Transform lives on StandardMaterial.textureTransforms; the shared Texture stays untouched.
+      expect(mat.iridescenceThicknessMap).toBe(thickness);
+      expect(mat.textureTransforms?.iridescenceThickness).toEqual({ scale: [2, 2] });
       expect(thickness.repeat).toEqual({ x: 1, y: 1 });
     });
 
@@ -328,9 +327,8 @@ describe("GltfMaterialParser", () => {
       );
       resolve.mockRestore();
 
-      expect(mat.anisotropyMap).not.toBe(directionMap);
-      expect(mat.anisotropyMap!.image).toBe(directionMap.image);
-      expect(mat.anisotropyMap!.offset).toEqual({ x: 0.5, y: 0 });
+      expect(mat.anisotropyMap).toBe(directionMap);
+      expect(mat.textureTransforms?.anisotropy).toEqual({ offset: [0.5, 0] });
       expect(directionMap.offset).toEqual({ x: 0, y: 0 });
     });
 
@@ -388,9 +386,8 @@ describe("GltfMaterialParser", () => {
       );
       resolve.mockRestore();
 
-      expect(mat.specularMap).not.toBe(weight);
-      expect(mat.specularMap!.image).toBe(weight.image);
-      expect(mat.specularMap!.repeat).toEqual({ x: 2, y: 2 });
+      expect(mat.specularMap).toBe(weight);
+      expect(mat.textureTransforms?.specular).toEqual({ scale: [2, 2] });
       expect(mat.specularColorMap).toBe(tint);
       expect(weight.repeat).toEqual({ x: 1, y: 1 });
     });

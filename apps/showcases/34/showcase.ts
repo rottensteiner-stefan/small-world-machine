@@ -263,7 +263,7 @@ const MOOD_CONFIGS: Record<MoodPreset, MoodConfig> = {
     sunColor: new Color(1.0, 0.991, 0.953),
     sunIntensity: 1.6,
     ambientColor: new Color(0.621, 0.659, 0.596),
-    ambientIntensity: 0.6,
+    ambientIntensity: 1.88,
     spriteTint: Color.WHITE,
   },
   golden: {
@@ -272,7 +272,7 @@ const MOOD_CONFIGS: Record<MoodPreset, MoodConfig> = {
     sunColor: new Color(1.0, 0.62, 0.3),
     sunIntensity: 1.9,
     ambientColor: new Color(0.65, 0.48, 0.38),
-    ambientIntensity: 0.55,
+    ambientIntensity: 1.73,
     spriteTint: new Color(1.05, 0.95, 0.88),
   },
   foggy: {
@@ -281,7 +281,7 @@ const MOOD_CONFIGS: Record<MoodPreset, MoodConfig> = {
     sunColor: new Color(0.92, 0.94, 0.96),
     sunIntensity: 1.0,
     ambientColor: new Color(0.62, 0.66, 0.72),
-    ambientIntensity: 0.7,
+    ambientIntensity: 2.2,
     spriteTint: new Color(0.95, 0.98, 1.0),
   },
   dusk: {
@@ -290,7 +290,7 @@ const MOOD_CONFIGS: Record<MoodPreset, MoodConfig> = {
     sunColor: new Color(0.4, 0.52, 0.8),
     sunIntensity: 0.9,
     ambientColor: new Color(0.22, 0.26, 0.38),
-    ambientIntensity: 0.45,
+    ambientIntensity: 1.41,
     spriteTint: new Color(0.7, 0.75, 0.9),
   },
 };
@@ -379,7 +379,7 @@ export class Showcase extends AbstractShowcase {
     // direction) -- bakeImposter defaults to a neutral grey/white rig, and mismatched lighting
     // would make the billboards read as cut-outs lit by another sun instead of as same-lit trees.
     const ambientColor = new Color(0.621, 0.659, 0.596);
-    const ambientIntensity = 0.6;
+    const ambientIntensity = 1.88;
     const sunColor = new Color(1, 0.991, 0.953);
     const sunIntensity = 1.6;
     const sunDirection: [number, number, number] = [-0.5, -1.0, -0.4];

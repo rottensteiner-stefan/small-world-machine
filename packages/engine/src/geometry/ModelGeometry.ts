@@ -35,6 +35,8 @@ export interface ModelGeometryOptions {
   morphTargets?: MorphTargetData[] | undefined;
   /** Optional morph target names (glTF `mesh.extras.targetNames`). */
   morphTargetNames?: string[] | undefined;
+  /** Optional secondary texture coordinates (`TEXCOORD_1`: u1, v1). */
+  uvs1?: number[] | Float32Array | undefined;
   /**
    * How `indices` are to be read: `TRIANGLE_LIST` (default) or `LINE_LIST` (index pairs, drawn as
    * line segments; normals default to up and no tangents are derived). Any other topology throws:
@@ -71,6 +73,10 @@ export class ModelGeometry extends AbstractGeometry {
     this._isLineGeometry = topology === Topology.LINE_LIST;
     this._vertices = vertices instanceof Float32Array ? vertices : new Float32Array(vertices);
     this._uvs = uvs instanceof Float32Array ? uvs : new Float32Array(uvs);
+    if (options?.uvs1 && options.uvs1.length > 0) {
+      this._uvs1 =
+        options.uvs1 instanceof Float32Array ? options.uvs1 : new Float32Array(options.uvs1);
+    }
     this._normals = normals instanceof Float32Array ? normals : new Float32Array(normals);
 
     if (options?.joints) {

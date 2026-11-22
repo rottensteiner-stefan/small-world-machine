@@ -116,18 +116,74 @@ uniform sampler2D u_anisotropyMap;
 #endif
 #endif
 
+#ifdef USE_UV_TRANSFORMS
+uniform vec4 u_uvTransforms[38];
+
+vec2 swmTransformUv(int slot) {
+    vec4 p0 = u_uvTransforms[slot * 2];
+    vec4 p1 = u_uvTransforms[slot * 2 + 1];
+#ifdef USE_UV1
+    vec2 baseUv = p1.z > 0.5 ? v_uv1 : v_uv0;
+#else
+    vec2 baseUv = v_uv0;
+#endif
+    vec2 uvScaled = baseUv * p0.zw;
+    return vec2(p1.x * uvScaled.x - p1.y * uvScaled.y, p1.y * uvScaled.x + p1.x * uvScaled.y) + p0.xy;
+}
+
+mat3 swmTransformTbn(int slot, vec2 slotUv, vec3 wp, mat3 baseTbn) {
+    vec4 p1 = u_uvTransforms[slot * 2 + 1];
+    if (p1.z > 0.5) {
+        vec3 dp1 = dFdx(wp);
+        vec3 dp2 = dFdy(wp);
+        vec2 duv1 = dFdx(slotUv);
+        vec2 duv2 = dFdy(slotUv);
+        float det = duv1.x * duv2.y - duv2.x * duv1.y;
+        if (abs(det) > 1e-12) {
+            vec3 n = baseTbn[2];
+            float invDet = 1.0 / det;
+            vec3 tDeriv = (dp1 * duv2.y - dp2 * duv1.y) * invDet;
+            vec3 bDeriv = (dp2 * duv1.x - dp1 * duv2.x) * invDet;
+            tDeriv -= n * dot(n, tDeriv);
+            bDeriv -= n * dot(n, bDeriv);
+            float tLenSq = dot(tDeriv, tDeriv);
+            float bLenSq = dot(bDeriv, bDeriv);
+            if (tLenSq > 1e-12 && bLenSq > 1e-12) {
+                return mat3(tDeriv * inversesqrt(tLenSq), bDeriv * inversesqrt(bLenSq), n);
+            }
+        }
+    }
+    vec3 tRot = normalize(p1.x * baseTbn[0] - p1.y * baseTbn[1]);
+    vec3 bRot = normalize(p1.y * baseTbn[0] + p1.x * baseTbn[1]);
+    return mat3(tRot, bRot, baseTbn[2]);
+}
+#endif
+
 void main() {
     // The alpha map shares the carrier texture's transform (repeat, offset, rotation): it samples the same
     // transformed v_uv as the diffuse map (dividing by u_texRepeat only undid the scale; wrong under rotation).
     // Convert sampled albedo to linear space
+#ifdef USE_UV_TRANSFORMS
+    vec2 diffuseUv = swmTransformUv(0);
+#if defined(USE_INSTANCING) && defined(USE_TEXTURE_ARRAY)
+    vec4 texColor = texture(u_diffuseMap, vec3(diffuseUv, v_texIndex));
+#else
+    vec4 texColor = texture(u_diffuseMap, diffuseUv);
+#endif
+#else
 #if defined(USE_INSTANCING) && defined(USE_TEXTURE_ARRAY)
     vec4 texColor = texture(u_diffuseMap, vec3(v_uv, v_texIndex));
 #else
     vec4 texColor = texture(u_diffuseMap, v_uv);
 #endif
-    
+#endif
+
 #ifdef USE_ALPHA_MAP
+#ifdef USE_UV_TRANSFORMS
+    texColor.a *= texture(u_alphaMap, swmTransformUv(6)).r;
+#else
     texColor.a *= texture(u_alphaMap, v_uv).r;
+#endif
 #endif
 
 #ifdef USE_ALPHA_TEST
@@ -137,26 +193,39 @@ void main() {
 #endif
 
     vec3 albedo = sRGBToLinear(texColor.rgb) * sRGBToLinear(u_color.rgb);
-    
+
 #ifdef USE_METALLIC_MAP
+#ifdef USE_UV_TRANSFORMS
+    float metallic = u_metallic * texture(u_metallicMap, swmTransformUv(2)).b;
+#else
     float metallic = u_metallic * texture(u_metallicMap, v_uv).b;
+#endif
 #else
     float metallic = u_metallic;
 #endif
 
 #ifdef USE_ROUGHNESS_MAP
+#ifdef USE_UV_TRANSFORMS
+    vec2 roughnessUv = swmTransformUv(3);
+#else
+    vec2 roughnessUv = v_uv;
+#endif
 #ifdef USE_METALLIC_ROUGHNESS_SHARED
     // Same texture as the metallic map: read the green channel through that sampler (one unit, not two).
-    float roughness = clamp(u_roughness * texture(u_metallicMap, v_uv).g, 0.05, 1.0);
+    float roughness = clamp(u_roughness * texture(u_metallicMap, roughnessUv).g, 0.05, 1.0);
 #else
-    float roughness = clamp(u_roughness * texture(u_roughnessMap, v_uv).g, 0.05, 1.0); // Avoid divide by zero
+    float roughness = clamp(u_roughness * texture(u_roughnessMap, roughnessUv).g, 0.05, 1.0); // Avoid divide by zero
 #endif
 #else
     float roughness = clamp(u_roughness, 0.05, 1.0);
 #endif
 
 #ifdef USE_AO_MAP
+#ifdef USE_UV_TRANSFORMS
+    float ao = u_extraParams.x * texture(u_aoMap, swmTransformUv(4)).r;
+#else
     float ao = u_extraParams.x * texture(u_aoMap, v_uv).r;
+#endif
 #else
     float ao = u_extraParams.x;
 #endif

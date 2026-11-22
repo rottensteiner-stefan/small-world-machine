@@ -30,6 +30,7 @@ import {
   Octahedron,
   OpenFrame,
   Plane,
+  PointLight,
   PointedPillar,
   PolygonFan,
   Polyline,
@@ -100,24 +101,30 @@ export class Showcase extends AbstractShowcase {
     this.camera.addBehavior(new ZoomController({ input: this.input }));
 
     // 3. Lights (Bright, multi-angle studio lighting so textured bodies are brilliantly lit)
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.75 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 2.36 }));
 
     const sun: DirectionalLight = new DirectionalLight({ color: Color.WHITE, intensity: 1.35 });
     sun.direction.set(-1, -1.6, -0.8).normalize();
     this.scene.add(sun);
 
-    const fillLight: DirectionalLight = new DirectionalLight({
+    // PointLights (not DirectionalLight): the renderer supports one directional light slot, so
+    // extra DirectionalLights would overwrite `sun`.
+    const fillLight: PointLight = new PointLight({
       color: new Color(0.953, 0.977, 1),
       intensity: 0.7,
+      distance: 500.0,
+      decay: 0.0,
     });
-    fillLight.direction.set(1, 0.8, 1.0).normalize();
+    fillLight.position.set(-120, -96, -120);
     this.scene.add(fillLight);
 
-    const backLight: DirectionalLight = new DirectionalLight({
+    const backLight: PointLight = new PointLight({
       color: new Color(1, 0.977, 0.929),
       intensity: 0.45,
+      distance: 500.0,
+      decay: 0.0,
     });
-    backLight.direction.set(0, -0.5, 1.2).normalize();
+    backLight.position.set(0, 50, -120);
     this.scene.add(backLight);
 
     // 4. Floor Grid

@@ -47,8 +47,8 @@ const BODY = `
     <div class="section-title">☀️ Lighting</div>
     <div class="hud-row">
       <label>Ambient Intensity</label>
-      <input type="range" id="slAmbientIntensity" min="0" max="2" step="0.05" value="0.55" />
-      <span class="val-label" id="valAmbientIntensity">0.55</span>
+      <input type="range" id="slAmbientIntensity" min="0" max="4" step="0.05" value="1.73" />
+      <span class="val-label" id="valAmbientIntensity">1.73</span>
     </div>
     <div class="hud-row">
       <label>Sun Intensity</label>

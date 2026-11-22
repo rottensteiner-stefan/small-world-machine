@@ -17,6 +17,15 @@ import { writeLane4 } from "../MaterialLanes.js";
 import type { MaterialLane } from "../MaterialLanes.js";
 import { Vector2D } from "../../../math/index.js";
 import type { InspectorField } from "../../Inspectable.js";
+import {
+  TEXTURE_SLOT_ORDER,
+  UV_TRANSFORM_FLOAT_COUNT,
+  cloneTextureTransforms,
+  hasAnyTextureTransform,
+  packUvTransformSlot,
+  type TextureSlotName,
+  type TextureTransform,
+} from "../TextureTransform.js";
 
 /**
  * Configuration options for StandardMaterial.
@@ -142,6 +151,8 @@ export interface StandardMaterialOptions {
   time?: number;
   /** Unlit material (KHR_materials_unlit equivalent): flat base color, no lighting/IBL. Defaults to false. */
   unlit?: boolean;
+  /** Per-slot KHR_texture_transform overrides (offset, scale, rotation, texCoord 0|1). */
+  textureTransforms?: Partial<Record<TextureSlotName, TextureTransform>>;
 }
 
 /**
@@ -299,6 +310,11 @@ export class StandardMaterial extends AbstractMaterial {
 
   /** Time parameter for shader animations. */
   public time: number;
+
+  /** @domain Per-slot UV transform overrides (`offset`, `scale`, `rotation`, `texCoord` `0|1`). */
+  public textureTransforms: Partial<Record<TextureSlotName, TextureTransform>> | undefined;
+
+  private readonly _uvTransformsData = new Float32Array(UV_TRANSFORM_FLOAT_COUNT);
 
   /**
    * Typed semantic lane table (ADR 0027 / 0039) for this material. `reflectionFresnelBlend` was
@@ -496,6 +512,7 @@ export class StandardMaterial extends AbstractMaterial {
       backlightThickness = 0.5,
       time = 0.0,
       unlit = false,
+      textureTransforms = undefined,
     } = options;
     this.color = Object.isFrozen(color) ? color.clone() : color;
     this.metallic = metallic;
@@ -552,6 +569,7 @@ export class StandardMaterial extends AbstractMaterial {
     this.backlight = Object.isFrozen(backlight) ? backlight.clone() : backlight;
     this.backlightThickness = backlightThickness;
     this.time = time;
+    this.textureTransforms = textureTransforms;
   }
 
   public override getRenderManifest(): RenderManifest {
@@ -560,17 +578,20 @@ export class StandardMaterial extends AbstractMaterial {
     }
 
     this._syncBaseManifestState();
+    const hasSlotTransforms = hasAnyTextureTransform(this.textureTransforms);
     this._syncTexOffsetRepeat(
-      this.diffuseMap ||
-        this.emissiveMap ||
-        this.normalMap ||
-        this.metallicMap ||
-        this.roughnessMap ||
-        this.aoMap ||
-        this.alphaMap ||
-        this.clearcoatMap ||
-        this.sheenColorMap ||
-        this.transmissionMap,
+      hasSlotTransforms
+        ? undefined
+        : this.diffuseMap ||
+            this.emissiveMap ||
+            this.normalMap ||
+            this.metallicMap ||
+            this.roughnessMap ||
+            this.aoMap ||
+            this.alphaMap ||
+            this.clearcoatMap ||
+            this.sheenColorMap ||
+            this.transmissionMap,
     );
 
     const props = this._renderManifest.properties;
@@ -747,6 +768,43 @@ export class StandardMaterial extends AbstractMaterial {
     if (this.unlit) flags.push(ShaderFlag.UNLIT);
     if (this.hasBacklight) flags.push(ShaderFlag.BACKLIGHT);
 
+    if (hasSlotTransforms) {
+      const tx = this.textureTransforms;
+      const data = this._uvTransformsData;
+      packUvTransformSlot(data, 0, tx?.diffuse, this.diffuseMap);
+      packUvTransformSlot(data, 1, tx?.normal, this.normalMap);
+      packUvTransformSlot(data, 2, tx?.metallic, this.metallicMap);
+      packUvTransformSlot(data, 3, tx?.roughness, this.roughnessMap);
+      packUvTransformSlot(data, 4, tx?.ao, this.aoMap);
+      packUvTransformSlot(data, 5, tx?.emissive, this.emissiveMap);
+      packUvTransformSlot(data, 6, tx?.alpha, this.alphaMap);
+      packUvTransformSlot(data, 7, tx?.specular, this.specularMap);
+      packUvTransformSlot(data, 8, tx?.specularColor, this.specularColorMap);
+      packUvTransformSlot(data, 9, tx?.clearcoat, this.clearcoatMap);
+      packUvTransformSlot(data, 10, tx?.clearcoatRoughness, this.clearcoatRoughnessMap);
+      packUvTransformSlot(data, 11, tx?.clearcoatNormal, this.clearcoatNormalMap);
+      packUvTransformSlot(data, 12, tx?.sheenColor, this.sheenColorMap);
+      packUvTransformSlot(data, 13, tx?.sheenRoughness, this.sheenRoughnessMap);
+      packUvTransformSlot(data, 14, tx?.transmission, this.transmissionMap);
+      packUvTransformSlot(data, 15, tx?.thickness, this.thicknessMap);
+      packUvTransformSlot(data, 16, tx?.anisotropy, this.anisotropyMap);
+      packUvTransformSlot(data, 17, tx?.iridescence, this.iridescenceMap);
+      packUvTransformSlot(data, 18, tx?.iridescenceThickness, this.iridescenceThicknessMap);
+
+      let usesUv1 = false;
+      for (let i = 0; i < TEXTURE_SLOT_ORDER.length; i++) {
+        if (data[i * 8 + 6]! > 0.5) {
+          usesUv1 = true;
+          break;
+        }
+      }
+      props["u_uvTransforms"] = data;
+      flags.push(ShaderFlag.UV_TRANSFORMS);
+      if (usesUv1) flags.push(ShaderFlag.UV1);
+    } else {
+      delete props["u_uvTransforms"];
+    }
+
     this._commitFlags();
 
     if (this._renderManifest.state) {
@@ -765,7 +823,9 @@ export class StandardMaterial extends AbstractMaterial {
    * multiple objects, where a direct mutation would visibly affect all of them at once.
    */
   public override clone(): StandardMaterial {
-    return super.clone() as StandardMaterial;
+    const copy = super.clone() as StandardMaterial;
+    copy.textureTransforms = cloneTextureTransforms(this.textureTransforms);
+    return copy;
   }
 
   /** @inheritdoc */

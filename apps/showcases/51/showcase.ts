@@ -706,7 +706,7 @@ export class Showcase extends AbstractShowcase {
     // default, disable via `?shadows=off` to isolate passes in benches.
     const ambient = new AmbientLight({
       color: new Color(0.58, 0.62, 0.55),
-      intensity: 0.5,
+      intensity: 0.5 * Math.PI,
     });
     this.scene.add(ambient);
 

@@ -1,4 +1,5 @@
 export { AbstractMaterial } from "./AbstractMaterial.js";
+export * from "./TextureTransform.js";
 export * from "./surface/BasicMaterial.js";
 export * from "./surface/LambertMaterial.js";
 export * from "./surface/StandardMaterial.js";

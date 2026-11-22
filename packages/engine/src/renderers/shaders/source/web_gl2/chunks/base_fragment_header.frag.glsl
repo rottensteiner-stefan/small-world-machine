@@ -8,6 +8,10 @@ precision highp sampler2DArrayShadow;
 in vec3 v_worldPos;
 in vec3 v_normal;
 in vec2 v_uv;
+in vec2 v_uv0;
+#ifdef USE_UV1
+in vec2 v_uv1;
+#endif
 in mat3 v_tbn;
 
 #if defined(USE_INSTANCING) && defined(USE_TEXTURE_ARRAY)
@@ -40,6 +44,8 @@ uniform sampler2D u_specularMap;
 uniform samplerCube u_irradianceMap;
 uniform samplerCube u_prefilterMap;
 uniform sampler2D u_brdfLUT;
+#endif
+#if defined(USE_IBL) || defined(USE_ENV_MAP)
 uniform float u_envIntensity;
 #endif
 

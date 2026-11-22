@@ -38,7 +38,7 @@ export class Showcase extends AbstractShowcase {
     // 1. Setup Camera and Lighting
     this.setInitialCamera(new Vector3D(0, 30, 60), new Vector3D(0, 0, 0));
 
-    const ambient = new AmbientLight({ color: Color.WHITE, intensity: 0.35 });
+    const ambient = new AmbientLight({ color: Color.WHITE, intensity: 1.1 });
     this.scene.add(ambient);
 
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.0 });

@@ -51,3 +51,33 @@ If you want to commit a layout refactoring, use an appropriate quote:
 `git commit -m "Perfection is achieved, not when there is nothing more to add, but when there is nothing left to take away."`
 
 Never use anything else for any commit.
+
+## 3. Package CHANGELOG.md Standards (`packages/*/CHANGELOG.md`)
+
+Each published satellite package (`extras`, `tools`, `gltf-extensions`) maintains an independent, consumer-facing `CHANGELOG.md` following standard [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [SemVer](https://semver.org/):
+
+### Action Matrix: What to update and when
+
+| Action | Root `CHANGELOG.md` | `packages/<pkg>/CHANGELOG.md` | Git Commit Message |
+| :--- | :--- | :--- | :--- |
+| **Regular Milestone / Feature Commit** | ❌ Do NOT touch | ❌ Do NOT touch | Pure quote without author/quotes |
+| **Satellite Package Release / Version Bump** | ❌ Do NOT touch | ✅ Add `## [x.y.z] - YYYY-MM-DD` | Pure quote without author/quotes |
+| **Core Engine / Platform Release** | ✅ Add `## [x.y.z]` + Quote | ❌ (Unless satellite package bumped) | Pure quote without author/quotes |
+
+### Rules for Package Changelogs:
+1. **Scope:** Only document changes, features, fixes, and breaking changes that affect consumers of that specific package.
+2. **Format:** Standard markdown without release quotes or philosophical subheaders:
+   ```markdown
+   # Changelog - @small-world-machine/<package-name>
+
+   All notable changes to this package will be documented in this file.
+   This package adheres to [Semantic Versioning](https://semver.org/).
+
+   ## [x.y.z] - YYYY-MM-DD
+   - **Added:** Description.
+   - **Changed:** Description.
+   - **Fixed:** Description.
+   ```
+3. **Core Engine (`packages/engine`):** Points directly to root `CHANGELOG.md` which remains the central platform and core engine release ledger.
+4. **Automated Enforcement:** Every package's `CHANGELOG.md` top-most version MUST match its `package.json` version. Guarded automatically by `tests/scripts/changelogFormat.test.ts`.
+

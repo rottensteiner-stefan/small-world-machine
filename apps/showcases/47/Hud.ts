@@ -115,7 +115,7 @@ export class Hud {
           "💡 Studio Light",
           "live",
           hudSlider("slKeyInt", "Key Light", 0, 8, 0.05) +
-            hudSlider("slAmbInt", "Ambient Fill", 0, 1, 0.01) +
+            hudSlider("slAmbInt", "Ambient Fill", 0, 3, 0.01) +
             hudSlider("slRimInt", "Rim / Back", 0, 6, 0.05),
         )}
 

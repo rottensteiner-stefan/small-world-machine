@@ -105,6 +105,31 @@
       "webgpu": { "state": "present", "file": "packages/engine/src/renderers/post/shaders/ContactShadow.comp.wgsl", "pattern": "fn cs_main" },
       "webgl2": { "state": "present", "file": "packages/engine/src/renderers/post/shaders/PostProcess.frag.glsl", "pattern": "u_contactShadowsEnabled" },
       "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/post/shaders/PostProcess100.frag.glsl", "pattern": "u_contactShadowsTexture", "reason": "ADR 0043 tier fallback: WebGL1 omits scene depth-texture raymarching and falls back cleanly without crash (u_contactShadowsEnabled remains 0)" }
+    },
+    "hemisphere_light": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "mix\\(global\\.ambientGround\\.rgb, global\\.ambientColor\\.rgb" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "mix\\(u_ambientGround, u_ambientColor" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "mix\\(u_ambientGround, u_ambientColor" }
+    },
+    "multi_scattering_ibl": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "FmsEms" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "FmsEms" },
+      "webgl1": { "state": "absent", "class": "deliberate", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "FmsEms", "reason": "WebGL1 has no irradiance/prefilter IBL cubes; per-object envMap probes retain single-scatter split-sum approximation" }
+    },
+    "specular_ao": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl", "pattern": "computeSpecularOcclusion" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl", "pattern": "computeSpecularOcclusion" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/chunks/light_calc_pbr.frag.glsl", "pattern": "computeSpecularOcclusion" }
+    },
+    "khr_texture_transform": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/core/materials/surface/shaders/Standard.frag.wgsl", "pattern": "swmTransformUv" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl", "pattern": "swmTransformUv" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/core/materials/surface/shaders/Standard.frag.glsl100", "pattern": "swmTransformUv" }
+    },
+    "texcoord_1": {
+      "webgpu": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gpu/base.vert.wgsl", "pattern": "USE_UV1" },
+      "webgl2": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl2/chunks/base_vertex_main.vert.glsl", "pattern": "USE_UV1" },
+      "webgl1": { "state": "present", "file": "packages/engine/src/renderers/shaders/source/web_gl1/base.vert.glsl", "pattern": "USE_UV1" }
     }
   }
 }

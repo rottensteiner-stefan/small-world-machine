@@ -7,6 +7,7 @@ import {
   DirectionalLight,
   GltfLoader,
   Object3D,
+  PointLight,
   PostProcessingEffectType,
   RendererType,
   SpotLight,
@@ -37,7 +38,7 @@ const LIGHT_PRESETS: Record<LightingPresetId, LightingPresetConfig> = {
     sunColor: new Color(1, 0.977, 0.953),
     fillIntensity: 0.5,
     fillColor: new Color(0.579, 0.73, 0.904),
-    ambientIntensity: 0.25,
+    ambientIntensity: 0.79,
     ambientColor: new Color(0.351, 0.381, 0.422),
     emissiveIntensity: 1.0,
     bloomIntensity: 1.8,
@@ -49,7 +50,7 @@ const LIGHT_PRESETS: Record<LightingPresetId, LightingPresetConfig> = {
     sunColor: new Color(0.85, 0.1, 0.65),
     fillIntensity: 1.4,
     fillColor: new Color(1.0, 0.05, 0.4),
-    ambientIntensity: 0.15,
+    ambientIntensity: 0.47,
     ambientColor: new Color(0.1, 0.15, 0.3),
     emissiveIntensity: 3.0,
     bloomIntensity: 3.0,
@@ -61,7 +62,7 @@ const LIGHT_PRESETS: Record<LightingPresetId, LightingPresetConfig> = {
     sunColor: new Color(1.0, 0.98, 0.92),
     fillIntensity: 0.4,
     fillColor: new Color(0.85, 0.9, 0.95),
-    ambientIntensity: 0.45,
+    ambientIntensity: 1.41,
     ambientColor: new Color(0.45, 0.52, 0.65),
     emissiveIntensity: 0.8,
     bloomIntensity: 1.2,
@@ -73,7 +74,7 @@ const LIGHT_PRESETS: Record<LightingPresetId, LightingPresetConfig> = {
     sunColor: new Color(0, 0, 0),
     fillIntensity: 0.15,
     fillColor: new Color(0.2, 0.25, 0.35),
-    ambientIntensity: 0.04,
+    ambientIntensity: 0.13,
     ambientColor: new Color(0.04, 0.05, 0.07),
     emissiveIntensity: 1.2,
     bloomIntensity: 2.2,
@@ -95,7 +96,7 @@ export class Showcase extends AbstractShowcase {
 
   private _keySpotLight?: SpotLight;
   private _mainLight?: DirectionalLight;
-  private _fillLight?: DirectionalLight;
+  private _fillLight?: PointLight;
   private _ambientLight?: AmbientLight;
   private _envTexture?: CubeTexture;
   private _bloom?: BloomElement;
@@ -115,7 +116,7 @@ export class Showcase extends AbstractShowcase {
     envMapEnabled: true,
     spotIntensity: 4.0,
     sunIntensity: 1.5,
-    ambientIntensity: 0.25,
+    ambientIntensity: 0.79,
     bloomEnabled: true,
     bloomIntensity: 1.8,
   };
@@ -153,7 +154,7 @@ export class Showcase extends AbstractShowcase {
       intensity: this._state.sunIntensity,
     });
     mainLight.position.set(5, 8, 5);
-    mainLight.direction.set(-1, -1.5, -1);
+    mainLight.direction.set(-1, -1.5, -1).normalize();
     mainLight.castShadow = true;
     mainLight.shadowBias = 0.003;
     this._mainLight = mainLight;
@@ -175,12 +176,15 @@ export class Showcase extends AbstractShowcase {
     this._keySpotLight = keySpotLight;
     this.scene.add(keySpotLight);
 
-    const fillLight = new DirectionalLight({
+    // PointLight (not DirectionalLight): the renderer supports one directional light slot, so a
+    // second DirectionalLight would overwrite mainLight (intensity and castShadow).
+    const fillLight = new PointLight({
       color: new Color(0.579, 0.73, 0.904),
       intensity: 0.5,
+      distance: 80.0,
+      decay: 0.0,
     });
     fillLight.position.set(-5, 2, -2);
-    fillLight.direction.set(1, -0.4, 0.5);
     this._fillLight = fillLight;
     this.scene.add(fillLight);
 
@@ -313,6 +317,7 @@ export class Showcase extends AbstractShowcase {
   private _toggleEnvMap(): void {
     this._state.envMapEnabled = !this._state.envMapEnabled;
     const env = this._state.envMapEnabled ? this._envTexture : undefined;
+    this.scene.environmentIntensity = this._state.envMapEnabled ? 1.0 : 0.0;
     if (this._helmetMaterial) this._helmetMaterial.envMap = env;
     if (this._pedestalMaterial) this._pedestalMaterial.envMap = env;
     if (this._groundMaterial) this._groundMaterial.envMap = env;
@@ -388,6 +393,7 @@ export class Showcase extends AbstractShowcase {
     this._state.clearcoat = 0.0;
     this._state.envMapEnabled = true;
     this._state.bloomEnabled = true;
+    this.scene.environmentIntensity = 1.0;
 
     if (this._helmetMaterial) {
       this._helmetMaterial.roughness = 1.0;

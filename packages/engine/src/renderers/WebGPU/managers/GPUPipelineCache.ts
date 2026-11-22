@@ -27,6 +27,8 @@ export interface WebGPUPipelineCacheEntry {
    * groups (clearcoat/sheen/transmission/specular maps, ADR 0054 revisit).
    */
   materialTextureNames: readonly string[];
+  /** True when the pipeline compiled with ShaderFlag.UV_TRANSFORMS (binding 35 uniform buffer). */
+  hasUvTransforms: boolean;
 }
 
 /** One entry of `getOptionalMaterialTextureBindings()`. */
@@ -593,6 +595,13 @@ export class GPUPipelineCache {
           matEntries.push(info.layoutEntry);
         }
       }
+      if (flags.includes(ShaderFlag.UV_TRANSFORMS)) {
+        matEntries.push({
+          binding: 35,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: "uniform" },
+        });
+      }
       this._checkSampledTextureBudget(shaderId, matEntries);
       bgl = this._device.createBindGroupLayout({ entries: matEntries });
       this._materialBGLCache.set(key, bgl);
@@ -759,7 +768,15 @@ export class GPUPipelineCache {
       const vertexBuffers: GPUVertexBufferLayout[] = [
         { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
         { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
-        { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
+        finalFlags.includes(ShaderFlag.UV1)
+          ? {
+              arrayStride: 16,
+              attributes: [
+                { shaderLocation: 2, offset: 0, format: "float32x2" },
+                { shaderLocation: 12, offset: 8, format: "float32x2" },
+              ],
+            }
+          : { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x2" }] },
         // Tangent contract is vec4 (tx, ty, tz, w) -- stride 16.
         { arrayStride: 16, attributes: [{ shaderLocation: 3, offset: 0, format: "float32x4" }] },
         { arrayStride: 16, attributes: [{ shaderLocation: 4, offset: 0, format: "float32x4" }] },
@@ -854,6 +871,7 @@ export class GPUPipelineCache {
           this._shaderRegistry,
           finalFlags,
         ),
+        hasUvTransforms: finalFlags.includes(ShaderFlag.UV_TRANSFORMS),
       };
       this._pipelines.set(key, cache);
       if (

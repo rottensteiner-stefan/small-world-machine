@@ -69,7 +69,7 @@ export class Hud {
           "☀️ Lighting",
           "Live",
           hudSlider("st40SlSun", "Sun intensity", 0, 2, 0.01) +
-            hudSlider("st40SlAmbient", "Ambient", 0, 1, 0.01),
+            hudSlider("st40SlAmbient", "Ambient", 0, 3, 0.01),
         )}
         ${hudSection(
           "🧱 Floor Surface",

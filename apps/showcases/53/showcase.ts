@@ -157,7 +157,7 @@ const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
     moonIntensity: 3.1,
     moonDirection: new Vector3D(0.38, -0.4, 0.83).normalize(),
     ambientColor: new Color(0.14, 0.2, 0.32),
-    ambientIntensity: 0.62,
+    ambientIntensity: 1.95,
     hangarColor: new Color(1.0, 0.16, 0.08),
     hangarIntensity: 260,
     fogColor: new Color(0.015, 0.025, 0.045),
@@ -171,7 +171,7 @@ const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
     moonIntensity: 3.3,
     moonDirection: new Vector3D(0.32, -0.48, 0.82).normalize(),
     ambientColor: new Color(0.22, 0.3, 0.42),
-    ambientIntensity: 0.88,
+    ambientIntensity: 2.76,
     hangarColor: new Color(1.0, 0.22, 0.12),
     hangarIntensity: 210,
     fogColor: new Color(0.026, 0.04, 0.068),
@@ -185,7 +185,7 @@ const ATMOSPHERES: Record<AtmosphereKey, AtmospherePreset> = {
     moonIntensity: 2.3,
     moonDirection: new Vector3D(0.42, -0.46, 0.78).normalize(),
     ambientColor: new Color(0.32, 0.09, 0.11),
-    ambientIntensity: 0.75,
+    ambientIntensity: 2.36,
     hangarColor: new Color(1.0, 0.08, 0.04),
     hangarIntensity: 480,
     fogColor: new Color(0.045, 0.014, 0.018),
@@ -666,7 +666,7 @@ export class Showcase extends AbstractShowcase {
       this._moonLight.intensity = preset.moonIntensity + flash * 6.5;
     }
     if (this._ambientLight) {
-      this._ambientLight.intensity = preset.ambientIntensity + flash * 1.35;
+      this._ambientLight.intensity = preset.ambientIntensity + flash * 4.24;
     }
     const vfog = this.renderer.postProcessing.get<VolumetricFogElement>(
       PostProcessingEffectType.VOLUMETRIC_FOG,
@@ -716,7 +716,7 @@ export class Showcase extends AbstractShowcase {
   private _setupLighting(): void {
     this._ambientLight = new AmbientLight({
       color: new Color(0.2, 0.27, 0.38),
-      intensity: 0.75,
+      intensity: 2.36,
     });
     this.scene.add(this._ambientLight);
 

@@ -115,3 +115,9 @@ split measured at the fixed observer is inherent perspective of the off-center v
 per-screen geometry defect. The grid-aligned implementation of the previous entry is the final
 shape. No code changes resulted from this decision.
 
+---
+
+## 2026-11-22 — Single-slot DirectionalLight fix (`dirLight2` → `PointLight`)
+
+- Replaced `dirLight2` (`DirectionalLight`) with a non-decaying `PointLight` (`distance: 120`, `decay: 0`, positioned along the inverse direction at `(-30, 15, 30)`) and normalized `dirLight.direction`. Prevents the secondary directional fill light from overwriting `dirLight` in `AbstractRenderer.extractLights()`.
+

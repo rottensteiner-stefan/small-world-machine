@@ -18,6 +18,7 @@ export interface WebGPUGeoCacheEntry {
   vb: GPUBuffer;
   nb: GPUBuffer | undefined;
   uvb: GPUBuffer | undefined;
+  uv01b: GPUBuffer | undefined;
   tb: GPUBuffer | undefined;
   cb: GPUBuffer | undefined;
   jb: GPUBuffer | undefined;
@@ -63,6 +64,10 @@ export class GPUGeometryCache {
         if (c.nb && geo.normals) this._device.queue.writeBuffer(c.nb, 0, geo.normals);
         if (c.tb && geo.tangents?.length) this._device.queue.writeBuffer(c.tb, 0, geo.tangents);
         if (c.cb && geo.colors?.length) this._device.queue.writeBuffer(c.cb, 0, geo.colors);
+        if (c.uv01b) {
+          c.uv01b.destroy();
+          c.uv01b = undefined;
+        }
         for (const r of c.lineRibbons) r.dirty = true;
         geo.needsUpdate = false;
         this.holdGeometry(obj, geo, c);
@@ -74,6 +79,7 @@ export class GPUGeometryCache {
           ? this._createBuffer(geo.normals, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
           : undefined,
         uvb: geo.uvs?.length ? this._createBuffer(geo.uvs, GPUBufferUsage.VERTEX) : undefined,
+        uv01b: undefined,
         tb: geo.tangents?.length
           ? this._createBuffer(geo.tangents, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST)
           : undefined,
@@ -111,6 +117,34 @@ export class GPUGeometryCache {
     }
     this.holdGeometry(obj, geo, c);
     return c;
+  }
+
+  /**
+   * Lazily builds and caches the interleaved `(u0, v0, u1, v1)` stride-16 vertex buffer for
+   * pipelines compiled with `ShaderFlag.UV1`. Keeps slot count within `maxVertexBuffers = 8`.
+   */
+  public getInterleavedUv01Buffer(geo: GeometryDataInterface, c: WebGPUGeoCacheEntry): GPUBuffer {
+    if (c.uv01b) return c.uv01b;
+    const count = c.vertexCount;
+    const packed = new Float32Array(count * 4);
+    const uv0 = geo.uvs;
+    const uv1 = geo.uvs1;
+    const has0 = uv0 !== undefined && uv0.length >= count * 2;
+    const has1 = uv1 !== undefined && uv1.length >= count * 2;
+    for (let i = 0; i < count; i++) {
+      const dst = i * 4;
+      const src = i * 2;
+      if (has0) {
+        packed[dst] = uv0[src]!;
+        packed[dst + 1] = uv0[src + 1]!;
+      }
+      if (has1) {
+        packed[dst + 2] = uv1[src]!;
+        packed[dst + 3] = uv1[src + 1]!;
+      }
+    }
+    c.uv01b = this._createBuffer(packed, GPUBufferUsage.VERTEX);
+    return c.uv01b;
   }
 
   /**
@@ -207,6 +241,7 @@ export class GPUGeometryCache {
       c.vb.destroy();
       c.nb?.destroy();
       c.uvb?.destroy();
+      c.uv01b?.destroy();
       c.tb?.destroy();
       c.cb?.destroy();
       c.jb?.destroy();
@@ -223,6 +258,7 @@ export class GPUGeometryCache {
       c.vb.destroy();
       c.nb?.destroy();
       c.uvb?.destroy();
+      c.uv01b?.destroy();
       c.tb?.destroy();
       c.cb?.destroy();
       c.jb?.destroy();

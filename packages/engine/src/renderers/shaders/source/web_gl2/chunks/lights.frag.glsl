@@ -64,6 +64,8 @@ layout(std140) uniform GlobalUniforms {
     vec2 u_tileSizePx;
     float u_toneMappingWhite; // forward REINHARD_EXTENDED white point (std140 gap before u_clusterDims)
     vec4 u_clusterDims; // x/y/z cell counts, w = maxLightsPerCluster, all as float
+    vec3 u_ambientGround;
+    int _pad4;
 };
 
 // Clustered light culling data textures: RGBA32UI (point.rg, spot.ba) per cluster cell,

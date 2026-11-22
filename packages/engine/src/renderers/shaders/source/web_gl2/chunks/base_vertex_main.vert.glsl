@@ -92,6 +92,10 @@ void main() {
     uvSin = sin(u_texRotation);
   }
   v_uv = vec2(uvCos * uvScaled.x - uvSin * uvScaled.y, uvSin * uvScaled.x + uvCos * uvScaled.y) + u_texOffset;
+  v_uv0 = a_uv;
+#ifdef USE_UV1
+  v_uv1 = a_uv1;
+#endif
 
   // Bitangent handedness w = ±1: folded into B in the VERTEX stage (fragment/material
   // shaders reconstruct the TBN unmodified). Defaults to +1 when the tangent is zero or

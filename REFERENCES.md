@@ -548,6 +548,25 @@ This document serves to record external sources, algorithms, mathematical deriva
   - [Kaplanyan, Hill, Patney, Lefohn: "Filtering Distributions of Normals for Shading Antialiasing" (HPG 2016)](https://doi.org/10.2312/hpg.20161188)
 - **Usage:** Widens the GGX lobe by the screen-space variance of the shading normal, $\sigma^2 = 0.15\,(\lVert\partial N/\partial x\rVert^2 + \lVert\partial N/\partial y\rVert^2)$, $\alpha'^2 = \mathrm{sat}(\alpha^2 + \min(2\sigma^2, 0.2))$ with $\alpha = r_{\text{perceptual}}^2$. Adds the normal map's in-pixel variance from the mipmapped normal length (Toksvig, vMF form: $\sigma^2 = (1 - n_l^2)/(3n_l - n_l^3)$). Stops sub-pixel normal-map and curvature detail from producing single-pixel specular sparkles on all three tiers.
 
+### Multi-Scattering Microfacet IBL (Fdez-Agüera Energy Compensation)
+
+- **File:** `packages/engine/src/renderers/shaders/source/web_gpu/chunks/lighting_pbr.wgsl`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/light_calc_pbr.frag.glsl` (`@invariant PBR-ENERGY-CONSERVATION`)
+- **Authors/Gurus:** Carmelo J. Fdez-Agüera (2019)
+- **Source:** [Fdez-Agüera: "A Multiple-Scattering Microfacet Model for Real-Time Image-Based Lighting" (JCGT 8(1), 2019)](https://jcgt.org/published/0008/01/03/)
+- **Formulas:**
+  - $F_{\text{ss}}E_{\text{ss}} = k_S \cdot \text{brdf}_x + F_{90} \cdot \text{brdf}_y$, $E_{\text{ss}} = \text{brdf}_x + \text{brdf}_y$, $E_{\text{ms}} = \max(1 - E_{\text{ss}}, 0)$
+  - $F_{\text{avg}} = F_0 + \frac{F_{90} - F_0}{21}$, $F_{\text{ms}} = \frac{F_{\text{ss}}E_{\text{ss}} \cdot F_{\text{avg}}}{1 - E_{\text{ms}} \cdot F_{\text{avg}}}$, $k_D = \max(1 - (F_{\text{ss}}E_{\text{ss}} + F_{\text{ms}}E_{\text{ms}}), 0)(1 - \text{metallic})$
+- **Usage:** Recovers energy lost in single-scattering IBL on rough metals and dielectrics so white-furnace reflectance approaches $1.0$ across roughness without LUT extensions.
+
+### Specular Ambient Occlusion (Lagarde & de Rousiers)
+
+- **File:** `packages/engine/src/renderers/shaders/source/web_gpu/chunks/pbr_math.wgsl`, `packages/engine/src/renderers/shaders/source/web_gl2/chunks/pbr_math.frag.glsl`, `packages/engine/src/renderers/shaders/source/web_gl1/chunks/pbr_math.frag.glsl`
+- **Authors/Gurus:** Sébastien Lagarde & Charles de Rousiers (Frostbite, SIGGRAPH 2014)
+- **Source:** [Lagarde & de Rousiers: "Moving Frostbite to Physically Based Rendering" (SIGGRAPH 2014 Course, §4.10.2)](https://seblagarde.wordpress.com/2015/07/14/siggraph-2014-moving-frostbite-to-physically-based-rendering/)
+- **Formulas:**
+  - $\text{SO}(N\cdot V, \text{ao}, r) = \mathrm{clamp}\big((N\cdot V + \text{ao})^{2^{-16 r - 1}} - 1 + \text{ao},\, 0,\, 1\big)$
+- **Usage:** Attenuates cavity and grazing-angle specular/clearcoat IBL occlusion consistently across all three tiers while preserving exact identity ($\text{SO} = 1$) when $\text{ao} = 1$.
+
 ### Khronos PBR Material Extensions & Formulas
 
 #### 1. `KHR_materials_ior` — Index of Refraction & Fresnel Baseline ($F_0$)

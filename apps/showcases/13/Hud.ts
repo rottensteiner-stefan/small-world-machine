@@ -87,7 +87,7 @@ export class Hud {
           <div class="preset-group four-col" style="margin-bottom:8px;">${presetButtons}</div>
           ${hudSlider("st13SlSpotIntensity", "Spotlight", 0, 10, 0.1)}
           ${hudSlider("st13SlSunIntensity", "Directional Sun", 0, 5, 0.1)}
-          ${hudSlider("st13SlAmbientIntensity", "Ambient Light", 0, 1, 0.02)}
+          ${hudSlider("st13SlAmbientIntensity", "Ambient Light", 0, 3, 0.02)}
         `,
         ),
         hudSection(

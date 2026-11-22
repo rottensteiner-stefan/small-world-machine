@@ -411,7 +411,7 @@ export class Showcase extends AbstractShowcase {
     // collapses into flat black voids; a faint simulated bounce fill, kept below the mood.
     const ambientLight = new AmbientLight({
       color: new Color(0.335, 0.278, 0.232),
-      intensity: 0.3,
+      intensity: 0.94,
     });
     this.scene.add(ambientLight);
 

@@ -33,9 +33,9 @@ const registry = new ShaderRegistry();
 
 /** Replicates `WebGPURenderer._computeStructsChunk()`: group-0-only view of the structs chunk. */
 function computeStructsChunk(): string {
-  const raw = registry.getChunk(ShaderChunkId.WGSL_STRUCTS, "wgsl") ?? "";
+  const raw = registry.assemble(`[${ShaderChunkId.WGSL_STRUCTS}]`, "wgsl");
   const group0Only = raw.split("@group(1)")[0] ?? raw;
-  return "const USE_DECAL_GRADIENTS: bool = false;\n" + group0Only;
+  return "const USE_DECAL_GRADIENTS: bool = false;\n" + preprocessConditionals(group0Only, []);
 }
 
 const SCAN_ROOTS = [
@@ -178,8 +178,9 @@ async function collectTargets(): Promise<LintTarget[]> {
         source = registry.assemble("[WGSL_STRUCTS]\n" + raw, "wgsl");
       }
 
+      const usesPipelineCache = kind !== "compute" && !rel.includes("/web_gpu/instance_field/");
       const hasConditionals = /^\s*#\s*(?:ifdef|ifndef)\b/m.test(source);
-      if (!hasConditionals) {
+      if (!usesPipelineCache || !hasConditionals) {
         targets.push({ file: full, kind, source, label: "" });
         continue;
       }

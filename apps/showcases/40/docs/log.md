@@ -113,3 +113,7 @@ Query-Parameter erreichbaren Decal-Parameter direkt ausprobierbar zu machen.
   convention and mirrored the view below the ground. Showcase 40 calls `resetCamera()` itself
   (`showcase.ts` ~505), so this applies without pressing `R`. Verified in showcases 50 and 1, not
   re-checked visually in 40.
+
+### 2026-11-22 — Ambient `1/π` Irradiance Alignment
+- Rescaled `AmbientLight.intensity` (`× Math.PI`) across `showcase.ts`, `Hud.ts`, `mipScene.ts`, `ormScene.ts`, `poolScene.ts`, and `wetScene.ts` to preserve visual parity under ADR 0063's `1 / π` PBR ambient irradiance normalization.
+- Updated `.agents/scripts/check-decals.mjs` (`aoStats`) to fall back to `r._postFxChain?._passes?.get("Hbao")?._aoTexture` on WebGPU.

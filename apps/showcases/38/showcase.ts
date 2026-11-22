@@ -356,7 +356,7 @@ export class Showcase extends AbstractShowcase {
     // ------------------------------------------------------------------------
     this._ambientLight = new AmbientLight({
       color: new Color(0.459, 0.381, 0.317),
-      intensity: 0.25,
+      intensity: 0.25 * Math.PI,
     });
     this.scene.add(this._ambientLight);
 
@@ -1544,7 +1544,7 @@ export class Showcase extends AbstractShowcase {
       this._sunLight.color.set(1, 0.982, 0.944);
       this._sunLight.intensity = 3.5;
       this._ambientLight.color.set(0.533, 0.481, 0.435);
-      this._ambientLight.intensity = 0.4;
+      this._ambientLight.intensity = 0.4 * Math.PI;
       this._fog.color.set(0.822, 0.73, 0.621);
       this._fog.density = 0.004;
       if (this._toneMapping) this._toneMapping.exposure = 1.0;
@@ -1559,7 +1559,7 @@ export class Showcase extends AbstractShowcase {
       this._sunLight.color.set(0.317, 0.381, 0.502);
       this._sunLight.intensity = 0.12;
       this._ambientLight.color.set(0.169, 0.169, 0.232);
-      this._ambientLight.intensity = 0.08;
+      this._ambientLight.intensity = 0.08 * Math.PI;
       this._fog.color.set(0.256, 0.278, 0.351);
       this._fog.density = 0.008;
       if (this._toneMapping) this._toneMapping.exposure = 1.45;
@@ -1574,7 +1574,7 @@ export class Showcase extends AbstractShowcase {
       this._sunLight.color.set(1, 0.944, 0.861);
       this._sunLight.intensity = 2.8;
       this._ambientLight.color.set(0.459, 0.381, 0.317);
-      this._ambientLight.intensity = 0.25;
+      this._ambientLight.intensity = 0.25 * Math.PI;
       this._fog.color.set(0.762, 0.621, 0.502);
       this._fog.density = 0.006;
       if (this._toneMapping) this._toneMapping.exposure = 1.15;

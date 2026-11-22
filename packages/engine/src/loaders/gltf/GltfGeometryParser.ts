@@ -76,6 +76,10 @@ export class GltfGeometryParser {
       attributes["TEXCOORD_0"] !== undefined
         ? GltfBinaryParser.getBufferData(json.accessors[attributes["TEXCOORD_0"]], json, buffers)
         : undefined;
+    const uvs1 =
+      attributes["TEXCOORD_1"] !== undefined
+        ? GltfBinaryParser.getBufferData(json.accessors[attributes["TEXCOORD_1"]], json, buffers)
+        : undefined;
     const indices =
       primitive.indices !== undefined
         ? GltfBinaryParser.getBufferData(json.accessors[primitive.indices], json, buffers)
@@ -157,6 +161,11 @@ export class GltfGeometryParser {
         ? uvs
         : new Float32Array(uvs)
       : new Float32Array(0);
+    const uv1Array = uvs1
+      ? uvs1 instanceof Float32Array
+        ? uvs1
+        : new Float32Array(uvs1)
+      : undefined;
     const normArray = normals
       ? normals instanceof Float32Array
         ? normals
@@ -188,6 +197,7 @@ export class GltfGeometryParser {
     }
 
     return new ModelGeometry(posArray, uvArray, normArray, finalIndices, {
+      ...(uv1Array ? { uvs1: uv1Array } : {}),
       ...(tanArray ? { tangents: tanArray } : {}),
       ...(headerBounds ? { headerBounds } : {}),
       ...(finalJoints || finalWeights ? { joints: finalJoints, weights: finalWeights } : {}),

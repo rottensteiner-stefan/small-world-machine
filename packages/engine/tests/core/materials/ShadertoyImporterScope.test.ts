@@ -44,25 +44,63 @@ describe("ShadertoyImporter GLSL300 scope", () => {
     expect(fs.indexOf("SHADERTOY SOURCE END")).toBeLessThan(
       fs.indexOf("swm_displayToTarget(color.rgb)"),
     );
+    expect(fs).not.toContain("out vec2 v_uv;");
+    expect(fs.match(/\buniform\s+GlobalUniforms\b/g)?.length).toBe(1);
   });
 
-  it("GlobalUniforms prefix stays byte-identical to the engine UBO up to u_gamma (std140 drift pin)", () => {
+  it("GlobalUniforms matches the engine UBO member-for-member (no WebGL2/ANGLE VS/FS link mismatch)", () => {
     const lights = readFileSync(
       join(__dirname, "../../../src/renderers/shaders/source/web_gl2/chunks/lights.frag.glsl"),
       "utf8",
     );
-    const members = (src: string): string[] =>
-      src
+    const baseVert = readFileSync(
+      join(
+        __dirname,
+        "../../../src/renderers/shaders/source/web_gl2/chunks/base_vertex_header.vert.glsl",
+      ),
+      "utf8",
+    );
+    const extractBlock = (src: string): string => {
+      const start = src.indexOf("layout(std140) uniform GlobalUniforms");
+      const open = src.indexOf("{", start);
+      const close = src.indexOf("}", open);
+      return src.slice(open + 1, close);
+    };
+    const members = (blockBody: string): string[] =>
+      blockBody
         .replace(/\/\/[^\n]*/g, "")
         .split("\n")
         .map((l) => l.trim())
-        .filter((l) => /^(mat4|vec3|int|float)\s+\w+;$/.test(l));
-    const engine = members(lights.slice(lights.indexOf("uniform GlobalUniforms")));
-    const mine = members(
-      SHADERTOY_GAMMA_DEFS.slice(0, SHADERTOY_GAMMA_DEFS.indexOf("} swm_global")),
-    );
-    expect(mine.length).toBeGreaterThan(5);
-    expect(mine).toEqual(engine.slice(0, mine.length));
-    expect(mine[mine.length - 1]).toBe("float u_gamma;");
+        .filter((l) => l.length > 0);
+    const extractStruct = (src: string, name: string): string[] => {
+      const m = src.match(new RegExp(`struct\\s+${name}\\s*\\{([\\s\\S]*?)\\};`));
+      return m ? members(m[1]!) : [];
+    };
+
+    const extractInstanceName = (src: string): string => {
+      const start = src.indexOf("layout(std140) uniform GlobalUniforms");
+      const open = src.indexOf("{", start);
+      const close = src.indexOf("}", open);
+      const semi = src.indexOf(";", close);
+      return src.slice(close + 1, semi).trim();
+    };
+
+    const mine = members(extractBlock(SHADERTOY_GAMMA_DEFS));
+    const engineFrag = members(extractBlock(lights));
+    const engineVert = members(extractBlock(baseVert));
+
+    expect(mine.length).toBeGreaterThan(15);
+    expect(mine).toEqual(engineFrag);
+    expect(mine).toEqual(engineVert);
+    expect(extractInstanceName(SHADERTOY_GAMMA_DEFS)).toBe("");
+    expect(extractInstanceName(SHADERTOY_GAMMA_DEFS)).toBe(extractInstanceName(lights));
+    expect(extractInstanceName(SHADERTOY_GAMMA_DEFS)).toBe(extractInstanceName(baseVert));
+
+    for (const structName of ["PointLight", "SpotLight", "AreaLight"]) {
+      const mineStruct = extractStruct(SHADERTOY_GAMMA_DEFS, structName);
+      expect(mineStruct.length).toBeGreaterThan(0);
+      expect(mineStruct).toEqual(extractStruct(lights, structName));
+      expect(mineStruct).toEqual(extractStruct(baseVert, structName));
+    }
   });
 });

@@ -54,7 +54,7 @@ export class Showcase extends AbstractShowcase {
     // Lighting: a soft backlight sells the shattered glass silhouette and cracks
     const ambientLight = new AmbientLight({
       color: new Color(0.422, 0.435, 0.481),
-      intensity: 0.3,
+      intensity: 0.94,
     });
     this.scene.add(ambientLight);
 
@@ -63,17 +63,20 @@ export class Showcase extends AbstractShowcase {
       intensity: 1.1,
     });
     backLight.position.set(0, 3, -6);
-    backLight.direction.set(0, -0.3, 1);
+    backLight.direction.set(0, -0.3, 1).normalize();
     backLight.castShadow = true;
     backLight.shadowBias = 0.003;
     this.scene.add(backLight);
 
-    const fillLight = new DirectionalLight({
+    // PointLight (not DirectionalLight): the renderer supports one directional light slot, so a
+    // second DirectionalLight would overwrite backLight (intensity and castShadow).
+    const fillLight = new PointLight({
       color: new Color(0.579, 0.696, 0.85),
       intensity: 0.4,
+      distance: 40.0,
+      decay: 0.0,
     });
     fillLight.position.set(-4, 1, 4);
-    fillLight.direction.set(0.6, -0.2, -1);
     this.scene.add(fillLight);
 
     // Warm accent light near the camera to bring out the metallic clasp/frame detail

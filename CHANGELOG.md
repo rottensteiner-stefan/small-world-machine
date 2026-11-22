@@ -2,6 +2,31 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.128.0] - 2026-11-22
+
+### "The real voyage of discovery consists not in seeking new landscapes, but in having new eyes." - Marcel Proust
+
+- **Features:**
+  - _Screen-space contact shadows & 3D LUT grading (`ContactShadowsElement`, `LutGradingElement`, `CubeLutParser`, `Lut3D`):_ added ray-marched screen-space contact shadows (`ContactShadowPassGPU`/`ContactShadowPassGL`) across WebGPU and WebGL2, plus `.cube` 3D LUT color grading across WebGPU and WebGL2.
+  - _Morph target animation & GPU blending (`MorphTargetBlender`, `GPUMorphTargetSystem`, `WebGL2MorphTargetManager`):_ added CPU morph-target evaluation (`morph_blend.wgsl` compute blending on WebGPU, WebGL2 texture-backed morph buffers, and WebGL1 vertex fallback) wired into `GltfGeometryParser` and `GltfAnimationParser`.
+  - _Two-phase HZB occlusion culling (`InstanceFieldSystem`, `HzbOcclusionSystem`, ADR 0059 Step 3):_ added WebGPU two-phase HZB culling (`cullMode == 2`) rescuing disoccluded instances against the rebuilt current-frame pyramid with zero CPU readback.
+  - _Far-field vegetation impostors & canopy shells (`OctahedralImpostor`, `CanopyShell`, ADR 0059 Steps 3–4):_ added multi-view hemi/full-octahedral atlas baking and parallax shaders (`OctahedralImpostorMaterial`) plus terrain-following `CanopyShellMaterial` envelopes in `@small-world-machine/vegetation-extras`.
+  - _SPH fluid particles & CDLOD water quadtree (`SphFluidAffector`, `WaterQuadtree`):_ added zero-GC 3D SPH simulation in `@small-world-machine/vfx-extras` (`Showcase 46` `fluid` variant) alongside a 2:1-balanced, `Uint16`-safe CDLOD `WaterQuadtree` generator in core geometry.
+  - _Binary GLB exporter & runtime resolution governor (`GlbWriter`, `swm glb`, `PerformanceGovernor`):_ added spec-compliant binary `.glb` packing (`WorldWriter.writeGlb()`, `swm glb`) and zero-GC EMA frame-time `PerformanceGovernor` dynamic `renderScale` scaling (ADR 0035 Phase 4).
+  - _Hemisphere ambient light & volumetric sky/ground fill (`HemisphereLight`, `LightType.HEMISPHERE`, `ambientGround`):_ added additive sky-to-ground gradient illumination (`mix(ground, sky, N.y * 0.5 + 0.5)`) across WebGPU, WebGL2, and WebGL1 (PBR, Phong/Lambert, `field_pull.wgsl`), plus spherical average fog scattering (`froxel_inject.wgsl`, `VolumetricFogPassGL`).
+  - _Multi-scattering IBL & Frostbite specular AO (`lighting_pbr.wgsl`, `light_calc_pbr.frag.glsl`, `pbr_math.*`):_ implemented Fdez-Aguera (2019) multi-scattering IBL energy compensation across WebGPU/WebGL2 and Lagarde & de Rousiers (2014) `computeSpecularOcclusion` for base specular and clearcoat across all tiers.
+  - _Per-slot `KHR_texture_transform` & `TEXCOORD_1` (`TextureTransform`, `u_uvTransforms`, `AlphaCutoutGroups`, ADR 0064):_ added material-owned 19-slot UV transforms (`offset`, `scale`, `rotation`, `texCoord` `0 | 1`) with `uvs1`/`a_uv1` vertex streams and `swmTransformTbn` across WebGPU/WebGL2/WebGL1 without cloning shared textures, plus cutout depth/shadow/EVSM splitting.
+
+- **Architecture & Bugfixes:**
+  - _Additive `AmbientLight` accumulation & `u_envIntensity` fallback (`AmbientLight`, `base_fragment_header.frag.glsl`, Showcase `13`):_ made `AmbientLight.applyTo()` accumulate additively alongside `HemisphereLight`, exposed `u_envIntensity` in WebGL2 `USE_ENV_MAP` fallback, and fixed WGSL/GL2 `AmbientLight + IBL` irradiance & Showcase 13 `environmentIntensity` state.
+  - _Single-slot `DirectionalLight` showcase discipline (Showcases `6/13/24/36/presentation`):_ replaced extra secondary `DirectionalLight` fill lights that overwrote the single directional light slot with non-decaying `PointLight` instances.
+  - _`ShadertoyImporter` WebGL2 UBO block parity (Showcase `24`):_ declared the full `GlobalUniforms` std140 interface block inside `SHADERTOY_GAMMA_DEFS` so GLSL ES 3.00 / ANGLE links vertex and fragment stages cleanly without UBO layout mismatch.
+  - _Early-Z `USE_ALPHA_TEST` shader split & frostglass parity (`ShaderFlag.ALPHA_TEST`, `FrostglassMaterial`):_ separated alpha-test cutout discards (`alphaTest > 0`) from opaque PBR/Standard/Phong/Lambert programs for full hardware early-Z, aligned `FrostglassMaterial` across all tiers, and wired a `FluidSurfaceMaterial` coolant pool in Showcase `32`.
+  - _Loader cancellation, GL field cleanup & `OilSlickMaterial` parity (`AssetManager`, `GltfLoader`, `InstanceFieldGL`, `OilSlickMaterial`):_ extended `AbortSignal` cleanup across loaders/textures, released `InstanceFieldGL` texture holdings on unregistration, and unified `oilHash(p)` across GLSL and WGSL (`<= 0.36%` GPU/GL2 parity).
+
+- **Housekeeping & Docs:**
+  - _Documentation & CLI catch-up (`ShaderFlag.ts`, `ADR 0055`, `ADR 0064`, `swm-cli.md`, `tier-parity.json`, `13/24/51/docs/log.md`, `MEMORY.md`, `BACKLOG.md`):_ updated `swm-cli.md` for `swm lod`/`swm glb`, recorded ADR 0064 (`khr_texture_transform` & `texcoord_1` in `tier-parity.json`), reconciled `ShaderFlag`/ADR 0055 map status, and updated `REFERENCES.md`/`CONTEXT.md` entries.
+
 ## [0.127.5] - 2026-11-21
 
 ### "Well done is better than well said." - Benjamin Franklin

@@ -73,7 +73,7 @@ async function readNormals(page, backend, points) {
         const gl = r.gl;
         if (!r.hasNormalTarget) throw new Error("hasNormalTarget=false");
         const tex = r.normalTexture;
-        const fbo = r._hdrFbo;
+        const fbo = r._hdrFbo ?? r._renderTargets?.hdrFbo;
         w = fbo.width ?? gl.drawingBufferWidth;
         h = fbo.height ?? gl.drawingBufferHeight;
         const f = gl.createFramebuffer();
@@ -202,7 +202,8 @@ async function aoStats(page, backend) {
     let px, w, h, rowStride, channelStride;
     if (be === "WEB_GPU") {
       const dev = r._device;
-      const tex = r._hbaoPassGPU?._aoTexture;
+      const tex =
+        r._hbaoPassGPU?._aoTexture ?? r._postFxChain?._passes?.get("Hbao")?._aoTexture;
       if (!tex) return null;
       w = tex.width;
       h = tex.height;
@@ -220,7 +221,8 @@ async function aoStats(page, backend) {
       channelStride = 4;
     } else {
       const gl = r.gl;
-      const tex = r._hbaoPassGL?._target?.texture;
+      const hbaoPass = r._hbaoPassGL ?? r._renderTargets?._postEffects?._passes?.get("Hbao");
+      const tex = hbaoPass?._target?.texture;
       if (!tex) return null;
       w = gl.canvas.width;
       h = gl.canvas.height;

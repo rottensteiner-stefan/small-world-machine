@@ -616,6 +616,16 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         lights.aCol.g * lights.aIntensity,
         lights.aCol.b * lights.aIntensity,
       );
+    const uAmbientGround = u.get("u_ambientGround");
+    if (uAmbientGround) {
+      const groundCol = lights.aGroundCol ?? lights.aCol;
+      this.gl.uniform3f(
+        uAmbientGround,
+        groundCol.r * lights.aIntensity,
+        groundCol.g * lights.aIntensity,
+        groundCol.b * lights.aIntensity,
+      );
+    }
 
     // G01: reflection-probe (u_envMap) radiance scales with the scene environment intensity like GL2/WGPU.
     const uEnvIntensity = u.get("u_envIntensity");
@@ -765,6 +775,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
           -1,
           -1,
           cache.attributes.get("a_color")!,
+          undefined,
+          undefined,
+          undefined,
+          cache.attributes.get("a_uv1") ?? -1,
         );
 
         // A mat4 attribute occupies 4 consecutive locations (loc..loc+3), one vec4 column each --
@@ -857,6 +871,7 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
           hasMorph ? morphEntry.vbo : undefined,
           hasMorph ? morphEntry.nbo : undefined,
           hasMorph ? morphEntry.tanbo : undefined,
+          cache.attributes.get("a_uv1") ?? -1,
         );
         mesh.draw(drawMode, batch.wireframeMode);
       }
@@ -1093,6 +1108,10 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
         -1,
         -1,
         cache.attributes.get("a_color")!,
+        undefined,
+        undefined,
+        undefined,
+        cache.attributes.get("a_uv1") ?? -1,
       );
 
       const posLoc = cache.attributes.get("a_instancePos");
@@ -1216,6 +1235,16 @@ export class WebGL1Renderer extends AbstractWebGLRenderer {
           lights.aCol.g * lights.aIntensity,
           lights.aCol.b * lights.aIntensity,
         );
+      const uAmbientGround = u.get("u_ambientGround");
+      if (uAmbientGround) {
+        const groundCol = lights.aGroundCol ?? lights.aCol;
+        gl.uniform3f(
+          uAmbientGround,
+          groundCol.r * lights.aIntensity,
+          groundCol.g * lights.aIntensity,
+          groundCol.b * lights.aIntensity,
+        );
+      }
       const uDirLightColor = u.get("u_dirLightColor");
       if (uDirLightColor)
         gl.uniform3f(

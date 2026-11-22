@@ -202,6 +202,11 @@ export class WebGL2InstanceManager {
         cache.attributes.get("a_tangent")!,
         cache.attributes.get("a_joints") ?? -1,
         cache.attributes.get("a_weights") ?? -1,
+        -1,
+        undefined,
+        undefined,
+        undefined,
+        cache.attributes.get("a_uv1") ?? -1,
       );
     }
 

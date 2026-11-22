@@ -21,7 +21,15 @@ export class AmbientLight extends AbstractLight {
 
   /** @inheritdoc */
   public override applyTo(data: LightDataInterface): void {
-    data.aCol.copyFrom(this.linearColor);
-    data.aIntensity = this.intensity;
+    const lin = this.linearColor;
+    const k = this.intensity;
+    const r = lin.r * k;
+    const g = lin.g * k;
+    const b = lin.b * k;
+    data.aCol.set(data.aCol.r + r, data.aCol.g + g, data.aCol.b + b, 1);
+    if (data.aGroundCol) {
+      data.aGroundCol.set(data.aGroundCol.r + r, data.aGroundCol.g + g, data.aGroundCol.b + b, 1);
+    }
+    data.aIntensity = 1;
   }
 }

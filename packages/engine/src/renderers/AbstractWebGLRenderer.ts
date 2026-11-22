@@ -480,7 +480,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
   ): void {
     for (const name in properties) {
       const value = properties[name];
-      const loc = u.get(name);
+      const loc = u.get(name) ?? u.get(`${name}[0]`);
       if (!loc) continue;
 
       if (typeof value === "number") {
@@ -491,6 +491,7 @@ export abstract class AbstractWebGLRenderer extends AbstractRenderer {
         else if (v.length === 3) this.gl.uniform3fv(loc, v);
         else if (v.length === 2) this.gl.uniform2fv(loc, v);
         else if (v.length === 16) this.gl.uniformMatrix4fv(loc, false, v);
+        else if (v.length > 4 && v.length % 4 === 0) this.gl.uniform4fv(loc, v);
       } else if (Array.isArray(value)) {
         if (value.length === 4) this.gl.uniform4fv(loc, value as number[]);
         else if (value.length === 3) this.gl.uniform3fv(loc, value as number[]);

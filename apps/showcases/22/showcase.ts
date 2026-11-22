@@ -77,7 +77,7 @@ export class Showcase extends AbstractShowcase {
     }
 
     // 1. Lighting Setup
-    const ambient = new AmbientLight({ color: new Color(0.351, 0.351, 0.481), intensity: 1.0 });
+    const ambient = new AmbientLight({ color: new Color(0.351, 0.351, 0.481), intensity: Math.PI });
     const dirLight = new DirectionalLight({ color: new Color(0.904, 0.953, 1), intensity: 2.0 });
     dirLight.position.set(10, 20, 10);
     this.scene.add(ambient, dirLight);

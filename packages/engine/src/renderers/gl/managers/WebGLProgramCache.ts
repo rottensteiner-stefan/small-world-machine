@@ -4,7 +4,7 @@ import { compileProgram } from "../../compileProgram.js";
 import type { ShaderDefinition, ShaderRegistry } from "../../shaders/index.js";
 import { StandardWebGPULayout } from "../../shaders/index.js";
 import type { WebGL2UniformBuffer } from "../../WebGL2/WebGL2UniformBuffer.js";
-import { VERTEX_COLOR_LOCATION } from "../../Mesh.js";
+import { UV1_LOCATION, VERTEX_COLOR_LOCATION } from "../../Mesh.js";
 import {
   RENDERER_OWNED_SAMPLERS,
   RESERVED_UNIT_END,
@@ -144,6 +144,7 @@ export class WebGLProgramCache {
     [VERTEX_COLOR_LOCATION, "a_color"],
     [12, "a_instancePos"],
     [13, "a_instancePose"],
+    [UV1_LOCATION, "a_uv1"],
   ];
 
   private _programs = new Map<string, WebGLProgramCacheEntry>();
@@ -294,7 +295,7 @@ export class WebGLProgramCache {
     const samplerUnits = new Map<string, number>();
     const samplerTypes = new Map<string, number>();
 
-    const attribsToQuery = ["a_position", "a_normal", "a_uv", "a_tangent", "a_color"];
+    const attribsToQuery = ["a_position", "a_normal", "a_uv", "a_uv1", "a_tangent", "a_color"];
     if (isInstanced) attribsToQuery.push("a_instanceMatrix", "a_instanceData");
     // ADR 0059 field lane (glsl100 dialect): the pose comes from the unpacked f32 companion fill
     // (yaw/scale as two float attributes, the frozen contract's WebGL1 mapping); WebGL1 has no
@@ -493,6 +494,7 @@ export class WebGLProgramCache {
       "a_position",
       "a_normal",
       "a_uv",
+      "a_uv1",
       "a_tangent",
       "a_joints",
       "a_weights",

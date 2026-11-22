@@ -25,9 +25,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.join(__dirname, "global-uniform-snapshot.json");
 
 interface PackedSnapshot {
-  /** 528 floats = full 2112-byte WebGL2 GlobalUniforms UBO, _data order. */
+  /** 532 floats = full 2128-byte WebGL2 GlobalUniforms UBO, _data order. */
   webgl2: number[];
-  /** 428 floats = full 1712-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
+  /** 432 floats = full 1728-byte WebGPU GlobalUniforms buffer (scratchGlobalBufferData). */
   webgpu: number[];
 }
 
@@ -156,7 +156,7 @@ function makeVp(): Float32Array {
 
 function captureWebGL2(): number[] {
   const gl = makeMockGL();
-  const ubo = new WebGL2UniformBuffer(gl, 2112, 0) as Any;
+  const ubo = new WebGL2UniformBuffer(gl, 2128, 0) as Any;
   const renderer = Object.create(WebGL2Renderer.prototype) as Any;
   renderer._globalUBO = ubo;
   renderer.postProcessing = { enabled: false };
@@ -166,7 +166,7 @@ function captureWebGL2(): number[] {
   renderer.updateGlobalUBO(makeVp(), new Vector3D(11, 12, 13), makeLights(), 0.1, 500);
   renderer.writeClusterGridUniforms([32, 32]);
 
-  return Array.from(ubo._data.subarray(0, 2112 / 4));
+  return Array.from(ubo._data.subarray(0, 2128 / 4));
 }
 
 function captureWebGPU(): number[] {
@@ -235,14 +235,14 @@ describe("GlobalUniforms packed bytes vs committed snapshot (change detector)", 
     expect(packed.webgpu).toEqual(committed.webgpu);
   });
 
-  it("webgl2 snapshot is a full 2112-byte block (528 floats)", () => {
+  it("webgl2 snapshot is a full 2128-byte block (532 floats)", () => {
     const packed = captureSnapshot();
-    expect(packed.webgl2).toHaveLength(528);
+    expect(packed.webgl2).toHaveLength(532);
   });
 
-  it("webgpu snapshot is a full 1712-byte block (428 floats)", () => {
+  it("webgpu snapshot is a full 1728-byte block (432 floats)", () => {
     const packed = captureSnapshot();
-    expect(packed.webgpu).toHaveLength(428);
+    expect(packed.webgpu).toHaveLength(432);
   });
 
   it("both backends carry the forward tone curve lanes (mode = default PBR_NEUTRAL, white point)", () => {
@@ -490,6 +490,7 @@ const WEBGL2_OUTER_MEMBERS: ReadonlyArray<{ shader: string; table: string }> = [
   { shader: "u_areaLights", table: "areaLights" },
   { shader: "u_tileSizePx", table: "tileSizePx" },
   { shader: "u_clusterDims", table: "clusterDims" },
+  { shader: "u_ambientGround", table: "ambientGround" },
 ];
 
 function expectGLSLBlockMatchesTable(source: string): void {
@@ -541,6 +542,21 @@ describe("shader parse: GlobalUniformLayout equals the authoritative shaders", (
 
   it("lights.frag.glsl std140 block matches the WebGL2 table", () => {
     expectGLSLBlockMatchesTable(LIGHTS_FRAG_GLSL);
+  });
+
+  it("all standalone GLSL GlobalUniforms vertex blocks match the WebGL2 table", () => {
+    const standalonePaths = [
+      "../../src/core/materials/liquid/shaders/FluidSurface.vert.glsl",
+      "../../src/core/materials/liquid/shaders/Ocean.vert.glsl",
+      "../../src/core/materials/liquid/shaders/OpenWater.vert.glsl",
+      "../../src/core/materials/liquid/shaders/StylizedLava.vert.glsl",
+      "../../src/core/materials/liquid/shaders/StylizedWater.vert.glsl",
+      "../../../vfx-extras/src/fire/Fire.vert.glsl",
+    ];
+    for (const rel of standalonePaths) {
+      const src = fs.readFileSync(path.resolve(__dirname, rel), "utf8");
+      expectGLSLBlockMatchesTable(src);
+    }
   });
 
   it("nested PointLight/SpotLight/AreaLight std140 offsets match the slot sub-layout tables", () => {

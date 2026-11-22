@@ -110,7 +110,7 @@ export class Hud {
           </div>
           <div class="hud-row">
             <label for="st43SlAmbient" title="Flat fill light; controls how dark the shadow gets">Ambient</label>
-            <input id="st43SlAmbient" type="range" min="0" max="1" step="0.01" />
+            <input id="st43SlAmbient" type="range" min="0" max="3" step="0.01" />
             <span id="st43ValAmbient" class="val-label"></span>
           </div>
         </div>

@@ -56,6 +56,12 @@ vec3 F_Schlick90(float cosTheta, vec3 F0, float F90) {
     return F0 + (vec3(F90) - F0) * (x2 * x2 * x);
 }
 
+// Specular ambient occlusion (Lagarde & de Rousiers 2014, Frostbite): attenuates grazing/rough cavity
+// reflections without dimming ao == 1.0 (evaluates to 1.0 exact at ao == 1, 0.0 at ao == 0).
+float computeSpecularOcclusion(float dotNV, float ao, float roughness) {
+    return clamp(pow(dotNV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
 // The iridescence and anisotropy helpers below are compiled only for materials with the feature: their code
 // is large and an unused copy still costs compile time (the flag becomes a #define).
 #ifdef USE_IRIDESCENCE

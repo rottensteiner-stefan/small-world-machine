@@ -45,8 +45,8 @@ const DEFAULT_LIGHT_BUDGET = 10;
 const WIND_LEAN = 0.55;
 const READOUT_INTERVAL = 0.25;
 const BUDGET_DEBUG_TINT = new Color(1, 0.05, 0.05);
-const NIGHT_AMBIENT = 0.08;
-const DAY_AMBIENT = 0.9;
+const NIGHT_AMBIENT = 0.08 * Math.PI;
+const DAY_AMBIENT = 0.9 * Math.PI;
 const DAY_SUN = 2.2;
 
 const PALETTE_OVERRIDES: Record<Exclude<PaletteChoice, "original">, FlamePalette | undefined> = {

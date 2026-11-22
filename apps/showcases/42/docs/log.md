@@ -173,3 +173,6 @@ PCSS-Penumbre real verbreitern — und dass sie auf WebGL2 eine dokumentierte No
 Translated user-facing strings to English.
 
 - 2026-11-02 dedup: slider loop uses `shared/hudBindings.ts` `bindRange`; `formatSlider` exported for tests.
+
+### 2026-11-22 — Ambient `1/π` Irradiance Alignment
+- Rescaled `AmbientLight.intensity` and `Hud.ts` ambient controls (`× Math.PI`) in `apps/showcases/42/` to match ADR 0063 PBR ambient `1 / π` normalization.

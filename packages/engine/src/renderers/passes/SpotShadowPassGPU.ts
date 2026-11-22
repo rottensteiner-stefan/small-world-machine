@@ -1,5 +1,11 @@
 import type { Scene } from "../../core/index.js";
-import { DepthMaterial } from "../../core/materials/index.js";
+import type { AbstractMaterial } from "../../core/materials/AbstractMaterial.js";
+import {
+  DepthMaterial,
+  StandardMaterial,
+  type TextureTransform,
+} from "../../core/materials/index.js";
+import type { Texture } from "../../core/textures/index.js";
 import { MaterialType } from "../../enums/MaterialType.js";
 import { Topology } from "../../enums/Topology.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
@@ -26,11 +32,11 @@ import {
   selectShadowedPointLights,
   writePointShadowFaceMatrices,
 } from "../../core/lights/PointLightShadow.js";
+import { AlphaCutoutGroups } from "./AlphaCutoutGroups.js";
 import { PointShadowCastersGPU } from "./PointShadowCastersGPU.js";
 import { ShadowCasterCollector } from "./ShadowCasterCollector.js";
 
 const _scratchLightCasters: SpotLight[] = [];
-const _scratchCasters: Object3D[] = [];
 const _scratchInstanced: InstancedMesh[] = [];
 const _scratchStandard: Object3D[] = [];
 
@@ -105,6 +111,7 @@ export class SpotShadowPassGPU implements RenderPass {
   );
   private readonly _spotCasters = new ShadowCasterCollector();
   private readonly _pointCasters = new PointShadowCastersGPU();
+  private readonly _cutoutGroups = new AlphaCutoutGroups();
   /** Point faces rendered / skipped by the view test in the last frame (diagnostics, tests). */
   public pointFacesRendered = 0;
   public pointFacesSkipped = 0;
@@ -512,7 +519,6 @@ export class SpotShadowPassGPU implements RenderPass {
     viewMatrix: Float32Array | undefined,
   ): void {
     const depthMaterial = this._depthMaterial!;
-    const depthManifest = depthMaterial.getRenderManifest();
     for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
       const batch = batches[batchIdx]!;
       if (batch.shaderId === MaterialType.SKYBOX || batch.objects.length === 0) continue;
@@ -525,64 +531,163 @@ export class SpotShadowPassGPU implements RenderPass {
         topologyStr = batch.topology as GPUPrimitiveTopology;
       let topology: GPUPrimitiveTopology = topologyStr;
 
-      let material: DepthMaterial = depthMaterial;
-      let manifest = depthManifest;
       if (usesLineQuadShadow(batch)) {
-        material = this._lineDepthMaterial!;
+        const material = this._lineDepthMaterial!;
         material.lineHalfWidth = batch.shadowWidth! * 0.5;
-        manifest = material.getRenderManifest();
+        const manifest = material.getRenderManifest();
         topology = Topology.TRIANGLE_LIST;
+        _scratchInstanced.length = 0;
+        _scratchStandard.length = 0;
+        for (let i = 0; i < objects.length; i++) {
+          const o = objects[i]!;
+          if (
+            o.castShadow &&
+            (!o.bounds || o instanceof InstancedMesh || this._frustum.intersectsVolume(o.bounds))
+          ) {
+            if (o instanceof InstancedMesh) _scratchInstanced.push(o);
+            else _scratchStandard.push(o);
+          }
+        }
+        if (_scratchStandard.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            _scratchStandard,
+            false,
+            material.uuid,
+            manifest,
+            viewOffset,
+            viewMatrix,
+            topology,
+            batch.wireframeMode,
+          );
+        }
+        if (_scratchInstanced.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            _scratchInstanced,
+            true,
+            material.uuid,
+            manifest,
+            viewOffset,
+            viewMatrix,
+            topology,
+            batch.wireframeMode,
+          );
+        }
+        continue;
       }
 
-      _scratchCasters.length = 0;
+      this._cutoutGroups.recycle();
       _scratchInstanced.length = 0;
       _scratchStandard.length = 0;
+      let lastMaterial: AbstractMaterial | undefined = undefined;
+      let matAlphaTest = 0;
+      let matDiffuseMap: Texture | undefined = undefined;
+      let matDiffuseTransform: TextureTransform | undefined = undefined;
 
       for (let i = 0; i < objects.length; i++) {
         const o = objects[i]!;
         // InstancedMesh bounds cover only the base geometry: never cull by them (WebGL2 parity).
         if (
-          o.castShadow &&
-          (!o.bounds || o instanceof InstancedMesh || this._frustum.intersectsVolume(o.bounds))
+          !o.castShadow ||
+          (o.bounds && !(o instanceof InstancedMesh) && !this._frustum.intersectsVolume(o.bounds))
         ) {
-          _scratchCasters.push(o);
-          if (o instanceof InstancedMesh) {
-            _scratchInstanced.push(o);
-          } else {
-            _scratchStandard.push(o);
-          }
+          continue;
+        }
+        if (o.material !== lastMaterial) {
+          lastMaterial = o.material;
+          const objManifest = lastMaterial?.getRenderManifest();
+          const extraParams = objManifest?.properties["u_extraParams"] as number[] | undefined;
+          matAlphaTest = extraParams?.[1] ?? 0;
+          matDiffuseMap =
+            matAlphaTest > 0
+              ? (objManifest?.textures["u_diffuseMap"] as Texture | undefined)
+              : undefined;
+          matDiffuseTransform =
+            matDiffuseMap && lastMaterial instanceof StandardMaterial
+              ? lastMaterial.textureTransforms?.diffuse
+              : undefined;
+        }
+        if (matDiffuseMap) {
+          this._cutoutGroups.add(o, matDiffuseMap, matAlphaTest, matDiffuseTransform);
+        } else if (o instanceof InstancedMesh) {
+          _scratchInstanced.push(o);
+        } else {
+          _scratchStandard.push(o);
         }
       }
 
-      if (_scratchCasters.length === 0) continue;
+      if (_scratchStandard.length > 0 || _scratchInstanced.length > 0) {
+        depthMaterial.diffuseMap = undefined;
+        depthMaterial.diffuseTransform = undefined;
+        depthMaterial.alphaTest = 0;
+        const opaqueManifest = depthMaterial.getRenderManifest();
 
-      if (_scratchStandard.length > 0) {
-        renderer._renderSubgroup(
-          rp,
-          _scratchStandard,
-          false,
-          material.uuid,
-          manifest,
-          viewOffset,
-          viewMatrix,
-          topology,
-          batch.wireframeMode,
-        );
+        if (_scratchStandard.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            _scratchStandard,
+            false,
+            depthMaterial.uuid,
+            opaqueManifest,
+            viewOffset,
+            viewMatrix,
+            topology,
+            batch.wireframeMode,
+          );
+        }
+        if (_scratchInstanced.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            _scratchInstanced,
+            true,
+            depthMaterial.uuid,
+            opaqueManifest,
+            viewOffset,
+            viewMatrix,
+            topology,
+            batch.wireframeMode,
+          );
+        }
       }
 
-      if (_scratchInstanced.length > 0) {
-        renderer._renderSubgroup(
-          rp,
-          _scratchInstanced,
-          true,
-          material.uuid,
-          manifest,
-          viewOffset,
-          viewMatrix,
-          topology,
-          batch.wireframeMode,
-        );
+      const activeCutouts = this._cutoutGroups.active;
+      for (let g = 0; g < activeCutouts.length; g++) {
+        const group = activeCutouts[g]!;
+        depthMaterial.diffuseMap = group.diffuseMap;
+        depthMaterial.diffuseTransform = group.diffuseTransform;
+        depthMaterial.alphaTest = group.alphaTest;
+        const alphaManifest = depthMaterial.getRenderManifest();
+        if (group.standard.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            group.standard,
+            false,
+            group.groupUuid,
+            alphaManifest,
+            viewOffset,
+            viewMatrix,
+            topology,
+            batch.wireframeMode,
+          );
+        }
+        if (group.instanced.length > 0) {
+          renderer._renderSubgroup(
+            rp,
+            group.instanced,
+            true,
+            group.groupUuid,
+            alphaManifest,
+            viewOffset,
+            viewMatrix,
+            topology,
+            batch.wireframeMode,
+          );
+        }
       }
+      depthMaterial.diffuseMap = undefined;
+      depthMaterial.diffuseTransform = undefined;
+      depthMaterial.alphaTest = 0;
     }
   }
 }

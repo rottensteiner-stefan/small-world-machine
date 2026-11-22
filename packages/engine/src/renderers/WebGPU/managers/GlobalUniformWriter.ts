@@ -228,6 +228,15 @@ export class GlobalUniformWriter {
       lights.aCol.b * lights.aIntensity,
       1,
     );
+    const groundCol = lights.aGroundCol ?? lights.aCol;
+    setVec4(
+      gData,
+      glob.ambientGround.index,
+      groundCol.r * lights.aIntensity,
+      groundCol.g * lights.aIntensity,
+      groundCol.b * lights.aIntensity,
+      1,
+    );
     setVec4(
       gData,
       glob.dirLightColor.index,

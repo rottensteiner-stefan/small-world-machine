@@ -146,7 +146,7 @@ const SUNS: Record<SunKey, SunSituation> = {
     sunColor: new Color(1, 0.97, 0.9),
     sunIntensity: 2.6,
     ambientColor: new Color(0.56, 0.64, 0.74),
-    ambientIntensity: 0.55,
+    ambientIntensity: 1.73,
     sky: new Color(0.46, 0.64, 0.88),
     fogNear: 120,
     fogFar: 340,
@@ -156,7 +156,7 @@ const SUNS: Record<SunKey, SunSituation> = {
     sunColor: new Color(1, 0.84, 0.62),
     sunIntensity: 2.3,
     ambientColor: new Color(0.5, 0.56, 0.68),
-    ambientIntensity: 0.45,
+    ambientIntensity: 1.41,
     sky: new Color(0.62, 0.66, 0.74),
     fogNear: 90,
     fogFar: 300,
@@ -166,7 +166,7 @@ const SUNS: Record<SunKey, SunSituation> = {
     sunColor: new Color(0.85, 0.87, 0.9),
     sunIntensity: 0.55,
     ambientColor: new Color(0.74, 0.77, 0.8),
-    ambientIntensity: 1.05,
+    ambientIntensity: 3.3,
     sky: new Color(0.68, 0.7, 0.73),
     fogNear: 60,
     fogFar: 240,
@@ -229,7 +229,7 @@ export class Showcase extends AbstractShowcase {
     this.configureCamera();
     this.setInitialCamera(CAMERA_POSITION.clone(), CAMERA_TARGET.clone());
 
-    this._ambient = new AmbientLight({ color: new Color(1, 1, 1), intensity: 0.5 });
+    this._ambient = new AmbientLight({ color: new Color(1, 1, 1), intensity: 1.57 });
     this.scene.add(this._ambient);
     this._sun = new DirectionalLight({
       direction: new Vector3D(0, -1, 0),

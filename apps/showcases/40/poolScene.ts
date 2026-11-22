@@ -59,7 +59,7 @@ export function setupPoolScene(scene: Scene, camera: Camera): DecalPool {
   const sun = new DirectionalLight({ color: Color.WHITE, intensity: 0.4 });
   sun.direction.set(0, -1, 0);
   scene.add(sun);
-  scene.add(new AmbientLight({ color: Color.WHITE, intensity: 1.0 }));
+  scene.add(new AmbientLight({ color: Color.WHITE, intensity: Math.PI }));
 
   const floor = new Object3D("Floor");
   floor.geometry = new Ground({ width: 40, depth: 40 }).getGeometryData();

@@ -5,7 +5,7 @@
 ## 1. Core Workflow & Token Saving
 
 - **Planning:** Require detailed plan approval only for major features, complex refactorings, or architectural changes. Small edits, bugfixes, asset generation, and documentation updates should be implemented directly without blocking for prior approval.
-- **Git Permissions & Commit Cadence:** You are explicitly authorized to execute git operations without asking, BUT **do NOT commit immediately after every single micro-edit/change**. Wait until a feature/milestone is cohesively rounded off or the user signals/requests a commit. Every commit message MUST be a pure quote without author/prefixes, and never reused (check `git log` first).
+- **Git Permissions & Commit Cadence:** You are explicitly authorized to execute git operations without asking, BUT **do NOT commit immediately after every single micro-edit/change**. Wait until a feature/milestone is cohesively rounded off or the user signals/requests a commit. Every commit message MUST be a pure quote without author/prefixes, and never reused (check `git log` first). Regular commits do NOT touch changelogs; changelogs are updated only during explicit package or engine releases (see `changelog` skill).
 - **Surgical Changes:** Use `replace` tool for edits. NEVER use `write_file` on existing files.
 - **Data Integrity:** Preserve historical entries in logs/changelogs.
 - **File Storage:** Store scratchpads, sketches, and temporary files locally in the project under `.agents/scratches`, not in the hard-to-reach agent-specific AppData directory. Exceptions are regular assets or artifacts where the target location is known and logical.
@@ -48,7 +48,7 @@
 
 Detailed coding standards, formatting, shader logic, and domain knowledge are outsourced to skills under `.agents/skills/` to save context tokens. **Always read the relevant skill before starting a task:**
 - `coding-guide`: For TS templates, DOM assignments, Enum rules, Shader optimizations, Rendering pipeline rules, Hot-path TypeScript performance, and Testing.
-- `changelog`: For release standard and commit rules.
+- `changelog`: For release standard, commit rules, and changelog maintenance (root `CHANGELOG.md` with quote for engine releases vs. independent `packages/*/CHANGELOG.md` for package releases).
 - `domain-modeling`: For maintaining `CONTEXT.md` and recording architecture decisions as ADRs (`docs/adr/`).
 - `maintain-references`: For adding to `REFERENCES.md`.
 - `deslop`: For anti-AI-slop and human tone filter.

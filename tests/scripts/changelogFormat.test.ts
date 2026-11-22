@@ -229,4 +229,58 @@ describe("CHANGELOG format and archive invariants", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("enforces valid CHANGELOG.md in every package with top version matching package.json", () => {
+    const packagesDir = path.join(ROOT, "packages");
+    const entries = fs.readdirSync(packagesDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const pkgJsonPath = path.join(packagesDir, entry.name, "package.json");
+      if (!fs.existsSync(pkgJsonPath)) continue;
+
+      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+      const changelogPath = path.join(packagesDir, entry.name, "CHANGELOG.md");
+
+      expect(
+        fs.existsSync(changelogPath),
+        `Missing CHANGELOG.md in packages/${entry.name}. Every package must have a CHANGELOG.md.`,
+      ).toBe(true);
+
+      const content = fs.readFileSync(changelogPath, "utf8");
+
+      // Core engine is a pointer to the root CHANGELOG.md
+      if (entry.name === "engine") {
+        expect(
+          content,
+          "packages/engine/CHANGELOG.md must point to the root CHANGELOG.md",
+        ).toContain("CHANGELOG.md");
+        continue;
+      }
+
+      // Satellite packages have independent semver blocks
+      const parsed = parseVersionBlocks(changelogPath);
+      expect(
+        parsed.blocks.length,
+        `packages/${entry.name}/CHANGELOG.md has no valid "## [x.y.z] - YYYY-MM-DD" version blocks.`,
+      ).toBeGreaterThan(0);
+
+      const topBlock = parsed.blocks[0]!;
+      expect(
+        topBlock.version,
+        `packages/${entry.name}/package.json version is "${pkgJson.version}", but top CHANGELOG.md version is "${topBlock.version}". ` +
+          `Did you forget to add a "## [${pkgJson.version}] - YYYY-MM-DD" entry?`,
+      ).toBe(pkgJson.version);
+
+      // Verify descending order
+      for (let i = 1; i < parsed.blocks.length; i++) {
+        const prev = parsed.blocks[i - 1]!;
+        const curr = parsed.blocks[i]!;
+        expect(
+          compareSemver(prev.version, curr.version),
+          `packages/${entry.name}/CHANGELOG.md: ${prev.version} must be > ${curr.version}`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
 });

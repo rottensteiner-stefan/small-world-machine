@@ -147,7 +147,7 @@ export class Showcase extends AbstractShowcase {
     floor.receiveShadow = true;
     this.scene.add(floor);
 
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.4 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 1.26 }));
 
     const dirLight = new DirectionalLight({
       color: new Color(1, 1, 1),

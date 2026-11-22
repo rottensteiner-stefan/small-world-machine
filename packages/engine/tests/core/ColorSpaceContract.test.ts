@@ -63,10 +63,15 @@ describe("colour-space contract (ADR 0049)", () => {
   });
 
   it("ambient and directional lights hand the renderers their linear colour", () => {
-    const data = { aCol: new Color(), aIntensity: 0 } as unknown as LightDataInterface;
+    const data = {
+      aCol: new Color(),
+      aGroundCol: new Color(),
+      aIntensity: 0,
+    } as unknown as LightDataInterface;
     new AmbientLight({ color: new Color(0.5, 0.5, 0.5), intensity: 0.4 }).applyTo(data);
-    expect(data.aCol.r).toBeCloseTo(lin(0.5), 12);
-    expect(data.aIntensity).toBe(0.4);
+    expect(data.aCol.r * data.aIntensity).toBeCloseTo(lin(0.5) * 0.4, 12);
+    expect(data.aGroundCol!.r * data.aIntensity).toBeCloseTo(lin(0.5) * 0.4, 12);
+    expect(data.aIntensity).toBe(1);
   });
 
   it("the clear colour lands in the forward pass's output space on every tier", () => {

@@ -128,7 +128,7 @@ export class Showcase extends AbstractShowcase {
     // rooflines renders as a pure black void instead of reading as a hazy, overcast fallout sky.
     this.renderer.setClearColor(fogColor);
 
-    this.scene.add(new AmbientLight({ color: new Color(0.396, 0.435, 0.367), intensity: 0.5 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.396, 0.435, 0.367), intensity: 1.57 }));
 
     const sun = new DirectionalLight({
       color: new Color(0.877, 0.904, 0.793),

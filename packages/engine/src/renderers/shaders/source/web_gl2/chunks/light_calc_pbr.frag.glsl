@@ -1,10 +1,17 @@
 vec3 V = normalize(u_viewPos - v_worldPos);
 float normalMapLength = 1.0;
 #ifdef USE_NORMAL_MAP
+#ifdef USE_UV_TRANSFORMS
+vec2 uvNormal = swmTransformUv(1);
+mat3 tbnNormal = swmTransformTbn(1, uvNormal, v_worldPos, v_tbn);
+vec3 rawNormal = SAMPLE_NORMAL_MAP(uvNormal).rgb * 2.0 - 1.0;
+#else
+mat3 tbnNormal = v_tbn;
 vec3 rawNormal = SAMPLE_NORMAL_MAP(v_uv).rgb * 2.0 - 1.0;
+#endif
 normalMapLength = length(rawNormal);
 rawNormal.xy *= u_extraParams.zw;
-vec3 N = v_tbn * rawNormal;
+vec3 N = tbnNormal * rawNormal;
 if (dot(N, N) < 0.0001) {
     N = v_normal;
 }
@@ -35,14 +42,23 @@ float F90 = 1.0;
 vec3 specularTint = u_matParam12.rgb;
 float specularWeight = u_matParam13.x;
 #ifdef USE_SPECULAR_COLOR_MAP
+#ifdef USE_UV_TRANSFORMS
+specularTint *= sRGBToLinear(texture(u_specularColorMap, swmTransformUv(8)).rgb);
+#else
 specularTint *= sRGBToLinear(texture(u_specularColorMap, v_uv).rgb);
 #endif
+#endif
 #ifdef USE_SPECULAR_WEIGHT_MAP
+#ifdef USE_UV_TRANSFORMS
+vec2 uvSpecWeight = swmTransformUv(7);
+#else
+vec2 uvSpecWeight = v_uv;
+#endif
 #ifdef USE_SPECULAR_MAPS_SHARED
 // Same texture as the tint map: read the alpha channel through that sampler (one unit, not two).
-specularWeight *= texture(u_specularColorMap, v_uv).a;
+specularWeight *= texture(u_specularColorMap, uvSpecWeight).a;
 #else
-specularWeight *= texture(u_specularWeightMap, v_uv).a;
+specularWeight *= texture(u_specularWeightMap, uvSpecWeight).a;
 #endif
 #endif
 F0 = min(specularTint, vec3(1.0));
@@ -59,7 +75,11 @@ float transmissionWeight = 0.0;
 #ifdef USE_TRANSMISSION
 transmissionWeight = u_liquidParams.z;
 #ifdef USE_TRANSMISSION_MAP
+#ifdef USE_UV_TRANSFORMS
+transmissionWeight *= texture(u_transmissionMap, swmTransformUv(14)).r;
+#else
 transmissionWeight *= texture(u_transmissionMap, v_uv).r;
+#endif
 #endif
 #endif
 vec3 diffuseAlbedo = albedo * (1.0 - transmissionWeight);
@@ -72,15 +92,24 @@ vec3 diffuseAlbedo = albedo * (1.0 - transmissionWeight);
 {
     float iridescenceStrength = u_matParam14.x;
 #ifdef USE_IRIDESCENCE_MAP
+#ifdef USE_UV_TRANSFORMS
+    iridescenceStrength *= texture(u_iridescenceMap, swmTransformUv(17)).r;
+#else
     iridescenceStrength *= texture(u_iridescenceMap, v_uv).r;
+#endif
 #endif
     float iridescenceThickness = u_matParam14.w;
 #ifdef USE_IRIDESCENCE_THICKNESS_MAP
+#ifdef USE_UV_TRANSFORMS
+    vec2 uvIridThickness = swmTransformUv(18);
+#else
+    vec2 uvIridThickness = v_uv;
+#endif
 #ifdef USE_IRIDESCENCE_MAPS_SHARED
     // Same texture as the intensity map: read the green channel through that sampler (one unit, not two).
-    iridescenceThickness = mix(u_matParam14.z, u_matParam14.w, texture(u_iridescenceMap, v_uv).g);
+    iridescenceThickness = mix(u_matParam14.z, u_matParam14.w, texture(u_iridescenceMap, uvIridThickness).g);
 #else
-    iridescenceThickness = mix(u_matParam14.z, u_matParam14.w, texture(u_iridescenceThicknessMap, v_uv).g);
+    iridescenceThickness = mix(u_matParam14.z, u_matParam14.w, texture(u_iridescenceThicknessMap, uvIridThickness).g);
 #endif
 #endif
 #ifdef USE_IRIDESCENCE_CHEAP
@@ -99,9 +128,19 @@ vec3 diffuseAlbedo = albedo * (1.0 - transmissionWeight);
 // strength with its blue channel; without it the default texel is direction +X at full strength.
 float anisotropyStrength = u_matParam15.x;
 vec2 anisotropyDirection = vec2(u_matParam15.y, u_matParam15.z);
+#ifdef USE_UV_TRANSFORMS
+vec2 uvAniso = swmTransformUv(16);
+mat3 anisoTbn = swmTransformTbn(16, uvAniso, v_worldPos, v_tbn);
+#else
+mat3 anisoTbn = v_tbn;
+#endif
 #ifdef USE_ANISOTROPY_MAP
 {
+#ifdef USE_UV_TRANSFORMS
+    vec3 anisotropySample = texture(u_anisotropyMap, uvAniso).rgb;
+#else
     vec3 anisotropySample = texture(u_anisotropyMap, v_uv).rgb;
+#endif
     vec2 texelDirection = anisotropySample.rg * 2.0 - 1.0;
     texelDirection = dot(texelDirection, texelDirection) > 1e-8 ? normalize(texelDirection) : vec2(1.0, 0.0);
     anisotropyDirection = vec2(
@@ -111,7 +150,7 @@ vec2 anisotropyDirection = vec2(u_matParam15.y, u_matParam15.z);
     anisotropyStrength *= anisotropySample.b;
 }
 #endif
-vec3 anisoT = normalize(v_tbn * vec3(anisotropyDirection, 0.0));
+vec3 anisoT = normalize(anisoTbn * vec3(anisotropyDirection, 0.0));
 vec3 anisoB = normalize(cross(normalize(v_tbn[2]), anisoT));
 float anisoAlpha = max(roughness * roughness, 0.002);
 float anisoAlphaT = mix(anisoAlpha, 1.0, anisotropyStrength * anisotropyStrength);
@@ -120,16 +159,32 @@ float anisoAlphaT = mix(anisoAlpha, 1.0, anisotropyStrength * anisotropyStrength
 #ifdef USE_CLEARCOAT
 float clearcoat = u_liquidParams.w;
 #ifdef USE_CLEARCOAT_MAP
+#ifdef USE_UV_TRANSFORMS
+clearcoat *= texture(u_clearcoatMap, swmTransformUv(9)).r;
+#else
 clearcoat *= texture(u_clearcoatMap, v_uv).r;
+#endif
 #endif
 float clearcoatRoughness = clamp(u_thresholds.x, 0.05, 1.0);
 #ifdef USE_CLEARCOAT_ROUGHNESS_MAP
+#ifdef USE_UV_TRANSFORMS
+clearcoatRoughness = clamp(clearcoatRoughness * texture(u_clearcoatRoughnessMap, swmTransformUv(10)).g, 0.05, 1.0);
+#else
 clearcoatRoughness = clamp(clearcoatRoughness * texture(u_clearcoatRoughnessMap, v_uv).g, 0.05, 1.0);
 #endif
+#endif
 #ifdef USE_CLEARCOAT_NORMAL_MAP
+#ifdef USE_UV_TRANSFORMS
+vec2 uvCcNormal = swmTransformUv(11);
+mat3 ccTbn = swmTransformTbn(11, uvCcNormal, v_worldPos, v_tbn);
+vec3 rawCcNormal = texture(u_clearcoatNormalMap, uvCcNormal).rgb * 2.0 - 1.0;
+rawCcNormal.xy *= u_extraParams.zw;
+vec3 N_cc = normalize(ccTbn * rawCcNormal);
+#else
 vec3 rawCcNormal = texture(u_clearcoatNormalMap, v_uv).rgb * 2.0 - 1.0;
 rawCcNormal.xy *= u_extraParams.zw;
 vec3 N_cc = normalize(v_tbn * rawCcNormal);
+#endif
 #else
 vec3 N_cc = N;
 #endif
@@ -141,11 +196,19 @@ float dotNV_cc = max(dot(N_cc, V), 0.0001);
 // StandardMaterial._LANES. The USE_SHEEN compile gate is pushed from the same basis as the lane's w-flag.
 vec3 sheenColor = sRGBToLinear(u_matParam10.rgb);
 #ifdef USE_SHEEN_COLOR_MAP
+#ifdef USE_UV_TRANSFORMS
+sheenColor *= sRGBToLinear(texture(u_sheenColorMap, swmTransformUv(12)).rgb);
+#else
 sheenColor *= sRGBToLinear(texture(u_sheenColorMap, v_uv).rgb);
+#endif
 #endif
 float sheenRoughness = clamp(u_thresholds.y, 0.05, 1.0);
 #ifdef USE_SHEEN_ROUGHNESS_MAP
+#ifdef USE_UV_TRANSFORMS
+sheenRoughness = clamp(sheenRoughness * texture(u_sheenRoughnessMap, swmTransformUv(13)).a, 0.05, 1.0);
+#else
 sheenRoughness = clamp(sheenRoughness * texture(u_sheenRoughnessMap, v_uv).a, 0.05, 1.0);
+#endif
 #endif
 // KHR_materials_sheen albedo scaling: the layer under the sheen loses the share the sheen reflects.
 // Constant directional-albedo fit 0.157 (three.js MeshPhysicalMaterial sheenEnergyComp).
@@ -573,14 +636,14 @@ for(int i = 0; i < 4; i++) {
 }
 
 // -- Ambient Lighting --
+vec3 hemiAmbient = mix(u_ambientGround, u_ambientColor, clamp(N.y * 0.5 + 0.5, 0.0, 1.0)) * (1.0 / 3.14159265359);
 #ifdef USE_IBL
 vec3 kS_ambient = F_SchlickRoughness90(dotNV, F0, F90, roughness);
-vec3 kD_ambient = 1.0 - kS_ambient;
-kD_ambient *= 1.0 - metallic;
 
 // Diffuse
 // The baked irradiance/prefilter cubes are 8-bit sRGB-encoded like u_envMap (ADR 0048).
-vec3 irradiance = sRGBToLinear(texture(u_irradianceMap, N).rgb) * u_envIntensity;
+vec3 iblIrradiance = sRGBToLinear(texture(u_irradianceMap, N).rgb) * u_envIntensity;
+vec3 irradiance = iblIrradiance + hemiAmbient;
 vec3 diffuseAmbient = irradiance * diffuseAlbedo;
 
 // Specular -- a per-object dynamic reflection probe (u_envMap, e.g. DynamicReflectionProbe) is
@@ -609,10 +672,21 @@ if (u_useEnvMap > 0.5) {
 #else
 prefilteredColor = sRGBToLinear(textureLod(u_prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb) * u_envIntensity;
 #endif
-vec2 envBRDF  = texture(u_brdfLUT, vec2(max(dotNV, 0.0), roughness)).rg;
-vec3 specularAmbient = prefilteredColor * (kS_ambient * envBRDF.x + envBRDF.y);
+vec2 envBRDF = texture(u_brdfLUT, vec2(max(dotNV, 0.0), roughness)).rg;
 
-vec3 ambient = (kD_ambient * diffuseAmbient + specularAmbient) * ao;
+// Multi-scattering IBL (Fdez-Aguera 2019, JCGT 8(1)): compensates single-scattering energy loss on rough surfaces.
+// @invariant PBR-ENERGY-CONSERVATION
+vec3 FssEss = kS_ambient * envBRDF.x + F90 * envBRDF.y;
+float Ess = envBRDF.x + envBRDF.y;
+float Ems = max(1.0 - Ess, 0.0);
+vec3 Favg = F0 + (vec3(F90) - F0) * (1.0 / 21.0);
+vec3 Fms = FssEss * Favg / max(vec3(1.0) - Ems * Favg, vec3(1e-5));
+vec3 FmsEms = Fms * Ems;
+vec3 kD_ambient = max(vec3(1.0) - (FssEss + FmsEms), vec3(0.0)) * (1.0 - metallic);
+
+vec3 specularAmbient = prefilteredColor * FssEss + iblIrradiance * FmsEms;
+float specularAO = computeSpecularOcclusion(dotNV, ao, roughness);
+vec3 ambient = kD_ambient * diffuseAmbient * ao + specularAmbient * specularAO;
 
 #ifdef USE_SHEEN
 // KHR_materials_sheen under IBL: base scaled by the sheen albedo; the rough Charlie lobe reads the diffuse
@@ -626,7 +700,8 @@ if (clearcoat > 0.0) {
     vec3 R_cc = reflect(-V, N_cc);
     vec3 ccPrefilter = sRGBToLinear(textureLod(u_prefilterMap, R_cc, clearcoatRoughness * MAX_REFLECTION_LOD).rgb) * u_envIntensity;
     vec2 ccEnvBRDF = texture(u_brdfLUT, vec2(max(dotNV_cc, 0.0), clearcoatRoughness)).rg;
-    vec3 ccSpecular = ccPrefilter * (vec3(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat;
+    float ccSpecularAO = computeSpecularOcclusion(dotNV_cc, ao, clearcoatRoughness);
+    vec3 ccSpecular = ccPrefilter * (vec3(0.04) * ccEnvBRDF.x + ccEnvBRDF.y) * clearcoat * ccSpecularAO;
     ambient = ambient * (1.0 - clearcoat * F_Schlick(dotNV_cc, vec3(0.04)).r) + ccSpecular;
 }
 #endif
@@ -639,15 +714,16 @@ R = reflect(-V, anisotropyBentNormal(anisoB, V, N, anisotropyStrength, roughness
 #endif
 vec3 f_fallback = F_Schlick90(dotNV, F0, F90);
 vec3 kD_fallback = (1.0 - f_fallback) * (1.0 - metallic);
-vec3 ambient = (kD_fallback * u_ambientColor * diffuseAlbedo) * ao;
+vec3 ambient = (kD_fallback * hemiAmbient * diffuseAlbedo) * ao;
 
 #ifdef USE_ENV_MAP
 // Per-material envMap fallback
 if (u_useEnvMap > 0.5) {
     float lod = roughness * 5.0;
     vec3 envRaw = textureLod(u_envMap, R, lod).rgb;
-    vec3 envColor = u_useEnvMap > 1.5 ? targetToLinear(envRaw) : sRGBToLinear(envRaw);
-    ambient += (envColor * f_fallback) * ao;
+    vec3 envColor = (u_useEnvMap > 1.5 ? targetToLinear(envRaw) : sRGBToLinear(envRaw)) * u_envIntensity;
+    float specularAO = computeSpecularOcclusion(dotNV, ao, roughness);
+    ambient += (envColor * f_fallback) * specularAO;
 }
 #endif
 #endif
@@ -659,7 +735,11 @@ if (transmissionWeight > 0.0) {
     // point and sample the opaque-scene snapshot there. A thick sphere thus shows the scene inverted.
     float thickness = u_liquidParams.y;
     #ifdef USE_THICKNESS_MAP
+    #ifdef USE_UV_TRANSFORMS
+    thickness *= texture(u_thicknessMap, swmTransformUv(15)).g;
+    #else
     thickness *= texture(u_thicknessMap, v_uv).g;
+    #endif
     #endif
     float attenuationDist = u_thresholds.z;
 
@@ -688,7 +768,11 @@ vec3 color = ambient + Lo;
 
 // Emissive
 #ifdef USE_EMISSIVE_MAP
+#ifdef USE_UV_TRANSFORMS
+vec3 emissive = sRGBToLinear(SAMPLE_EMISSIVE_MAP(swmTransformUv(5)).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
+#else
 vec3 emissive = sRGBToLinear(SAMPLE_EMISSIVE_MAP(v_uv).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
+#endif
 #else
 vec3 emissive = sRGBToLinear(u_specColor.rgb) * u_specColor.a;
 #endif

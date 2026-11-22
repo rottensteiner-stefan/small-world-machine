@@ -64,6 +64,16 @@ import { WebGL2OpaqueCapture } from "./managers/WebGL2OpaqueCapture.js";
 import { WebGL2RenderTargetManager } from "./managers/WebGL2RenderTargetManager.js";
 import { WebGL2ShadowManager, type WebGL2ShadowHost } from "./managers/WebGL2ShadowManager.js";
 
+const SHADOW_FLAGS_UV_TX: string[] = [ShaderFlag.UV_TRANSFORMS];
+const SHADOW_FLAGS_UV_TX_UV1: string[] = [ShaderFlag.UV_TRANSFORMS, ShaderFlag.UV1];
+const SHADOW_FLAGS_FIELD: string[] = [ShaderFlag.INSTANCE_FIELD];
+const SHADOW_FLAGS_FIELD_UV_TX: string[] = [ShaderFlag.INSTANCE_FIELD, ShaderFlag.UV_TRANSFORMS];
+const SHADOW_FLAGS_FIELD_UV_TX_UV1: string[] = [
+  ShaderFlag.INSTANCE_FIELD,
+  ShaderFlag.UV_TRANSFORMS,
+  ShaderFlag.UV1,
+];
+
 /**
  * WebGL 2.0 implementation of the renderer.
  */
@@ -516,6 +526,18 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const manifest = firstObj.material.getRenderManifest();
       const texVersion = this._textures.textureSetVersion(manifest.textures);
       const lineQuads = usesLineQuadShadow(batch!);
+      const extraParams = manifest.properties["u_extraParams"] as
+        Float32Array | number[] | undefined;
+      const isCutout = Boolean(
+        !lineQuads && extraParams && extraParams[1]! > 0.0 && manifest.textures["u_diffuseMap"],
+      );
+      const hasUvTx = isCutout && manifest.flags?.includes(ShaderFlag.UV_TRANSFORMS) === true;
+      const hasUv1 = hasUvTx && manifest.flags?.includes(ShaderFlag.UV1) === true;
+      const shadowFlags = hasUv1
+        ? SHADOW_FLAGS_UV_TX_UV1
+        : hasUvTx
+          ? SHADOW_FLAGS_UV_TX
+          : undefined;
       // The edge ribbon is two-sided triangles: never culled.
       if (lineQuads) this.gl.disable(this.gl.CULL_FACE);
       // Program the batch uniforms (alpha test / line width) were last set on; a switch re-sets them.
@@ -535,7 +557,9 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         partitionInstanceRuns(objects, runObjects, runs, runRest, true);
         if (runs.length > 0) {
           perObject = runRest;
-          const cache = (instCache ??= this._programCache.getProgram(shaderId, true));
+          const cache = shadowFlags
+            ? this._programCache.getProgram(shaderId, true, shadowFlags)
+            : (instCache ??= this._programCache.getProgram(shaderId, true));
           if (cache !== current) {
             this.gl.useProgram(cache.prog);
             this._bindDummyShadowMaps(cache);
@@ -573,6 +597,8 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
           cache = isInstanced
             ? (lineInstCache ??= this._programCache.getProgram(lineShaderId, true))
             : (lineCache ??= this._programCache.getProgram(lineShaderId));
+        } else if (shadowFlags) {
+          cache = this._programCache.getProgram(shaderId, isInstanced, shadowFlags);
         } else {
           cache = isInstanced
             ? (instCache ??= this._programCache.getProgram(shaderId, true))
@@ -645,6 +671,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             morphed.vbo,
             morphed.nbo,
             morphed.tanbo,
+            cache.attributes.get("a_uv1") ?? -1,
           );
         } else if (mesh.vaoCapable) {
           mesh.bindVAO();
@@ -657,6 +684,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
             -1,
             -1,
             cache.attributes.get("a_color")!,
+            undefined,
+            undefined,
+            undefined,
+            cache.attributes.get("a_uv1") ?? -1,
           );
         }
         mesh.draw(drawMode, batch!.wireframeMode);
@@ -735,9 +766,23 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         this._bindGenericMaterialProperties(cache.uniforms, manifest.properties, false);
         this._bindSubgroupTextures(cache, manifest.shaderId, manifest);
       } else {
-        cache = this._programCache.getProgram(ctx.shaderId ?? MaterialType.DEPTH, false, [
-          ShaderFlag.INSTANCE_FIELD,
-        ]);
+        const extraParams = manifest.properties["u_extraParams"] as
+          Float32Array | number[] | undefined;
+        const isCutout = Boolean(
+          extraParams && extraParams[1]! > 0.0 && manifest.textures["u_diffuseMap"],
+        );
+        const hasUvTx = isCutout && manifest.flags?.includes(ShaderFlag.UV_TRANSFORMS) === true;
+        const hasUv1 = hasUvTx && manifest.flags?.includes(ShaderFlag.UV1) === true;
+        const shadowFlags = hasUv1
+          ? SHADOW_FLAGS_FIELD_UV_TX_UV1
+          : hasUvTx
+            ? SHADOW_FLAGS_FIELD_UV_TX
+            : SHADOW_FLAGS_FIELD;
+        cache = this._programCache.getProgram(
+          ctx.shaderId ?? MaterialType.DEPTH,
+          false,
+          shadowFlags,
+        );
         if (cache !== currentProgram) {
           gl.useProgram(cache.prog);
           this._bindFieldWindUniforms(field, cache);
@@ -794,6 +839,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       cache.attributes.get("a_joints") ?? -1,
       cache.attributes.get("a_weights") ?? -1,
       cache.attributes.get("a_color") ?? -1,
+      undefined,
+      undefined,
+      undefined,
+      cache.attributes.get("a_uv1") ?? -1,
     );
 
     const posLoc = cache.attributes.get("a_instancePos");
@@ -887,6 +936,22 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
       const uDiffuseLoc = cache.uniforms.get("u_diffuseMap");
       if (uDiffuseLoc) this.gl.uniform1i(uDiffuseLoc, 0);
       if (uExtraLoc) this.gl.uniform4fv(uExtraLoc, extraParams as Float32Array);
+      const uvTransforms = manifest.properties["u_uvTransforms"] as Float32Array | undefined;
+      if (uvTransforms) {
+        const uvLoc =
+          cache.uniforms.get("u_uvTransforms") ?? cache.uniforms.get("u_uvTransforms[0]");
+        if (uvLoc) this.gl.uniform4fv(uvLoc, uvTransforms);
+      } else {
+        const texOffset = manifest.properties["u_texOffset"] as number[] | Float32Array | undefined;
+        const texRepeat = manifest.properties["u_texRepeat"] as number[] | Float32Array | undefined;
+        const texRotation = manifest.properties["u_texRotation"] as number | undefined;
+        const offLoc = cache.uniforms.get("u_texOffset");
+        if (offLoc) this.gl.uniform2f(offLoc, texOffset?.[0] ?? 0, texOffset?.[1] ?? 0);
+        const repLoc = cache.uniforms.get("u_texRepeat");
+        if (repLoc) this.gl.uniform2f(repLoc, texRepeat?.[0] ?? 1, texRepeat?.[1] ?? 1);
+        const rotLoc = cache.uniforms.get("u_texRotation");
+        if (rotLoc) this.gl.uniform1f(rotLoc, texRotation ?? 0);
+      }
       return;
     }
 
@@ -1468,6 +1533,7 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         morphed.vbo,
         morphed.nbo,
         morphed.tanbo,
+        cache.attributes.get("a_uv1") ?? -1,
       );
     } else if (mesh.vaoCapable) {
       mesh.bindVAO();
@@ -1480,6 +1546,10 @@ export class WebGL2Renderer extends AbstractWebGLRenderer {
         cache.attributes.get("a_joints") ?? -1,
         cache.attributes.get("a_weights") ?? -1,
         cache.attributes.get("a_color") ?? -1,
+        undefined,
+        undefined,
+        undefined,
+        cache.attributes.get("a_uv1") ?? -1,
       );
     }
 

@@ -1,4 +1,8 @@
-import { AmbientLight, DirectionalLight } from "@small-world-machine/engine/core/lights/index.js";
+import {
+  AmbientLight,
+  DirectionalLight,
+  PointLight,
+} from "@small-world-machine/engine/core/lights/index.js";
 import {
   CameraStrategyType,
   RendererType,
@@ -60,7 +64,7 @@ class PresentationDemoApp extends AbstractShowcase {
     // Setup PBR Lights
     const ambientLight = new AmbientLight({
       color: new Color(1.0, 1.0, 1.0),
-      intensity: 0.25,
+      intensity: 0.79,
     });
     this.scene.add(ambientLight);
 
@@ -69,15 +73,17 @@ class PresentationDemoApp extends AbstractShowcase {
       intensity: 2.0,
     });
     mainLight.position.set(5, 5, 5);
-    mainLight.direction.set(-1, -1, -1);
+    mainLight.direction.set(-1, -1, -1).normalize();
     this.scene.add(mainLight);
 
-    const fillLight = new DirectionalLight({
+    // PointLight (not DirectionalLight): the renderer supports one directional light slot.
+    const fillLight = new PointLight({
       color: new Color(0.73, 0.793, 1),
       intensity: 0.8,
+      distance: 80.0,
+      decay: 0.0,
     });
     fillLight.position.set(-5, 0, 0);
-    fillLight.direction.set(1, 0, 0);
     this.scene.add(fillLight);
 
     // Load Environment Map (skybox) -- fail fast; envTexture is reused as the helmet's envMap.

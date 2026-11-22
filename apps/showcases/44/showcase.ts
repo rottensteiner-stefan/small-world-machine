@@ -146,7 +146,7 @@ export class Showcase extends AbstractShowcase {
     this.setInitialCamera(camPos, camTarget);
 
     // Ambient only: no shadow-casting light, so no shadow passes add draws to the count.
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.6 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 1.88 }));
 
     this._material = new StandardMaterial({
       color: new Color(0.85, 0.85, 0.92),

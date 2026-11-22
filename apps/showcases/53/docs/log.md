@@ -162,3 +162,7 @@ Living log. Newest entries at the bottom, nothing is deleted.
   - Replaced the placeholder guard in `deck_props.glb` with Iar's BlendSwap CC0 trooper mesh (`iar_stormtroopers.blend` via Printables `#290968`, posed from T-pose via `metarig` into a low-ready guard stance) paired with a magazine-trimmed Quaternius CC0 carbine (`Gun_SMG.glb`, `build_fortress_blender.py -- --only-deck-props`, `12,820` tris, `1.82 m` tall, `minY = 0.000`), split into 4 auto-instanced PBR material parts (`SpaceTrooperArmor`, `SpaceTrooperUnder`, `SpaceTrooperVisor`, `SpaceTrooperGear`) in `showcase.ts` (`4` draw calls for all 28 troopers).
   - Added a `1.95 m` tall (`1.07×`) **Chrome Commander** leading the hangar honor guard at `(72.5, 116.0, 26.8)` with mirror-chrome armor/carbine (`metallic: 1.0, roughness: 0.08`) and a procedural solid-thickness asymmetric shoulder cape with crimson border trim (`CommanderCape`, `CommanderCapeTrim`, `1,424` tris).
 
+
+## 2026-11-22 — Ambient `1/π` Irradiance Alignment
+
+- Rescaled `ATMOSPHERES` (`ambientIntensity`), lightning-flash ambient boost (`1.35 -> 4.24`), and initial `AmbientLight` intensity (`0.75 -> 2.36`) in `showcase.ts` (`× π`) to preserve calibrated night/storm exposure under ADR 0063's `1 / π` PBR ambient normalization.

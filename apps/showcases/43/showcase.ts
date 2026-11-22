@@ -26,7 +26,7 @@ interface MaterialSpec {
 /** Travel direction of the reference key light: from upper-left-front down onto the floor. */
 const KEY_DIRECTION_REFERENCE = new Vector3D(2.5, -4, -1.5);
 const KEY_INTENSITY_REFERENCE = 1.6;
-const AMBIENT_INTENSITY_REFERENCE = 0.22;
+const AMBIENT_INTENSITY_REFERENCE = 0.22 * Math.PI;
 /** The repo has no neutral studio HDRI; the nebula set gives chrome something to mirror. */
 const IBL_PATH = "../13/assets/ibl";
 const IBL_INTENSITY = 1.0;

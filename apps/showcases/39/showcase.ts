@@ -684,7 +684,7 @@ export class Showcase extends AbstractShowcase {
     // --- 9. Dynamic Lights & CSM Cascades ---
     this._ambientLight = new AmbientLight({
       color: new Color(0.459, 0.502, 0.561),
-      intensity: 0.35,
+      intensity: 0.35 * Math.PI,
     });
     this.scene.add(this._ambientLight);
 

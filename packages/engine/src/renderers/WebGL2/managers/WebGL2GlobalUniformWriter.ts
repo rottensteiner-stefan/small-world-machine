@@ -69,6 +69,13 @@ export function writeWebGL2GlobalUBO(
     lights.aCol.g * lights.aIntensity,
     lights.aCol.b * lights.aIntensity,
   );
+  const groundCol = lights.aGroundCol ?? lights.aCol;
+  ubo.setVec3(
+    f.ambientGround.offset,
+    groundCol.r * lights.aIntensity,
+    groundCol.g * lights.aIntensity,
+    groundCol.b * lights.aIntensity,
+  );
   ubo.setVec3(
     f.dirLightColor.offset,
     lights.dCol.r * lights.dIntensity,

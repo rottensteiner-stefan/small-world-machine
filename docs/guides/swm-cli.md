@@ -16,6 +16,8 @@ npm run swm -- ibl --input panorama.png ./ibl-out
 | `swm splatter [options] <out.png>` | Seeded splatter decal as a transparent PNG. |
 | `swm material [gen] [options] <diffuse.png> <out-dir>` | Derives PBR texture maps (`height`, `normal`, `specular`, `roughness`, `ao`, `edge`, plus optional `diffuse`/`albedo`) from a diffuse PNG using `core/material.ts`. |
 | `swm ibl [bake] [options] <out-dir>` | Bakes `env.png`, `irradiance.png`, `brdf_lut.png`, `prefilter/mip0..N.png` and `manifest.json` from an `--input` panorama or a seeded procedural panorama (`--seed`, `--panorama-only`). |
+| `swm lod [options] <input.glb> <out-dir>` | Generates deterministic `<stem>_LOD0..N.glb` meshoptimizer chains (`--ratios`, `--min-tris`, `--error`, `--verify`) per ADR 0059. |
+| `swm glb [--binary] <input.gltf> [out.glb]` | Packs a `.gltf` asset (embedded data URIs or external `.bin` + images) into a self-contained binary `.glb` via `GlbWriter.packGltf`. |
 
 ## `swm material`
 
@@ -24,6 +26,14 @@ Runs the same `derivePbrMaps` pipeline and `MATERIAL_STUDIO_PRESETS` (`default`,
 ## `swm ibl`
 
 Uses `core/ibl.ts` (`generateTestEquirect`, `resolveIblGenOptions`) for seeded panorama generation and option validation, then runs the engine's WebGL2 `IBLBaker` inside a throw-away headless Chrome subprocess (SwiftShader) to write the cross-layout cubemaps, GGX mip chain, BRDF LUT, and `manifest.json` (with `sha256` per output). Pass `--panorama-only` to emit only the deterministic `input.png` and `manifest.json` without launching a browser.
+
+## `swm lod`
+
+Runs headless `meshoptimizer` simplification (`core/lod.ts`) on indexed `TRIANGLES` GLB assets. Emits `<stem>_LOD0.glb` as a verbatim finest copy alongside simplified `<stem>_LOD1..N.glb` meshes (default ratios `0.5,0.2,0.08`, `--min-tris 32`, `--error 0.02`, `--verify` structural validation). `TANGENT` attributes are omitted so the engine regenerates MikkTSpace-compatible tangents at load time.
+
+## `swm glb`
+
+Packs `.gltf` JSON files (`data:` URIs or sibling `.bin`/image files inside the input directory) into 4-byte-aligned binary `.glb` containers via `GlbWriter.packGltf` (`--in`, `--out`, `-b`/`--binary`).
 
 ## `swm splatter`
 

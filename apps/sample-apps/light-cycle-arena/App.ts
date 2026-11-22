@@ -82,7 +82,7 @@ export class App extends SmallWorldMachine {
     this.camera.updateProjectionMatrix();
     this.camera.setStrategy(CameraStrategyType.ISOMETRIC);
 
-    scene.add(new AmbientLight({ color: new Color(0.73, 0.762, 0.85), intensity: 0.75 }));
+    scene.add(new AmbientLight({ color: new Color(0.73, 0.762, 0.85), intensity: 2.36 }));
 
     this._grid = new ArenaGrid(GRID_SIZE, ARENA_CELLS);
     const arenaWorldSize = ARENA_CELLS * GRID_SIZE;

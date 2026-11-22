@@ -57,7 +57,7 @@ export class Showcase extends AbstractShowcase {
   private _foxRoot?: Object3D;
   private _mixer?: AnimationMixer;
   private _actions: Map<string, AnimationAction> = new Map();
-  private _clips: typeof FOX_CLIPS[number][] = [];
+  private _clips: (typeof FOX_CLIPS)[number][] = [];
   private _playing: string | null = null;
   private _tempo: number = 1;
   private _key?: DirectionalLight;
@@ -144,7 +144,7 @@ export class Showcase extends AbstractShowcase {
   private _setupLights(): void {
     this._ambient = new AmbientLight({
       color: new Color(0.85, 0.87, 0.9),
-      intensity: 0.25,
+      intensity: 0.79,
     });
     this.scene.add(this._ambient);
 
@@ -174,8 +174,9 @@ export class Showcase extends AbstractShowcase {
       this.scene.add(root);
 
       this._measureScene();
-      this._clips = FOX_CLIPS.filter((name) => root.animations.some((c) => c.name === name))
-        .map((name) => name);
+      this._clips = FOX_CLIPS.filter((name) => root.animations.some((c) => c.name === name)).map(
+        (name) => name,
+      );
 
       // Bind every authored clip to one mixer; the HUD switches by restarting actions.
       const mixer = new AnimationMixer(root);

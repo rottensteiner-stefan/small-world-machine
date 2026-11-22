@@ -13,6 +13,9 @@ fn cofactor3(m: mat3x3f) -> mat3x3f {
     @location(3) tangent: vec4f, // (tx, ty, tz, w), w = ±1 bitangent handedness (MikkTSpace/glTF)
     @location(4) joints: vec4f,
     @location(5) weights: vec4f
+#ifdef USE_UV1
+    , @location(12) uv1: vec2f
+#endif
 ) -> Out {
     var o: Out;
     
@@ -53,6 +56,10 @@ fn cofactor3(m: mat3x3f) -> mat3x3f {
     }
     o.uv = vec2f(uvCos * uvScaled.x - uvSin * uvScaled.y, uvSin * uvScaled.x + uvCos * uvScaled.y) + obj.texOffset;
     o.original_uv = uv;
+    o.uv0 = uv;
+#ifdef USE_UV1
+    o.uv1 = uv1;
+#endif
     
     // Improved Normal Matrix (handling non-uniform scaling and negative scale correctly)
     let m33 = mat3x3f(obj.model[0].xyz, obj.model[1].xyz, obj.model[2].xyz);

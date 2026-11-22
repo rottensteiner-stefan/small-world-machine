@@ -6,6 +6,10 @@ precision highp float;
 varying vec3 v_worldPos;
 varying vec3 v_normal;
 varying vec2 v_uv;
+varying vec2 v_uv0;
+#ifdef USE_UV1
+varying vec2 v_uv1;
+#endif
 varying mat3 v_tbn;
 varying vec4 v_clipPos;
 

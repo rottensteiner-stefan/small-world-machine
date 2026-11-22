@@ -1,5 +1,6 @@
 import type { GltfJson, GltfTextureInfo } from "./types.js";
 import { StandardMaterial } from "../../core/materials/index.js";
+import type { TextureSlotName, TextureTransform } from "../../core/materials/index.js";
 import { Color } from "../../core/colors/index.js";
 import { Texture } from "../../core/textures/index.js";
 import type { AssetManager } from "../AssetManager.js";
@@ -42,9 +43,9 @@ export class GltfMaterialParser {
   }
 
   /**
-   * Maps `KHR_texture_transform` offset/scale/rotation onto `Texture.offset`/`repeat`/`rotation`,
-   * the only UV transform the material pipeline carries (one per material, read via
-   * `_syncTexOffsetRepeat`). `texCoord` is not supported and is ignored.
+   * Legacy helper: maps `KHR_texture_transform` offset/scale/rotation onto `Texture.offset`/
+   * `repeat`/`rotation`. Prefer `StandardMaterial.textureTransforms` for per-slot transforms
+   * without mutating shared `Texture` instances.
    */
   public static applyTextureTransform(tex: Texture, info: GltfTextureInfo): void {
     const transform = info.extensions?.KHR_texture_transform;
@@ -60,6 +61,33 @@ export class GltfMaterialParser {
     if (transform.rotation !== undefined) {
       tex.rotation = transform.rotation;
     }
+  }
+
+  private static _extractSlotTransform(
+    mat: StandardMaterial,
+    slotName: TextureSlotName,
+    info: GltfTextureInfo,
+  ): void {
+    const transform = info.extensions?.KHR_texture_transform;
+    const rawTexCoord = transform?.texCoord ?? info.texCoord ?? 0;
+    const texCoord = rawTexCoord === 1 ? 1 : 0;
+
+    const ox = transform?.offset?.[0] ?? 0;
+    const oy = transform?.offset?.[1] ?? 0;
+    const sx = transform?.scale?.[0] ?? 1;
+    const sy = transform?.scale?.[1] ?? 1;
+    const rot = transform?.rotation ?? 0;
+
+    const hasTransform =
+      ox !== 0 || oy !== 0 || sx !== 1 || sy !== 1 || rot !== 0 || texCoord === 1;
+    if (!hasTransform) return;
+
+    const entry: TextureTransform = {};
+    if (ox !== 0 || oy !== 0) entry.offset = [ox, oy];
+    if (sx !== 1 || sy !== 1) entry.scale = [sx, sy];
+    if (rot !== 0) entry.rotation = rot;
+    if (texCoord === 1) entry.texCoord = 1;
+    (mat.textureTransforms ??= {})[slotName] = entry;
   }
 
   private static _wrapFromGl(code: number | undefined): TextureWrap | undefined {
@@ -156,6 +184,7 @@ export class GltfMaterialParser {
       );
       if (tex) {
         mat.diffuseMap = tex;
+        this._extractSlotTransform(mat, "diffuse", pbr.baseColorTexture);
       }
     }
 
@@ -172,6 +201,8 @@ export class GltfMaterialParser {
       if (tex) {
         mat.metallicMap = tex;
         mat.roughnessMap = tex;
+        this._extractSlotTransform(mat, "metallic", pbr.metallicRoughnessTexture);
+        this._extractSlotTransform(mat, "roughness", pbr.metallicRoughnessTexture);
       }
     }
 
@@ -190,6 +221,7 @@ export class GltfMaterialParser {
         if (m.normalTexture.scale !== undefined) {
           mat.normalScale.set(m.normalTexture.scale, m.normalTexture.scale);
         }
+        this._extractSlotTransform(mat, "normal", m.normalTexture);
       }
     }
 
@@ -208,6 +240,7 @@ export class GltfMaterialParser {
         if (m.occlusionTexture.strength !== undefined) {
           mat.ao = m.occlusionTexture.strength;
         }
+        this._extractSlotTransform(mat, "ao", m.occlusionTexture);
       }
     }
 
@@ -223,6 +256,7 @@ export class GltfMaterialParser {
       );
       if (tex) {
         mat.emissiveMap = tex;
+        this._extractSlotTransform(mat, "emissive", m.emissiveTexture);
       }
     }
 
@@ -256,7 +290,10 @@ export class GltfMaterialParser {
           readCtx,
           "cc.clearcoatTexture",
         );
-        if (tex) mat.clearcoatMap = tex;
+        if (tex) {
+          mat.clearcoatMap = tex;
+          this._extractSlotTransform(mat, "clearcoat", cc.clearcoatTexture);
+        }
       }
       if (cc.clearcoatRoughnessTexture) {
         const tex = await this.resolveSlot(
@@ -268,7 +305,10 @@ export class GltfMaterialParser {
           readCtx,
           "cc.clearcoatRoughnessTexture",
         );
-        if (tex) mat.clearcoatRoughnessMap = tex;
+        if (tex) {
+          mat.clearcoatRoughnessMap = tex;
+          this._extractSlotTransform(mat, "clearcoatRoughness", cc.clearcoatRoughnessTexture);
+        }
       }
       if (cc.clearcoatNormalTexture) {
         const tex = await this.resolveSlot(
@@ -280,7 +320,10 @@ export class GltfMaterialParser {
           readCtx,
           "cc.clearcoatNormalTexture",
         );
-        if (tex) mat.clearcoatNormalMap = tex;
+        if (tex) {
+          mat.clearcoatNormalMap = tex;
+          this._extractSlotTransform(mat, "clearcoatNormal", cc.clearcoatNormalTexture);
+        }
       }
     }
 
@@ -305,7 +348,10 @@ export class GltfMaterialParser {
           readCtx,
           "sheen.sheenColorTexture",
         );
-        if (tex) mat.sheenColorMap = tex;
+        if (tex) {
+          mat.sheenColorMap = tex;
+          this._extractSlotTransform(mat, "sheenColor", sheen.sheenColorTexture);
+        }
       }
       if (sheen.sheenRoughnessTexture) {
         const tex = await this.resolveSlot(
@@ -317,7 +363,10 @@ export class GltfMaterialParser {
           readCtx,
           "sheen.sheenRoughnessTexture",
         );
-        if (tex) mat.sheenRoughnessMap = tex;
+        if (tex) {
+          mat.sheenRoughnessMap = tex;
+          this._extractSlotTransform(mat, "sheenRoughness", sheen.sheenRoughnessTexture);
+        }
       }
     }
 
@@ -334,7 +383,10 @@ export class GltfMaterialParser {
           readCtx,
           "trans.transmissionTexture",
         );
-        if (tex) mat.transmissionMap = tex;
+        if (tex) {
+          mat.transmissionMap = tex;
+          this._extractSlotTransform(mat, "transmission", trans.transmissionTexture);
+        }
       }
     }
 
@@ -351,7 +403,10 @@ export class GltfMaterialParser {
           readCtx,
           "vol.thicknessTexture",
         );
-        if (tex) mat.thicknessMap = tex;
+        if (tex) {
+          mat.thicknessMap = tex;
+          this._extractSlotTransform(mat, "thickness", vol.thicknessTexture);
+        }
       }
       // glTF default is +Infinity (no attenuation, not expressible in JSON); the engine's
       // `attenuationDistance` default of 1000 is that "no attenuation" sentinel, so a missing
@@ -394,6 +449,7 @@ export class GltfMaterialParser {
         );
         if (tex) {
           mat.specularMap = tex;
+          this._extractSlotTransform(mat, "specular", spec.specularTexture);
         }
       }
       if (spec.specularColorTexture) {
@@ -408,6 +464,7 @@ export class GltfMaterialParser {
         );
         if (tex) {
           mat.specularColorMap = tex;
+          this._extractSlotTransform(mat, "specularColor", spec.specularColorTexture);
         }
       }
     }
@@ -430,6 +487,7 @@ export class GltfMaterialParser {
         );
         if (tex) {
           mat.anisotropyMap = tex;
+          this._extractSlotTransform(mat, "anisotropy", aniso.anisotropyTexture);
         }
       }
     }
@@ -456,6 +514,7 @@ export class GltfMaterialParser {
         );
         if (tex) {
           mat.iridescenceMap = tex;
+          this._extractSlotTransform(mat, "iridescence", irid.iridescenceTexture);
         }
       }
       if (irid.iridescenceThicknessTexture) {
@@ -478,6 +537,7 @@ export class GltfMaterialParser {
           ));
         if (tex) {
           mat.iridescenceThicknessMap = tex;
+          this._extractSlotTransform(mat, "iridescenceThickness", irid.iridescenceThicknessTexture);
         }
       }
     }
@@ -523,10 +583,11 @@ export class GltfMaterialParser {
   }
 
   /**
-   * Resolves one material texture slot: the shared per-parse `Texture` for the referenced index, or
-   * (non-identity `KHR_texture_transform`) a per-transform sibling that reuses the decoded pixels.
-   * A `texCoord` other than 0 is unsupported (only `TEXCOORD_0` is imported) and warned about once
-   * per slot.
+   * Resolves one material texture slot: always returns the shared per-parse `Texture` for the
+   * referenced index (per-slot `KHR_texture_transform` and `texCoord` live on
+   * `StandardMaterial.textureTransforms`, so shared textures never need sibling clones).
+   * UV sets `0` (`TEXCOORD_0`) and `1` (`TEXCOORD_1`) are supported; `texCoord > 1` or invalid
+   * values warn and fall back to `0`.
    */
   public static async resolveSlot(
     info: GltfTextureInfo,
@@ -539,47 +600,12 @@ export class GltfMaterialParser {
   ): Promise<Texture | null> {
     const transform = info.extensions?.KHR_texture_transform;
     const texCoord = transform?.texCoord ?? info.texCoord ?? 0;
-    if (texCoord !== 0) {
+    if (texCoord !== 0 && texCoord !== 1) {
       console.warn(
-        `[GltfMaterialParser] ${slot} (texture ${info.index}) uses texCoord ${texCoord}; only TEXCOORD_0 is imported, UV set ${texCoord} is ignored.`,
+        `[GltfMaterialParser] ${slot} (texture ${info.index}) uses texCoord ${texCoord}; only TEXCOORD_0 and TEXCOORD_1 are supported, falling back to TEXCOORD_0.`,
       );
     }
-    const base = await this.resolveTexture(
-      info.index,
-      json,
-      folderPath,
-      buffers,
-      assetManager,
-      readCtx,
-    );
-    if (!base) return null;
-    const isIdentity =
-      !transform ||
-      (!transform.offset?.some((v) => v !== 0) &&
-        !transform.scale?.some((v) => v !== 1) &&
-        !transform.rotation);
-    if (isIdentity) return base;
-
-    // The transform lives on the Texture object, so slots with different transforms need their
-    // own instance. They share the decoded bitmap / compressed payload, not the GPU upload.
-    const key = `slotTexture:${info.index}:${JSON.stringify([
-      transform.offset,
-      transform.scale,
-      transform.rotation,
-    ])}`;
-    let derived = readCtx.state.get(key) as Texture | undefined;
-    if (!derived) {
-      derived = base.compressedImage
-        ? Texture.fromCompressed(base.compressedImage)
-        : Texture.fromImage(base.image as ImageBitmap | HTMLImageElement);
-      derived.addressModeU = base.addressModeU;
-      derived.addressModeV = base.addressModeV;
-      derived.magFilter = base.magFilter;
-      derived.minFilter = base.minFilter;
-      this.applyTextureTransform(derived, info);
-      readCtx.state.set(key, derived);
-    }
-    return derived;
+    return this.resolveTexture(info.index, json, folderPath, buffers, assetManager, readCtx);
   }
 
   /**

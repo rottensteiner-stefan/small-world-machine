@@ -1359,7 +1359,7 @@ export class Showcase extends AbstractShowcase {
     }
 
     // 7. Lighting: Ambient (Increased to balance contrast and prevent pitch-black shadows)
-    this.scene.add(new AmbientLight({ color: new Color(0.351, 0.351, 0.422), intensity: 0.4 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.351, 0.351, 0.422), intensity: 1.26 }));
 
     // 7. Lighting: Moon/Ocean rays coming from above/side (Dimmed)
     const oceanLight = new DirectionalLight({ color: new Color(0.659, 0.85, 1), intensity: 1.0 }); // Increased for visibility

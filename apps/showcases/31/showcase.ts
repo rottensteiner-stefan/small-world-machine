@@ -109,7 +109,7 @@ export class Showcase extends AbstractShowcase {
     this.camera.addBehavior(new OrbitController({ input: this.input }));
 
     // Dank, cool underground ambient fill -- there is no sky here, only whatever the breach lets in.
-    this.scene.add(new AmbientLight({ color: new Color(0.299, 0.335, 0.317), intensity: 0.55 }));
+    this.scene.add(new AmbientLight({ color: new Color(0.299, 0.335, 0.317), intensity: 1.73 }));
 
     // The sun shaft: a steep, narrow beam finding its way straight down through the breach.
     this._sunLight = new DirectionalLight({

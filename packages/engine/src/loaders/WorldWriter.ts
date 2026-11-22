@@ -237,6 +237,15 @@ export class WorldWriter {
         false,
       );
     }
+    if (geo.uvs1 && geo.uvs1.length === vertexCount * 2) {
+      attributes["TEXCOORD_1"] = this._writeAccessor(
+        geo.uvs1,
+        "VEC2",
+        COMPONENT_TYPE_FLOAT,
+        vertexCount,
+        false,
+      );
+    }
     const primitive: GltfMeshJson["primitives"][number] = { attributes };
     if (geo.indices && 0 < geo.indices.length) {
       primitive.indices = this._writeAccessor(

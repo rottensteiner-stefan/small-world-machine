@@ -1,6 +1,12 @@
 import type { Scene } from "../../core/index.js";
-import { DepthMaterial } from "../../core/materials/index.js";
+import type { AbstractMaterial } from "../../core/materials/AbstractMaterial.js";
+import {
+  DepthMaterial,
+  StandardMaterial,
+  type TextureTransform,
+} from "../../core/materials/index.js";
 import { EvsmMomentMaterial } from "../../core/materials/EvsmMomentMaterial.js";
+import type { Texture } from "../../core/textures/index.js";
 import { MaterialType, ShadowMode, Topology } from "../../enums/index.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
 import { VIEW_SLOT_CASCADE_BASE } from "../WebGPU/WebGPURenderer.js";
@@ -15,6 +21,7 @@ import { usesLineQuadShadow } from "../LineShadowRibbon.js";
 import { splitByInstancing } from "../AutoInstancing.js";
 import type { InstancingSplit } from "../AutoInstancing.js";
 import type { RenderBatch } from "../../core/Scene.js";
+import { AlphaCutoutGroups } from "./AlphaCutoutGroups.js";
 import { ShadowCasterCollector } from "./ShadowCasterCollector.js";
 
 const _scratchCasters: Object3D[] = [];
@@ -25,6 +32,8 @@ const _split: InstancingSplit = { standard: [], instanced: [] };
 export class CascadedShadowPassGPU implements RenderPass {
   public name = "CascadedShadowPassGPU";
   private readonly _casterCollector = new ShadowCasterCollector();
+  private readonly _cutoutGroups = new AlphaCutoutGroups();
+  private readonly _evsmCutoutGroups = new AlphaCutoutGroups();
 
   /**
    * Keyed by format rather than a single cached view: this pass renders both during the main
@@ -232,75 +241,167 @@ export class CascadedShadowPassGPU implements RenderPass {
         else if (batch!.topology === Topology.LINE_LIST) topology = Topology.LINE_LIST;
         else if (batch!.topology === Topology.LINE_STRIP) topology = Topology.LINE_STRIP;
 
-        let material: EvsmMomentMaterial = this._evsmMaterial;
-        let manifest = evsmManifest;
-        if (usesLineQuadShadow(batch!)) {
-          material = this._lineEvsmMaterial;
-          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
-          manifest = material.getRenderManifest();
-          topology = Topology.TRIANGLE_LIST;
-        }
-
         const objects = batch!.objects;
+        if (usesLineQuadShadow(batch!)) {
+          const material = this._lineEvsmMaterial;
+          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
+          const manifest = material.getRenderManifest();
+          topology = Topology.TRIANGLE_LIST;
 
-        // Index writes + final `length = n`: `length = 0` makes V8 drop the backing store, so these
-        // per-cascade lists used to regrow from zero for every batch of every cascade.
-        // Pass the batch through when every object casts into this cascade (no copy); filter
-        // into the scratch list only otherwise.
-        let casters: Object3D[] = objects;
-        let nCasters = 0;
-        for (let j = 0; j < objects.length; j++) {
-          const o = objects[j]!;
-          if (o.castShadow && this._inCascade(o)) nCasters++;
-        }
-        if (nCasters === 0) continue;
-        if (nCasters !== objects.length) {
-          let n = 0;
+          let nCasters = 0;
           for (let j = 0; j < objects.length; j++) {
             const o = objects[j]!;
-            if (o.castShadow && this._inCascade(o)) _scratchCasters[n++] = o;
+            if (o.castShadow && this._inCascade(o)) _scratchCasters[nCasters++] = o;
           }
-          _scratchCasters.length = n;
-          casters = _scratchCasters;
+          if (nCasters === 0) continue;
+          _scratchCasters.length = nCasters;
+          splitByInstancing(_scratchCasters, _scratchStandard, _scratchInstanced, _split);
+          if (_split.standard.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.standard,
+              false,
+              material.uuid,
+              manifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+              undefined,
+              "rgba32float",
+            );
+          }
+          if (_split.instanced.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.instanced,
+              true,
+              material.uuid,
+              manifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+              undefined,
+              "rgba32float",
+            );
+          }
+          continue;
         }
-        splitByInstancing(casters, _scratchStandard, _scratchInstanced, _split);
-        const standardCasters = _split.standard;
-        const instancedCasters = _split.instanced;
 
-        if (standardCasters.length > 0) {
-          // `"rgba32float"` overrides the derived main-target format so the moment pipeline's
-          // color target matches this pass's rgba32float attachment (see _renderSubgroup).
-          renderer._renderSubgroup(
-            rp,
-            standardCasters,
-            false,
-            material.uuid,
-            manifest,
-            viewOffset,
-            cascadeCam.viewMatrix,
-            topology,
-            batch!.wireframeMode,
-            undefined,
-            "rgba32float",
-          );
+        this._evsmCutoutGroups.recycle();
+        let lastMaterial: AbstractMaterial | undefined = undefined;
+        let matAlphaTest = 0;
+        let matDiffuseMap: Texture | undefined = undefined;
+        let matDiffuseTransform: TextureTransform | undefined = undefined;
+        let nOpaque = 0;
+
+        for (let j = 0; j < objects.length; j++) {
+          const o = objects[j]!;
+          if (!o.castShadow || !this._inCascade(o)) continue;
+          if (o.material !== lastMaterial) {
+            lastMaterial = o.material;
+            const objManifest = lastMaterial?.getRenderManifest();
+            const extraParams = objManifest?.properties["u_extraParams"] as number[] | undefined;
+            matAlphaTest = extraParams?.[1] ?? 0;
+            matDiffuseMap =
+              matAlphaTest > 0
+                ? (objManifest?.textures["u_diffuseMap"] as Texture | undefined)
+                : undefined;
+            matDiffuseTransform =
+              matDiffuseMap && lastMaterial instanceof StandardMaterial
+                ? lastMaterial.textureTransforms?.diffuse
+                : undefined;
+          }
+          if (matDiffuseMap) {
+            this._evsmCutoutGroups.add(o, matDiffuseMap, matAlphaTest, matDiffuseTransform);
+          } else {
+            _scratchCasters[nOpaque++] = o;
+          }
+        }
+        _scratchCasters.length = nOpaque;
+
+        if (nOpaque > 0) {
+          this._evsmMaterial.diffuseMap = undefined;
+          this._evsmMaterial.diffuseTransform = undefined;
+          this._evsmMaterial.alphaTest = 0;
+          const opaqueManifest = this._evsmMaterial.getRenderManifest();
+          splitByInstancing(_scratchCasters, _scratchStandard, _scratchInstanced, _split);
+          if (_split.standard.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.standard,
+              false,
+              this._evsmMaterial.uuid,
+              opaqueManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+              undefined,
+              "rgba32float",
+            );
+          }
+          if (_split.instanced.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.instanced,
+              true,
+              this._evsmMaterial.uuid,
+              opaqueManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+              undefined,
+              "rgba32float",
+            );
+          }
         }
 
-        if (instancedCasters.length > 0) {
-          renderer._renderSubgroup(
-            rp,
-            instancedCasters,
-            true,
-            material.uuid,
-            manifest,
-            viewOffset,
-            cascadeCam.viewMatrix,
-            topology,
-            batch!.wireframeMode,
-            undefined,
-            "rgba32float",
-          );
+        const activeCutouts = this._evsmCutoutGroups.active;
+        for (let g = 0; g < activeCutouts.length; g++) {
+          const group = activeCutouts[g]!;
+          this._evsmMaterial.diffuseMap = group.diffuseMap;
+          this._evsmMaterial.diffuseTransform = group.diffuseTransform;
+          this._evsmMaterial.alphaTest = group.alphaTest;
+          const alphaManifest = this._evsmMaterial.getRenderManifest();
+          if (group.standard.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              group.standard,
+              false,
+              group.groupUuid,
+              alphaManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+              undefined,
+              "rgba32float",
+            );
+          }
+          if (group.instanced.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              group.instanced,
+              true,
+              group.groupUuid,
+              alphaManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+              undefined,
+              "rgba32float",
+            );
+          }
         }
+        this._evsmMaterial.diffuseMap = undefined;
+        this._evsmMaterial.diffuseTransform = undefined;
+        this._evsmMaterial.alphaTest = 0;
       }
+      void evsmManifest;
 
       // ADR 0059 P1-2: pulled field draws for this cascade's EVSM moments (rgba32float target,
       // LEQUAL against the stored depth; the culls for view VIEW_SLOT_CASCADE_BASE + i ran in the
@@ -500,69 +601,155 @@ export class CascadedShadowPassGPU implements RenderPass {
         else if (batch!.topology === Topology.LINE_LIST) topology = Topology.LINE_LIST;
         else if (batch!.topology === Topology.LINE_STRIP) topology = Topology.LINE_STRIP;
 
-        let material: DepthMaterial = this._depthMaterial;
-        let manifest = depthManifest;
-        if (usesLineQuadShadow(batch!)) {
-          material = this._lineDepthMaterial;
-          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
-          manifest = material.getRenderManifest();
-          topology = Topology.TRIANGLE_LIST;
-        }
-
         const objects = batch!.objects;
+        if (usesLineQuadShadow(batch!)) {
+          const material = this._lineDepthMaterial;
+          material.lineHalfWidth = batch!.shadowWidth! * 0.5;
+          const manifest = material.getRenderManifest();
+          topology = Topology.TRIANGLE_LIST;
 
-        // Index writes + final `length = n`: `length = 0` makes V8 drop the backing store, so these
-        // per-cascade lists used to regrow from zero for every batch of every cascade.
-        // Pass the batch through when every object casts into this cascade (no copy); filter
-        // into the scratch list only otherwise.
-        let casters: Object3D[] = objects;
-        let nCasters = 0;
-        for (let i = 0; i < objects.length; i++) {
-          const o = objects[i]!;
-          if (o.castShadow && this._inCascade(o)) nCasters++;
-        }
-        if (nCasters === 0) continue;
-        if (nCasters !== objects.length) {
-          let n = 0;
-          for (let i = 0; i < objects.length; i++) {
-            const o = objects[i]!;
-            if (o.castShadow && this._inCascade(o)) _scratchCasters[n++] = o;
+          let nCasters = 0;
+          for (let j = 0; j < objects.length; j++) {
+            const o = objects[j]!;
+            if (o.castShadow && this._inCascade(o)) _scratchCasters[nCasters++] = o;
           }
-          _scratchCasters.length = n;
-          casters = _scratchCasters;
+          if (nCasters === 0) continue;
+          _scratchCasters.length = nCasters;
+          splitByInstancing(_scratchCasters, _scratchStandard, _scratchInstanced, _split);
+          if (_split.standard.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.standard,
+              false,
+              material.uuid,
+              manifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+            );
+          }
+          if (_split.instanced.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.instanced,
+              true,
+              material.uuid,
+              manifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+            );
+          }
+          continue;
         }
-        splitByInstancing(casters, _scratchStandard, _scratchInstanced, _split);
-        const standardCasters = _split.standard;
-        const instancedCasters = _split.instanced;
 
-        if (standardCasters.length > 0) {
-          renderer._renderSubgroup(
-            rp,
-            standardCasters,
-            false,
-            material.uuid,
-            manifest,
-            viewOffset,
-            cascadeCam.viewMatrix,
-            topology,
-            batch!.wireframeMode,
-          );
+        this._cutoutGroups.recycle();
+        let lastMaterial: AbstractMaterial | undefined = undefined;
+        let matAlphaTest = 0;
+        let matDiffuseMap: Texture | undefined = undefined;
+        let matDiffuseTransform: TextureTransform | undefined = undefined;
+        let nOpaque = 0;
+
+        for (let j = 0; j < objects.length; j++) {
+          const o = objects[j]!;
+          if (!o.castShadow || !this._inCascade(o)) continue;
+          if (o.material !== lastMaterial) {
+            lastMaterial = o.material;
+            const objManifest = lastMaterial?.getRenderManifest();
+            const extraParams = objManifest?.properties["u_extraParams"] as number[] | undefined;
+            matAlphaTest = extraParams?.[1] ?? 0;
+            matDiffuseMap =
+              matAlphaTest > 0
+                ? (objManifest?.textures["u_diffuseMap"] as Texture | undefined)
+                : undefined;
+            matDiffuseTransform =
+              matDiffuseMap && lastMaterial instanceof StandardMaterial
+                ? lastMaterial.textureTransforms?.diffuse
+                : undefined;
+          }
+          if (matDiffuseMap) {
+            this._cutoutGroups.add(o, matDiffuseMap, matAlphaTest, matDiffuseTransform);
+          } else {
+            _scratchCasters[nOpaque++] = o;
+          }
+        }
+        _scratchCasters.length = nOpaque;
+
+        if (nOpaque > 0) {
+          this._depthMaterial.diffuseMap = undefined;
+          this._depthMaterial.diffuseTransform = undefined;
+          this._depthMaterial.alphaTest = 0;
+          const opaqueManifest = this._depthMaterial.getRenderManifest();
+          splitByInstancing(_scratchCasters, _scratchStandard, _scratchInstanced, _split);
+          if (_split.standard.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.standard,
+              false,
+              this._depthMaterial.uuid,
+              opaqueManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+            );
+          }
+          if (_split.instanced.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              _split.instanced,
+              true,
+              this._depthMaterial.uuid,
+              opaqueManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+            );
+          }
         }
 
-        if (instancedCasters.length > 0) {
-          renderer._renderSubgroup(
-            rp,
-            instancedCasters,
-            true,
-            material.uuid,
-            manifest,
-            viewOffset,
-            cascadeCam.viewMatrix,
-            topology,
-            batch!.wireframeMode,
-          );
+        const activeCutouts = this._cutoutGroups.active;
+        for (let g = 0; g < activeCutouts.length; g++) {
+          const group = activeCutouts[g]!;
+          this._depthMaterial.diffuseMap = group.diffuseMap;
+          this._depthMaterial.diffuseTransform = group.diffuseTransform;
+          this._depthMaterial.alphaTest = group.alphaTest;
+          const alphaManifest = this._depthMaterial.getRenderManifest();
+          if (group.standard.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              group.standard,
+              false,
+              group.groupUuid,
+              alphaManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+            );
+          }
+          if (group.instanced.length > 0) {
+            renderer._renderSubgroup(
+              rp,
+              group.instanced,
+              true,
+              group.groupUuid,
+              alphaManifest,
+              viewOffset,
+              cascadeCam.viewMatrix,
+              topology,
+              batch!.wireframeMode,
+            );
+          }
         }
+        this._depthMaterial.diffuseMap = undefined;
+        this._depthMaterial.diffuseTransform = undefined;
+        this._depthMaterial.alphaTest = 0;
       }
+      void depthManifest;
 
       // ADR 0059 P1-2: pulled field draws for this cascade (depth variant into this cascade's
       // layer; the pass bound the dummy-referencing global snapshot, so `bindGlobal` stays off).

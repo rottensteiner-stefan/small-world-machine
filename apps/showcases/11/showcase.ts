@@ -59,7 +59,7 @@ export class Showcase extends AbstractShowcase {
     sunObj.add(sunLight);
 
     // Add AmbientLight so the rest of the coordinate system is visible
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.2 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.63 }));
 
     // --- Add Axes ---
     // The engine's own coordinate-cross gizmo (Neon Red/Green/Blue for X/Y/Z, arrow + label per

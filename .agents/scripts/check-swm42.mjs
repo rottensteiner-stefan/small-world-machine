@@ -37,7 +37,7 @@ const RIG = {
   camX: "0", camY: "6.5", camZ: "12",
   lookX: "0", lookY: "1", lookZ: "-1",
   lightX: "0.08", lightY: "-0.5", lightZ: "0.85",
-  sunI: "5", amb: "0.08",
+  sunI: "5", amb: "0.25",
 };
 
 const POLE_THRESHOLDS = {

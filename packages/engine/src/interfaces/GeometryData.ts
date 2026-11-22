@@ -29,6 +29,8 @@ export interface GeometryDataInterface {
   tangents?: Float32Array | undefined;
   /** Optional texture coordinate data (u, v). */
   uvs?: Float32Array | undefined;
+  /** Optional secondary texture coordinate data (`TEXCOORD_1`: u1, v1). */
+  uvs1?: Float32Array | undefined;
   /** Optional per-vertex color data (r, g, b, a). */
   colors?: Float32Array | undefined;
   /**

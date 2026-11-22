@@ -122,7 +122,7 @@ export class Showcase extends AbstractShowcase {
     const dLook: [number, number, number] = usePoleRig ? [0, 1, -1] : [0, 1.4, -3.0];
     const dLight: [number, number, number] = usePoleRig ? [0.08, -0.5, 0.85] : [0.45, -0.88, 0.3];
     const dSunI = usePoleRig ? 5 : 2.6;
-    const dAmb = usePoleRig ? 0.08 : 0.12;
+    const dAmb = usePoleRig ? 0.25 : 0.38;
     this._camPos = {
       x: parseNum(p, "camX", dCam[0]),
       y: parseNum(p, "camY", dCam[1]),
@@ -312,7 +312,7 @@ export class Showcase extends AbstractShowcase {
       this._camLook = { x: dLook[0], y: dLook[1], z: dLook[2] };
       this._lightDir = { x: dLight[0], y: dLight[1], z: dLight[2] };
       this._sunIntensity = usePoleRig ? 5 : 2.6;
-      this._ambientIntensity = usePoleRig ? 0.08 : 0.12;
+      this._ambientIntensity = usePoleRig ? 0.25 : 0.38;
       this._syncSunAnglesFromVector(this._lightDir.x, this._lightDir.y, this._lightDir.z);
 
       if (probe === "steps" && this._softness <= 1 && this._maxRadius <= 4) {

@@ -137,7 +137,7 @@ export class Showcase extends AbstractShowcase {
 
     const ambient = new AmbientLight({
       color: new Color(0.35, 0.3, 0.28),
-      intensity: 0.35,
+      intensity: 0.35 * Math.PI,
     });
     this.scene.add(ambient);
 

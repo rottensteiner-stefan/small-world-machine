@@ -30,7 +30,7 @@ export async function buildEnvironment(scene: Scene): Promise<LabSurfaceTextures
   // Ambient Optical Environment (Dark cleanroom lab aesthetic) -- P0-1 rebalanced down
   const ambientLight = new AmbientLight({
     color: new Color(0.232, 0.256, 0.317),
-    intensity: 0.12,
+    intensity: 0.38,
   });
   scene.add(ambientLight);
 

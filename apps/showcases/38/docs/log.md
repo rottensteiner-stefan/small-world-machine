@@ -63,3 +63,6 @@ Szene.
 - `GoldenCapture.ts` now delegates query parsing, surface pinning, resize handler, ready signal, frame stepping and repaint to `apps/showcases/shared/GoldenCapture.ts` (`GoldenSession`, `parseGoldenSpec`, `lookupOwn`); only the showcase-specific mapping/hooks stay here. Public API (`GoldenCapture`, `parseGoldenSpec`, options) unchanged, `showcase.ts` untouched.
 - Pool-key lookups are prototype-safe (`__golden=constructor` -> `Unknown __golden pool` in `meta.error`, no TypeError).
 - Byte-stability verified: pre/post gl2 captures pixel-identical (see `apps/showcases/tests/GoldenCapture.test.ts` for parser/session tests).
+
+### 2026-11-22 — Ambient `1/π` Irradiance Alignment
+- Rescaled initial and preset `AmbientLight.intensity` values (`× Math.PI`) in `showcase.ts` to match ADR 0063 PBR `1 / π` ambient irradiance normalization without changing scene luminance.

@@ -1,14 +1,21 @@
 vec3 V = normalize(u_viewPos - v_worldPos);
+#ifdef USE_UV_TRANSFORMS
+vec2 uvNormal = swmTransformUv(1);
+mat3 tbnNormal = swmTransformTbn(1, uvNormal, v_worldPos, v_tbn);
+vec3 rawNormal = texture2D(u_normalMap, uvNormal).rgb * 2.0 - 1.0;
+#else
+mat3 tbnNormal = v_tbn;
 vec3 rawNormal = texture2D(u_normalMap, v_uv).rgb * 2.0 - 1.0;
+#endif
 float normalMapLength = length(rawNormal);
 rawNormal.xy *= u_extraParams.zw;
-vec3 N = normalize(v_tbn * rawNormal);
+vec3 N = normalize(tbnNormal * rawNormal);
 roughness = specularAntiAliasing(roughness, N, normalMapLength, max(abs(u_extraParams.z), abs(u_extraParams.w)));
 float dotNV = max(dot(N, V), 0.0001);
 
 float ior = u_liquidParams.x > 0.0 ? u_liquidParams.x : 1.5;
 float f0_dielectric = pow((ior - 1.0) / (ior + 1.0), 2.0);
-// KHR_materials_specular: u_matParam12.rgb = f0(ior) x specularColor (linear, unclamped), w = enable;
+// KHR_materials_specular: u_matParam12.rgb = f0(ior) x specularColor (linear, unclamped); w = enable;
 // u_matParam13.x = specularFactor, the dielectric F90. Metals keep F90 = 1.
 bool specularEnabled = u_matParam12.w > 0.5;
 vec3 F0 = specularEnabled ? min(u_matParam12.rgb, vec3(1.0)) : vec3(f0_dielectric);
@@ -34,7 +41,12 @@ F90 = mix(F90, 1.0, metallic);
 float anisotropyStrength = u_matParam15.x;
 float anisoAlpha = max(roughness * roughness, 0.002);
 float anisoAlphaT = mix(anisoAlpha, 1.0, anisotropyStrength * anisotropyStrength);
-vec3 anisoT = normalize(v_tbn * vec3(u_matParam15.y, u_matParam15.z, 0.0));
+#ifdef USE_UV_TRANSFORMS
+mat3 anisoTbn = swmTransformTbn(16, swmTransformUv(16), v_worldPos, v_tbn);
+#else
+mat3 anisoTbn = v_tbn;
+#endif
+vec3 anisoT = normalize(anisoTbn * vec3(u_matParam15.y, u_matParam15.z, 0.0));
 vec3 anisoB = normalize(cross(normalize(v_tbn[2]), anisoT));
 #endif
 
@@ -56,7 +68,11 @@ float transmissionWeight = 0.0;
 #ifdef USE_TRANSMISSION
 transmissionWeight = u_liquidParams.z;
 #ifdef USE_TRANSMISSION_MAP
+#ifdef USE_UV_TRANSFORMS
+transmissionWeight *= texture2D(u_transmissionMap, swmTransformUv(14)).r;
+#else
 transmissionWeight *= texture2D(u_transmissionMap, v_uv).r;
+#endif
 #endif
 #endif
 vec3 diffuseAlbedo = albedo * (1.0 - transmissionWeight);
@@ -237,7 +253,7 @@ for(int i = 0; i < 4; i++) {
     Lo += directLight;
 }
 
-vec3 irradiance = u_ambientColor;
+vec3 irradiance = mix(u_ambientGround, u_ambientColor, clamp(N.y * 0.5 + 0.5, 0.0, 1.0)) * (1.0 / 3.14159265359);
 vec3 diffuseAmbient = irradiance * diffuseAlbedo;
 vec3 specularAmbient = vec3(0.0);
 
@@ -268,8 +284,9 @@ if (u_useEnvMap > 0.5) {
 
 // `specularAmbient` is already `vec3(0.0)` when there's no envMap, so this one formula covers
 // both cases; the ambient diffuse uses the G04 Fresnel energy split, never a separate override.
-vec3 ambient = (kD_ambient * diffuseAmbient + specularAmbient) * ao;
-// KHR_materials_sheen ambient (WebGL1 has no IBL: u_ambientColor stands in for the irradiance).
+float specularAO = computeSpecularOcclusion(dotNV, ao, roughness);
+vec3 ambient = kD_ambient * diffuseAmbient * ao + specularAmbient * specularAO;
+// KHR_materials_sheen ambient (WebGL1 has no IBL: hemisphere irradiance stands in for the irradiance).
 if (sheenOn) {
     ambient = ambient * sheenEnergyComp + irradiance * sheenColor * IBLSheenBRDF(dotNV, sheenRoughness) * ao;
 }
@@ -284,7 +301,11 @@ if (sheenOn) {
 if (transmissionWeight > 0.0) {
     float thickness = u_liquidParams.y;
     #ifdef USE_THICKNESS_MAP
+    #ifdef USE_UV_TRANSFORMS
+    thickness *= texture2D(u_thicknessMap, swmTransformUv(15)).g;
+    #else
     thickness *= texture2D(u_thicknessMap, v_uv).g;
+    #endif
     #endif
     float attenuationDist = u_thresholds.z;
 
@@ -310,7 +331,11 @@ if (transmissionWeight > 0.0) {
 vec3 color = ambient + Lo;
 
 // Emissive
+#ifdef USE_UV_TRANSFORMS
+vec3 emissive = sRGBToLinear(texture2D(u_emissiveMap, swmTransformUv(5)).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
+#else
 vec3 emissive = sRGBToLinear(texture2D(u_emissiveMap, v_uv).rgb) * sRGBToLinear(u_specColor.rgb) * u_specColor.a;
+#endif
 color += emissive;
 
 // Exposure (A03): same forward order as GL2 -- gain, then forwardToneMap, then encode.

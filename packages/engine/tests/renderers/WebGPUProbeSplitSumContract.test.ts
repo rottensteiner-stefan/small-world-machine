@@ -21,7 +21,10 @@ describe("WebGPU probe split-sum BRDF integration (G01)", () => {
     expect(src).toContain("* global.envIntensity");
     // ... and specular integrated through the BRDF LUT's split-sum terms -- not plain Fresnel.
     expect(src).toContain("let envBRDF = textureSampleLevel(u_brdfLUT");
-    expect(src).toContain("specularAmbient = envColor * (kS_ambient * envBRDF.x + envBRDF.y)");
+    expect(src).toContain("let FssEss = kS_ambient * envBRDF.x + F90 * envBRDF.y;");
+    expect(src).toContain(
+      "let specularAmbient = specularRadiance * FssEss + iblIrradiance * FmsEms;",
+    );
     // The pre-fix F_Schlick-only shortcut is gone from the specular path.
     expect(src).not.toContain("specularAmbient = envColor * F_Schlick90");
   });

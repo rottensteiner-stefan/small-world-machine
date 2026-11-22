@@ -3,7 +3,7 @@
 // IMPORTANT: Re-normalize interpolated normal in fragment shader!
 let N = normalize(i.n);
 let V = normalize(global.viewPos.xyz - i.wp); 
-var fL = global.ambientColor.xyz; 
+var fL = mix(global.ambientGround.xyz, global.ambientColor.xyz, clamp(N.y * 0.5 + 0.5, 0.0, 1.0)); 
 var spec = vec3f(0.0);
 
 // Directional Light

@@ -160,6 +160,10 @@ _Avoid_: GTAO — an earlier draft was named `GtaoElement`, but that overstates 
 A pure data or transform operation on the shared headless core (`core/*`) that runs identically in the browser UI and the CLI, free of DOM, GL, and browser dependencies.
 _Avoid_: CLI Operation — the CLI is only one consumer; the identical operation also powers the web UI. Browser Operation, Standalone Tool Logic.
 
+**Hemisphere Light (`HemisphereLight`)**:
+An additive sky-to-ground gradient ambient light (`LightType.HEMISPHERE`, `skyColor` + `groundColor`, evaluated via `mix(ground, sky, clamp(N.y * 0.5 + 0.5, 0, 1))` across WebGPU/WebGL2/WebGL1 and averaged as `0.5 * (sky + ground)` in volumetric fog). Multiple `AmbientLight` and `HemisphereLight` nodes accumulate additively into the shared `aCol`/`aGroundCol` slots during `extractLights`.
+_Avoid_: Single-winner ambient override or separate uniform slots per ambient node.
+
 **Instance Field**:
 A single scene-graph node owning N instances of 1..k prototypes (`PrototypeDescriptor`, ADR 0059): per-instance GPU culling (conservative frustum + projected-size, previous-frame HZB skip) and `atomicAdd` compaction into per-(view × LOD bucket) `IndirectDrawSource` segments — no CPU readback in the render path. Instances are NOT scene-graph objects (no per-instance picking, behaviors or octree entry); records are static 16-B (position + packed yaw/scale), cell-ordered, engine-owned sort, full rebuild as the only mutation path. WebGL2/1 fall back to CPU cell culling via the same contract. Deliberate counterpart to ADR 0046 auto-instancing: "many objects" vs "a population".
 _Avoid_: InstancedMesh / ADR-0046 auto-instancing (per-object CPU lane, wrong at 10⁵–10⁶), Mesh Merging per cell (no per-instance culling), billboard scatter.
@@ -231,6 +235,10 @@ _Avoid_: Per-particle `PointLight` allocation, unbounded light counts.
 **Per-Cell Light List**:
 The stored data a Cluster reads at lookup time: an offset+count into a flat list of light indices. The read-side counterpart to Light Coverage, which is the write-side view (from a light's perspective, which cells it reaches).
 _Avoid_: Light Grid (ambiguous with "Cluster grid", the whole 3D structure, rather than one cell's list)
+
+**Per-Slot Texture Transform (`TextureTransform` / `u_uvTransforms`)**:
+Per-material-slot UV transform (`offset`, `scale`, `rotation`, `texCoord` `0 | 1`) packed into a 19-slot (`38 vec4`) buffer behind `ShaderFlag.UV_TRANSFORMS` and `ShaderFlag.UV1` (ADR 0064), leaving shared `Texture` objects unmodified across all 3 tiers (`swmTransformUv`, `swmTransformTbn`) and alpha-cutout depth/shadow passes (`AlphaCutoutGroups`).
+_Avoid_: Cloning or mutating shared `Texture.{offset,repeat,rotation}` per glTF material slot.
 
 **Performance Governor (`PerformanceGovernor`)**:
 The ADR 0035 Phase 4 runtime closed-loop frame-time regulator (`core/quality/PerformanceGovernor.ts`): filters frame durations via EMA and adjusts `Renderer.setRenderScale()` monotonically within configured `[minScale, maxScale]` bounds with hysteresis cooldowns when `quality.dynamicScale` is active.

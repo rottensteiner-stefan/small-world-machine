@@ -1,4 +1,5 @@
 uniform vec3 u_ambientColor;
+uniform vec3 u_ambientGround;
 uniform float u_envIntensity;
 // A03: forward exposure gain (1.0 while the post pass owns exposure, quality exposure otherwise).
 uniform float u_exposure;

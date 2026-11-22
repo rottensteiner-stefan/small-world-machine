@@ -204,7 +204,7 @@ void main() {
     float g = clamp(u_asymmetry, -0.95, 0.95);
 
     // Ambient inject: scene ambient colour plus the IBL irradiance from above (same as WebGPU).
-    vec3 skyAmbient = u_ambientLight;
+    vec3 skyAmbient = u_ambientLight * (1.0 / 3.14159265359);
     if (u_ambientInject > 0.0) {
         // Isotropic scattering sees the whole sphere: the mean of the (low-frequency) irradiance cube over the
         // six axis directions approximates its L0 term; sampling straight up would only see the zenith.

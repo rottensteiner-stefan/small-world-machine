@@ -31,6 +31,7 @@ import {
   Matrix4,
   Object3D,
   Plane,
+  PointLight,
   Quaternion,
   Raycaster,
   RendererType,
@@ -318,16 +319,21 @@ export class Showcase extends AbstractShowcase {
 
     // Basic Light
     const dirLight = new DirectionalLight({ color: new Color(1, 1, 1), intensity: 1.0 });
-    dirLight.direction.set(-1, -1, -1);
+    dirLight.direction.set(-1, -1, -1).normalize();
     this.scene.add(dirLight);
 
-    // Fill Light for the right side
-    const dirLight2 = new DirectionalLight({ color: new Color(0.904, 0.904, 1), intensity: 0.5 });
-    dirLight2.direction.set(1, -0.5, -1);
-    this.scene.add(dirLight2);
+    // Fill Light for the right side (PointLight: renderer has one directional light slot)
+    const fillLight = new PointLight({
+      color: new Color(0.904, 0.904, 1),
+      intensity: 0.5,
+      distance: 120.0,
+      decay: 0.0,
+    });
+    fillLight.position.set(-30, 15, 30);
+    this.scene.add(fillLight);
 
     // Ambient Light to illuminate dark metallic surfaces
-    const ambLight = new AmbientLight({ color: new Color(1, 1, 1), intensity: 0.3 });
+    const ambLight = new AmbientLight({ color: new Color(1, 1, 1), intensity: 0.94 });
     this.scene.add(ambLight);
 
     // Wireframe sphere: the "structure" the curved screens are glued to -- the screens bend

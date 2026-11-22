@@ -109,7 +109,7 @@ export class Showcase extends AbstractShowcase {
     // OrbitController will be attached to the camera later, once the marble is created
 
     // Lighting (Cyberpunk Neon vibe)
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.2 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.63 }));
 
     const purpleLight = new PointLight({
       color: new Color(0.845, 0, 1),

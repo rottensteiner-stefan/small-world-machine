@@ -279,7 +279,7 @@ export class Showcase extends AbstractShowcase {
     );
 
     // 2. Lights
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.85 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 2.67 }));
     const sun = new DirectionalLight({ color: Color.WHITE, intensity: 1.3 });
     sun.direction.set(0.4, -0.7, -1).normalize();
 

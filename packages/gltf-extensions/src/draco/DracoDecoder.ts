@@ -7,6 +7,7 @@ export interface DecodedDracoAttributes {
   positions: Float32Array;
   normals?: Float32Array;
   uvs?: Float32Array;
+  uvs1?: Float32Array;
   /** glTF `TANGENT`: 4 components per vertex, `w` = ±1 bitangent handedness. */
   tangents?: Float32Array;
   indices?: Uint16Array | Uint32Array;
@@ -71,11 +72,12 @@ export class DracoDecoder {
       attributes.uvs ?? new Float32Array(0),
       attributes.normals ?? new Float32Array(0),
       attributes.indices ?? new Uint16Array(0),
-      attributes.joints || attributes.weights || attributes.tangents
+      attributes.joints || attributes.weights || attributes.tangents || attributes.uvs1
         ? {
             joints: attributes.joints,
             weights: attributes.weights,
             tangents: attributes.tangents,
+            uvs1: attributes.uvs1,
           }
         : undefined,
     ).getGeometryData();

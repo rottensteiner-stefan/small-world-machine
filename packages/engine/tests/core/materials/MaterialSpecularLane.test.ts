@@ -124,10 +124,10 @@ describe("KHR_materials_specular: shader parity across the three tiers", () => {
       /#ifdef USE_MATERIAL_SPECULAR[\s\S]*vec3 specularTint = u_matParam12\.rgb;[\s\S]*float specularWeight = u_matParam13\.x;[\s\S]*F0 = min\(specularTint, vec3\(1\.0\)\);\s*\n\s*F90 = specularWeight;/,
     );
     expect(chunk).toMatch(
-      /#ifdef USE_SPECULAR_COLOR_MAP\s*\n\s*specularTint \*= sRGBToLinear\(texture\(u_specularColorMap, v_uv\)\.rgb\);/,
+      /#ifdef USE_SPECULAR_COLOR_MAP[\s\S]*specularTint \*= sRGBToLinear\(texture\(u_specularColorMap, swmTransformUv\(8\)\)\.rgb\);[\s\S]*specularTint \*= sRGBToLinear\(texture\(u_specularColorMap, v_uv\)\.rgb\);/,
     );
     expect(chunk).toMatch(
-      /#ifdef USE_SPECULAR_WEIGHT_MAP\s*\n(?:#ifdef USE_SPECULAR_MAPS_SHARED[^\n]*\n[^\n]*\n[^\n]*\n#else\n)?\s*specularWeight \*= texture\(u_specularWeightMap, v_uv\)\.a;/,
+      /#ifdef USE_SPECULAR_WEIGHT_MAP[\s\S]*#ifdef USE_SPECULAR_MAPS_SHARED[\s\S]*specularWeight \*= texture\(u_specularColorMap, uvSpecWeight\)\.a;[\s\S]*#else\n\s*specularWeight \*= texture\(u_specularWeightMap, uvSpecWeight\)\.a;/,
     );
     expect(standard).toMatch(
       /#ifdef USE_SPECULAR_COLOR_MAP\s*\n\s*uniform sampler2D u_specularColorMap;/,

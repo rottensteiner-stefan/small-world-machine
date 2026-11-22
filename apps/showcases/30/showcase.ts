@@ -87,7 +87,7 @@ interface MoodPreset {
 const MOODS: Record<Mood, MoodPreset> = {
   [Mood.NIGHT]: {
     ambientColor: new Color(0.232, 0.299, 0.409),
-    ambientIntensity: 0.2,
+    ambientIntensity: 0.63,
     keyColor: new Color(0.481, 0.696, 0.85),
     keyIntensity: 0.4,
     spotIntensity: 2.2,
@@ -112,7 +112,7 @@ const MOODS: Record<Mood, MoodPreset> = {
   },
   [Mood.DAY]: {
     ambientColor: new Color(0.805, 0.816, 0.839),
-    ambientIntensity: 0.85,
+    ambientIntensity: 2.67,
     keyColor: new Color(0.934, 0.944, 0.963),
     keyIntensity: 0.55,
     spotIntensity: 0.0,

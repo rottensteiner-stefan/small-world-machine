@@ -85,6 +85,8 @@ layout(std140) uniform GlobalUniforms {
     vec2 u_tileSizePx;
     float u_toneMappingWhite; // forward REINHARD_EXTENDED white point (std140 gap before u_clusterDims)
     vec4 u_clusterDims;
+    vec3 u_ambientGround;
+    int _pad4;
 };
 
 uniform mat4 u_model;

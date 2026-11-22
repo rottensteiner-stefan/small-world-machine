@@ -114,6 +114,8 @@ layout(std140) uniform GlobalUniforms {
     vec2 u_tileSizePx;
     float u_toneMappingWhite; // forward REINHARD_EXTENDED white point (std140 gap before u_clusterDims)
     vec4 u_clusterDims;
+    vec3 u_ambientGround;
+    int _pad4;
 };
 
 uniform mat4 u_model;
@@ -125,8 +127,14 @@ uniform float u_texRotation;
 uniform mat4 u_spotShadowMatrix[4];
 uniform vec4 u_spotShadowInfo[4]; // x=bias, y=normalBias, z=castShadow, w=pad
 
+#ifdef USE_UV1
+in vec2 a_uv1;
+out vec2 v_uv1;
+#endif
+
 out vec3 v_worldPos;
 out vec3 v_normal;
 out vec2 v_uv;
+out vec2 v_uv0;
 out mat3 v_tbn;
 out vec4 v_spotLightSpacePos[4];

@@ -71,16 +71,16 @@ export const ShaderFlag = {
    * for the two-beam model of WebGL1 in iridescent programs of WebGPU and WebGL2 (ADR 0055).
    */
   IRIDESCENCE_CHEAP: "USE_IRIDESCENCE_CHEAP",
-  /** KHR_materials_anisotropy direction/strength texture present (WebGL2 only, ADR 0055). */
+  /** KHR_materials_anisotropy direction/strength texture present (WebGL2 + WebGPU; WebGL1 ignores maps, ADR 0055). */
   ANISOTROPY_MAP: "USE_ANISOTROPY_MAP",
-  /** KHR_materials_iridescence intensity texture (red channel) present (WebGL2 only, ADR 0055). */
+  /** KHR_materials_iridescence intensity texture (red channel) present (WebGL2 + WebGPU; WebGL1 ignores maps, ADR 0055). */
   IRIDESCENCE_MAP: "USE_IRIDESCENCE_MAP",
-  /** KHR_materials_iridescence thickness texture (green channel) present (WebGL2 only, ADR 0055). */
+  /** KHR_materials_iridescence thickness texture (green channel) present (WebGL2 + WebGPU; WebGL1 ignores maps, ADR 0055). */
   IRIDESCENCE_THICKNESS_MAP: "USE_IRIDESCENCE_THICKNESS_MAP",
   /**
-   * The iridescence and thickness textures are one texture (the usual packed glTF layout): WebGL2 reads
-   * the thickness from the green channel of the `u_iridescenceMap` sampler and declares no
-   * `u_iridescenceThicknessMap`, saving a texture unit (ADR 0055).
+   * The iridescence and thickness textures are one texture (the usual packed glTF layout): WebGL2 and
+   * WebGPU read thickness from the green channel of `u_iridescenceMap` and omit
+   * `u_iridescenceThicknessMap`, saving a texture unit / binding (ADR 0055).
    */
   IRIDESCENCE_MAPS_SHARED: "USE_IRIDESCENCE_MAPS_SHARED",
   /** Phong specular map present. */
@@ -122,6 +122,10 @@ export const ShaderFlag = {
   BACKLIGHT: "USE_BACKLIGHT",
   /** WebGPU compute JONSWAP 2D IFFT wavefield textures (`u_oceanDispMap`, `u_oceanNormFoamMap`, ADR 0062). */
   OCEAN_FFT: "USE_OCEAN_FFT",
+  /** Secondary texture coordinate set (`TEXCOORD_1` / `uvs1` -> `a_uv1`). */
+  UV1: "USE_UV1",
+  /** Per-slot `KHR_texture_transform` offset/scale/rotation/texCoord array (`u_uvTransforms`). */
+  UV_TRANSFORMS: "USE_UV_TRANSFORMS",
 } as const;
 
 /** Type definition for ShaderFlag. */

@@ -65,10 +65,60 @@ uniform sampler2D u_transmissionMap;
 uniform sampler2D u_thicknessMap;
 #endif
 
+#ifdef USE_UV_TRANSFORMS
+uniform vec4 u_uvTransforms[38];
+
+vec2 swmTransformUv(int slot) {
+    vec4 p0 = u_uvTransforms[slot * 2];
+    vec4 p1 = u_uvTransforms[slot * 2 + 1];
+#ifdef USE_UV1
+    vec2 baseUv = p1.z > 0.5 ? v_uv1 : v_uv0;
+#else
+    vec2 baseUv = v_uv0;
+#endif
+    vec2 uvScaled = baseUv * p0.zw;
+    return vec2(p1.x * uvScaled.x - p1.y * uvScaled.y, p1.y * uvScaled.x + p1.x * uvScaled.y) + p0.xy;
+}
+
+mat3 swmTransformTbn(int slot, vec2 slotUv, vec3 wp, mat3 baseTbn) {
+    vec4 p1 = u_uvTransforms[slot * 2 + 1];
+#ifdef GL_OES_standard_derivatives
+    if (p1.z > 0.5) {
+        vec3 dp1 = dFdx(wp);
+        vec3 dp2 = dFdy(wp);
+        vec2 duv1 = dFdx(slotUv);
+        vec2 duv2 = dFdy(slotUv);
+        float det = duv1.x * duv2.y - duv2.x * duv1.y;
+        if (abs(det) > 1e-12) {
+            vec3 n = baseTbn[2];
+            float invDet = 1.0 / det;
+            vec3 tDeriv = (dp1 * duv2.y - dp2 * duv1.y) * invDet;
+            vec3 bDeriv = (dp2 * duv1.x - dp1 * duv2.x) * invDet;
+            tDeriv -= n * dot(n, tDeriv);
+            bDeriv -= n * dot(n, bDeriv);
+            float tLenSq = dot(tDeriv, tDeriv);
+            float bLenSq = dot(bDeriv, bDeriv);
+            if (tLenSq > 1e-12 && bLenSq > 1e-12) {
+                return mat3(tDeriv * inversesqrt(tLenSq), bDeriv * inversesqrt(bLenSq), n);
+            }
+        }
+    }
+#endif
+    vec3 tRot = normalize(p1.x * baseTbn[0] - p1.y * baseTbn[1]);
+    vec3 bRot = normalize(p1.y * baseTbn[0] + p1.x * baseTbn[1]);
+    return mat3(tRot, bRot, baseTbn[2]);
+}
+#endif
+
 void main() {
     // The alpha map shares the carrier texture's transform: same transformed v_uv as the diffuse map.
+#ifdef USE_UV_TRANSFORMS
+    vec4 texColor = texture2D(u_diffuseMap, swmTransformUv(0));
+    texColor.a *= texture2D(u_alphaMap, swmTransformUv(6)).r;
+#else
     vec4 texColor = texture2D(u_diffuseMap, v_uv);
     texColor.a *= texture2D(u_alphaMap, v_uv).r;
+#endif
 
 #ifdef USE_ALPHA_TEST
     if (texColor.a < u_extraParams.y) {
@@ -77,9 +127,14 @@ void main() {
 #endif
 
     vec3 albedo = sRGBToLinear(texColor.rgb) * sRGBToLinear(u_color.rgb);
-    
+
+#ifdef USE_UV_TRANSFORMS
+    float metallic = u_metallic * texture2D(u_metallicMap, swmTransformUv(2)).b;
+    float roughness = clamp(u_roughness * texture2D(u_roughnessMap, swmTransformUv(3)).g, 0.05, 1.0);
+#else
     float metallic = u_metallic * texture2D(u_metallicMap, v_uv).b;
     float roughness = clamp(u_roughness * texture2D(u_roughnessMap, v_uv).g, 0.05, 1.0);
+#endif
     float ao = u_extraParams.x;
 
 #ifdef USE_UNLIT

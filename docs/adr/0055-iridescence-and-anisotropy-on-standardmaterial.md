@@ -4,10 +4,12 @@ status: accepted
 
 # 0055: Anisotropy and iridescence on `StandardMaterial` — the last two lanes, a tiered iridescence model, textures as a later step
 
-> **Status note 2026-11-01 (no decision change):** the WebGL2 texture step of this ADR (`anisotropyTexture`, `iridescenceTexture`, `iridescenceThicknessTexture`) was implemented and GPU-verified in the same working session on 2026-10-31 (see `Textures` below); the lingering backlog entry about it was closed as done on 2026-11-01. The ADR-0054 revisit of 2026-11-01 restructured the WebGPU material bindings into per-flag groups with a budget fit; the anisotropy/iridescence textures deliberately stay WebGL2-only and are registered as the documented follow-up there. The phrase "WebGPU keeps its 15 of 16 texture budget" below describes the pre-revisit state; the decision it belongs to (WebGL2-only sampling, factors elsewhere) is unchanged.
+> **Status note 2026-11-01 (no decision change):** the WebGL2 texture step of this ADR (`anisotropyTexture`, `iridescenceTexture`, `iridescenceThicknessTexture`) was implemented and GPU-verified in the same working session on 2026-10-31 (see `Textures` below); the lingering backlog entry about it was closed as done on 2026-11-01. The ADR-0054 revisit of 2026-11-01 restructured the WebGPU material bindings into per-flag groups with a budget fit; at that time anisotropy/iridescence textures stayed WebGL2-only.
+>
+> **Follow-up 2026-11-20 (`0.127.2`) — RESOLVED:** WebGPU `@group(1)` bindings `32–34` (`u_anisotropyMap`, `u_iridescenceMap`, `u_iridescenceThicknessMap`) and `USE_IRIDESCENCE_MAPS_SHARED` were wired into `GPUPipelineCache`, `structs.wgsl`, and `lighting_pbr.wgsl` behind the same budget-drop resolver (`WEBGPU_EXTENSION_MAP_GROUPS`, ADR 0056 order). Both **WebGL2 and WebGPU** now sample anisotropy and iridescence maps when adapter texture headroom permits; **WebGL1** still ignores them (`tier-parity.json`). Everything below preserves the original 2026-10-31 / 2026-11-01 decision text.
 
-- **Status:** Accepted (human-approved 2026-10-31)
-- **Date:** 2026-10-31
+- **Status:** Accepted (human-approved 2026-10-31; WebGPU extension maps resolved 2026-11-20 in `0.127.2`)
+- **Date:** 2026-10-31 (revisited 2026-11-20)
 - **Trigger:** Showcase 13 glTF audit listed `KHR_materials_anisotropy` and `KHR_materials_iridescence` as missing (after `KHR_materials_specular`, ADR 0054).
 
 ## Decision

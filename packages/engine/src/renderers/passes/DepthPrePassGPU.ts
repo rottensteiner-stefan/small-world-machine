@@ -1,5 +1,9 @@
 import type { Scene } from "../../core/index.js";
-import { DepthMaterial } from "../../core/materials/index.js";
+import {
+  DepthMaterial,
+  StandardMaterial,
+  type TextureTransform,
+} from "../../core/materials/index.js";
 import { MaterialType, Topology } from "../../enums/index.js";
 import type { WebGPURenderer } from "../WebGPU/WebGPURenderer.js";
 import { VIEW_SLOT_MAIN_CAMERA } from "../WebGPU/WebGPURenderer.js";
@@ -7,23 +11,13 @@ import type { RenderPass } from "../index.js";
 import { InstancedMesh } from "../../core/InstancedMesh.js";
 import type { Object3D } from "../../core/Object3D.js";
 import type { Vector3D } from "../../math/index.js";
-import { MathUtils } from "../../math/index.js";
 import type { Texture } from "../../core/textures/index.js";
 import type { AbstractMaterial } from "../../core/materials/AbstractMaterial.js";
 import type { RenderManifest } from "../shaders/RenderManifest.js";
+import { AlphaCutoutGroups } from "./AlphaCutoutGroups.js";
 
 const _scratchInstanced: InstancedMesh[] = [];
 const _scratchStandard: Object3D[] = [];
-
-/** One (diffuseMap, alphaTest) group of objects sharing an alpha-cutout depth draw call. */
-interface AlphaTestGroup {
-  /** Stable synthetic matUuid for this texture's bind group / object-uniform ring slot,
-   * assigned once and reused across frames (see `DepthPrePassGPU._alphaGroupUuids`). */
-  groupUuid: string;
-  alphaTest: number;
-  standard: Object3D[];
-  instanced: InstancedMesh[];
-}
 
 /**
  * Z-only pre-pass for opaque objects, using the shared DepthMaterial pipeline (same
@@ -40,56 +34,7 @@ export class DepthPrePassGPU implements RenderPass {
   public name = "DepthPrePassGPU";
 
   private _depthMaterial?: DepthMaterial;
-
-  /** Groups objects needing alpha-cutout within the batch currently being processed, keyed by
-   * their real material's diffuseMap texture -- rebuilt every batch, see `execute()`. */
-  private readonly _alphaGroups = new Map<Texture, AlphaTestGroup>();
-
-  /** Reusable alpha-cutout group objects: fills come from this pool after warmup, so the per-batch
-   * `{ groupUuid, alphaTest, standard: [], instanced: [] }` object + array allocation disappears.
-   * Entries are recycled by `_recycleAlphaGroups()` at the START of each batch (the map of the
-   * batch just processed). */
-  private readonly _alphaGroupPool: AlphaTestGroup[] = [];
-  private _alphaGroupPoolSize = 0;
-
-  /** Returns the previous batch's alpha groups to the pool (their object/arrays are re-used, not
-   * dropped) and clears the batch map -- the replacement for `this._alphaGroups.clear()`. */
-  private _recycleAlphaGroups(): void {
-    for (const [, group] of this._alphaGroups) {
-      group.standard.length = 0;
-      group.instanced.length = 0;
-      if (this._alphaGroupPoolSize < this._alphaGroupPool.length) {
-        this._alphaGroupPool[this._alphaGroupPoolSize++] = group;
-      } else {
-        this._alphaGroupPool.push(group);
-      }
-    }
-    this._alphaGroups.clear();
-  }
-
-  /** Takes a pooled alpha group for `diffuseMap` (fresh single allocation only on the first
-   * encounter of that storage class) and registers it in the batch map. */
-  private _acquireAlphaGroup(
-    diffuseMap: Texture,
-    groupUuid: string,
-    alphaTest: number,
-  ): AlphaTestGroup {
-    let group: AlphaTestGroup;
-    if (this._alphaGroupPoolSize > 0) {
-      group = this._alphaGroupPool[--this._alphaGroupPoolSize]!;
-    } else {
-      group = { groupUuid: "", alphaTest: 0, standard: [], instanced: [] };
-    }
-    group.groupUuid = groupUuid;
-    group.alphaTest = alphaTest;
-    this._alphaGroups.set(diffuseMap, group);
-    return group;
-  }
-
-  /** Stable synthetic matUuid per alpha-cutout diffuseMap texture, assigned once and reused
-   * across frames so `_getMaterialBindGroup`'s cache (and the object-uniform ring's per-slot
-   * cache, both keyed by matUuid) actually get reused instead of rebuilding every frame. */
-  private readonly _alphaGroupUuids = new WeakMap<Texture, string>();
+  private readonly _cutoutGroups = new AlphaCutoutGroups();
 
   /** Copies the plain prefix `objects[0..end)` into the scratch list; returns its length. */
   private _leavePassThrough(objects: readonly Object3D[], end: number): number {
@@ -158,24 +103,33 @@ export class DepthPrePassGPU implements RenderPass {
       // While every object takes the plain opaque path, the batch list itself is that path (no
       // copy); the first deviating object switches to the scratch list (prefix copied once).
       let passThrough = true;
-      this._recycleAlphaGroups();
+      this._cutoutGroups.recycle();
       // A batch is keyed by material, so consecutive objects share it: build its manifest once.
       let lastMaterial: AbstractMaterial | undefined = undefined;
       let objManifest: RenderManifest | undefined = undefined;
+      let matAlphaTest = 0;
+      let matDiffuseMap: Texture | undefined = undefined;
+      let matDiffuseTransform: TextureTransform | undefined = undefined;
 
       // Split into the fast opaque path (no per-object texture -- everything that doesn't
-      // alpha-test) and one group per alpha-cutout diffuseMap: a shared depth-only pipeline
-      // can't early-Z alpha-tested geometry correctly without actually sampling THAT object's
-      // own cutout texture, so treating it as opaque here would let the depth pre-pass write
-      // solid depth for pixels the color pass will later discard (see class doc + the
-      // GPUTextureResourceCache.acquireTextures doc for why a stand-in, always-undefined
-      // diffuseMap on the shared DepthMaterial was also corrupting the main pass's own texture
-      // lifecycle).
+      // alpha-test) and one group per (diffuseMap, alphaTest, diffuseTransform): a shared
+      // depth-only pipeline can't early-Z alpha-tested geometry correctly without actually
+      // sampling THAT object's cutout texture + UV transform.
       for (let i = 0; i < objects.length; i++) {
         const obj = objects[i]!;
         if (obj.material !== lastMaterial) {
           lastMaterial = obj.material;
           objManifest = lastMaterial?.getRenderManifest();
+          const extraParams = objManifest?.properties["u_extraParams"] as number[] | undefined;
+          matAlphaTest = extraParams?.[1] ?? 0;
+          matDiffuseMap =
+            matAlphaTest > 0
+              ? (objManifest?.textures["u_diffuseMap"] as Texture | undefined)
+              : undefined;
+          matDiffuseTransform =
+            matDiffuseMap && lastMaterial instanceof StandardMaterial
+              ? lastMaterial.textureTransforms?.diffuse
+              : undefined;
         }
         if (
           objManifest?.state?.skipDepthPrePass === true ||
@@ -188,29 +142,13 @@ export class DepthPrePassGPU implements RenderPass {
           passThrough = false;
           continue;
         }
-        const extraParams = objManifest?.properties["u_extraParams"] as number[] | undefined;
-        const alphaTest = extraParams?.[1] ?? 0;
-        const diffuseMap =
-          alphaTest > 0
-            ? (objManifest!.textures["u_diffuseMap"] as Texture | undefined)
-            : undefined;
 
-        if (passThrough && (diffuseMap || obj instanceof InstancedMesh)) {
+        if (passThrough && (matDiffuseMap || obj instanceof InstancedMesh)) {
           nStandard = this._leavePassThrough(objects, i);
           passThrough = false;
         }
-        if (diffuseMap) {
-          let group = this._alphaGroups.get(diffuseMap);
-          if (!group) {
-            let groupUuid = this._alphaGroupUuids.get(diffuseMap);
-            if (!groupUuid) {
-              groupUuid = MathUtils.generateUUID();
-              this._alphaGroupUuids.set(diffuseMap, groupUuid);
-            }
-            group = this._acquireAlphaGroup(diffuseMap, groupUuid, alphaTest);
-          }
-          if (obj instanceof InstancedMesh) group.instanced.push(obj);
-          else group.standard.push(obj);
+        if (matDiffuseMap) {
+          this._cutoutGroups.add(obj, matDiffuseMap, matAlphaTest, matDiffuseTransform);
         } else if (obj instanceof InstancedMesh) {
           _scratchInstanced[nInstanced++] = obj;
         } else if (!passThrough) {
@@ -225,6 +163,8 @@ export class DepthPrePassGPU implements RenderPass {
       // _updateGlobalBuffers() -- its offset is always 0, no _setViewMatrix() call needed.
       if (standardList.length > 0 || _scratchInstanced.length > 0) {
         this._depthMaterial.diffuseMap = undefined;
+        this._depthMaterial.diffuseTransform = undefined;
+        this._depthMaterial.alphaTest = 0;
         const opaqueManifest = this._depthMaterial.getRenderManifest();
 
         if (standardList.length > 0) {
@@ -254,8 +194,11 @@ export class DepthPrePassGPU implements RenderPass {
         }
       }
 
-      for (const [diffuseMap, group] of this._alphaGroups) {
-        this._depthMaterial.diffuseMap = diffuseMap;
+      const activeCutouts = this._cutoutGroups.active;
+      for (let g = 0; g < activeCutouts.length; g++) {
+        const group = activeCutouts[g]!;
+        this._depthMaterial.diffuseMap = group.diffuseMap;
+        this._depthMaterial.diffuseTransform = group.diffuseTransform;
         this._depthMaterial.alphaTest = group.alphaTest;
         const alphaManifest = this._depthMaterial.getRenderManifest();
 
@@ -285,6 +228,9 @@ export class DepthPrePassGPU implements RenderPass {
           );
         }
       }
+      this._depthMaterial.diffuseMap = undefined;
+      this._depthMaterial.diffuseTransform = undefined;
+      this._depthMaterial.alphaTest = 0;
     }
 
     // ADR 0059 P1-2: pulled field depth draws for the main view (their cutout alpha writes this

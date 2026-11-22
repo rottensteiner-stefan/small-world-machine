@@ -52,6 +52,12 @@ fn F_Schlick90(cosTheta: f32, F0: vec3f, F90: f32) -> vec3f {
     return F0 + (vec3f(F90) - F0) * (x2 * x2 * x);
 }
 
+// Specular ambient occlusion (Lagarde & de Rousiers 2014, Frostbite): attenuates grazing/rough cavity
+// reflections without dimming ao == 1.0 (evaluates to 1.0 exact at ao == 1, 0.0 at ao == 0).
+fn computeSpecularOcclusion(dotNV: f32, ao: f32, roughness: f32) -> f32 {
+    return clamp(pow(dotNV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
 // The iridescence and anisotropy helpers below sit in #ifdef blocks that GPUPipelineCache strips for
 // materials without the feature: their code is large and an unused copy still costs compile time.
 #ifdef USE_IRIDESCENCE

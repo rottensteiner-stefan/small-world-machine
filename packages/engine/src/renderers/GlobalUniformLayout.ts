@@ -32,12 +32,12 @@ export interface GlobalUniformArrayField extends GlobalUniformField {
   stride: number;
 }
 
-// ── WebGL2 std140 (2112 bytes) ────────────────────────────────────────────────────────────────
+// ── WebGL2 std140 (2128 bytes) ────────────────────────────────────────────────────────────────
 // Field order and std140 offsets match `base_vertex_header.vert.glsl` / `lights.frag.glsl`
 // exactly. Sub-layouts of the three light structs are separate tables below.
 
 export const WebGL2GlobalUniformLayout = {
-  totalBytes: 2112,
+  totalBytes: 2128,
   fields: {
     vp: { offset: 0, size: 64 },
     viewPos: { offset: 64, size: 12 },
@@ -57,6 +57,8 @@ export const WebGL2GlobalUniformLayout = {
     tileSizePx: { offset: 2080, size: 8 },
     toneMappingWhite: { offset: 2088, size: 4 },
     clusterDims: { offset: 2096, size: 16 },
+    // Appended after clusterDims so the prefix up to u_gamma stays byte-identical (ShadertoyImporter).
+    ambientGround: { offset: 2112, size: 12 },
   },
 } as const;
 
@@ -95,12 +97,12 @@ export const WebGL2AreaLightLayout = {
   slotBytes: 96,
 } as const;
 
-// ── WebGPU (428 floats / 1712 bytes) ───────────────────────────────────────────────────────────
+// ── WebGPU (432 floats / 1728 bytes) ───────────────────────────────────────────────────────────
 // Field order and float indices match `structs.wgsl` exactly.
 
 export const WebGPUGGlobalUniformLayout = {
-  totalFloats: 428,
-  totalBytes: 1712,
+  totalFloats: 432,
+  totalBytes: 1728,
   fields: {
     vp: { index: 0, floats: 16 },
     viewPos: { index: 16, floats: 4 },
@@ -142,5 +144,7 @@ export const WebGPUGGlobalUniformLayout = {
     pointShadowInfo: { index: 416, floats: 8, count: 2, stride: 4 },
     // Forward tone curve lane [mode, reserved x3], appended like the above.
     toneMapping: { index: 424, floats: 4 },
+    // Ground-hemisphere ambient radiance [r, g, b, 1], appended after toneMapping.
+    ambientGround: { index: 428, floats: 4 },
   },
 } as const;

@@ -111,3 +111,6 @@ Vergleichsbäumen**, damit der Geometrie-Swap auf kurze Distanz sichtbar ist.
 ## Translated user-facing strings
 
 Translated user-facing strings to English.
+
+### 2026-11-22 — Ambient `1/π` Irradiance Alignment
+- Rescaled `MOOD_CONFIGS` ambient intensities (`× π`: `0.6→1.88`, `0.55→1.73`, `0.7→2.2`, `0.45→1.41`) and setup default (`1.88`) to match the ADR 0063 PBR ambient `1 / π` irradiance normalization with preserved look.

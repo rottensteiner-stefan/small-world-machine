@@ -411,11 +411,12 @@ export class VolumetricFogPassGL {
     }
 
     if (this._uAmbientLightLoc) {
+      const ambientGround = ctx.lights?.aGroundCol ?? ambientColor;
       gl2.uniform3f(
         this._uAmbientLightLoc,
-        ambientColor.r * ambientIntensity,
-        ambientColor.g * ambientIntensity,
-        ambientColor.b * ambientIntensity,
+        (ambientColor.r + ambientGround.r) * 0.5 * ambientIntensity,
+        (ambientColor.g + ambientGround.g) * 0.5 * ambientIntensity,
+        (ambientColor.b + ambientGround.b) * 0.5 * ambientIntensity,
       );
     }
     if (this._uAmbientInjectLoc)

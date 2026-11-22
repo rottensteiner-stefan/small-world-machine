@@ -1,5 +1,5 @@
       vec3 V = normalize(u_viewPos - v_worldPos);
-      vec3 finalLight = u_ambientColor;
+      vec3 finalLight = mix(u_ambientGround, u_ambientColor, clamp(N.y * 0.5 + 0.5, 0.0, 1.0));
       vec3 specular = vec3(0.0);
 
       // Directional Light

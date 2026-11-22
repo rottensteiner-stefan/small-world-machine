@@ -3,14 +3,48 @@ import type { CustomShaderMaterialOptions } from "../CustomShaderMaterial.js";
 import { ShaderPropertyType } from "../../../enums/index.js";
 
 /**
- * Minimal GLSL300 gamma lane for the wrapper. `[LIGHT_DEFS]` above user code would put
- * `linearToSRGB`/`sRGBToLinear`/`targetToLinear`/`displayToTarget`, the whole GlobalUniforms member list and
- * the GLASS_* macros into the Shadertoy's scope, and Shadertoys routinely define their own `sRGBToLinear` /
- * `linearToSRGB` (redefinition compile error). This declares only the std140 PREFIX of `GlobalUniforms` up
- * to `u_gamma` (a UBO may be declared as a prefix of the bound buffer) behind an instance name, plus a
- * wrapper-private `swm_displayToTarget` (same maths as `lights.frag.glsl`). Prefix drift is pinned by a test.
+ * Minimal-scope GLSL300 gamma lane for the wrapper. `[LIGHT_DEFS]` above user code would put
+ * `linearToSRGB`/`sRGBToLinear`/`targetToLinear`/`displayToTarget` and the `GLASS_*` macros into
+ * the Shadertoy's scope, and Shadertoys routinely define their own `sRGBToLinear` / `linearToSRGB`
+ * (redefinition compile error). GLSL ES 3.00 / ANGLE requires every stage declaring `GlobalUniforms`
+ * to share the identical block definition AND instance-name qualification with `[BASE_VERTEX_HEADER]`,
+ * so the anonymous `GlobalUniforms` block is declared here verbatim alongside wrapper-private
+ * `swm_displayToTarget` (same maths as `lights.frag.glsl`). Full block and qualifier parity is
+ * pinned by `ShadertoyImporterScope.test.ts`.
  */
-export const SHADERTOY_GAMMA_DEFS = `layout(std140) uniform GlobalUniforms {
+export const SHADERTOY_GAMMA_DEFS = `struct PointLight {
+    vec3 pos;
+    float distance;
+    vec3 color;
+    float decay;
+};
+
+struct SpotLight {
+    vec3 pos;
+    float _pad;
+    vec3 dir;
+    float _pad2;
+    vec3 color;
+    float _pad3;
+    vec4 params;
+};
+
+struct AreaLight {
+    vec3 pos;
+    float _pad;
+    vec3 color;
+    float _pad2;
+    vec3 right;
+    float _pad3;
+    vec3 up;
+    float _pad4;
+    vec3 normal;
+    float _pad5;
+    vec2 size;
+    vec2 params;
+};
+
+layout(std140) uniform GlobalUniforms {
     mat4 u_vp;
     vec3 u_viewPos;
     int _pad0;
@@ -24,10 +58,21 @@ export const SHADERTOY_GAMMA_DEFS = `layout(std140) uniform GlobalUniforms {
     int u_numSpotLights;
     int u_numAreaLights;
     float u_gamma;
-} swm_global;
+    float u_exposure;
+    float u_toneMappingMode;
+    vec2 u_cameraNearFar;
+    PointLight u_pointLights[16];
+    SpotLight u_spotLights[16];
+    AreaLight u_areaLights[4];
+    vec2 u_tileSizePx;
+    float u_toneMappingWhite;
+    vec4 u_clusterDims;
+    vec3 u_ambientGround;
+    int _pad4;
+};
 
 vec3 swm_displayToTarget(vec3 color) {
-    return pow(max(color, vec3(0.0)), vec3(2.2 / swm_global.u_gamma));
+    return pow(max(color, vec3(0.0)), vec3(2.2 / u_gamma));
 }`;
 
 /**
@@ -46,8 +91,8 @@ precision highp int;
 in vec2 v_uv;
 out vec4 fragColor;
 
-// Global gamma lane (ADR 0049): Shadertoy output is display-referred sRGB. Minimal, instance-named, swm_-
-// prefixed so user code can define its own sRGBToLinear/linearToSRGB/displayToTarget.
+// Global gamma lane (ADR 0049): Shadertoy output is display-referred sRGB. Anonymous GlobalUniforms
+// (matching base_vertex_header) + swm_-prefixed lane fn so user code keeps its own sRGB helpers.
 ${SHADERTOY_GAMMA_DEFS}
 
 uniform vec3 iResolution;

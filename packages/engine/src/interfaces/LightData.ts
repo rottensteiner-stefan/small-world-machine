@@ -6,9 +6,11 @@ import type { PointLight, SpotLight, AreaLight, DirectionalLight } from "../core
  * Interface representing the data for all lights in a scene.
  */
 export interface LightDataInterface {
-  /** Ambient light color. */
+  /** Ambient / sky-hemisphere linear radiance color. */
   aCol: Color;
-  /** Ambient light intensity. */
+  /** Ground-hemisphere linear radiance color (falls back to aCol when omitted). */
+  aGroundCol?: Color;
+  /** Ambient light intensity multiplier. */
   aIntensity: number;
   /** Directional light direction. */
   dDir: Vector3D;

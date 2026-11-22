@@ -14,7 +14,7 @@ export interface GltfTextureTransform {
 /** A glTF `textureInfo` reference: texture index plus the optional `KHR_texture_transform`. */
 export interface GltfTextureInfo {
   index: number;
-  /** UV set; only 0 (`TEXCOORD_0`) is imported. */
+  /** UV set (`0` = `TEXCOORD_0`, `1` = `TEXCOORD_1`). */
   texCoord?: number;
   extensions?: {
     KHR_texture_transform?: GltfTextureTransform;
@@ -162,24 +162,24 @@ export interface GltfJson {
       };
       KHR_materials_clearcoat?: {
         clearcoatFactor?: number;
-        clearcoatTexture?: { index: number };
+        clearcoatTexture?: GltfTextureInfo;
         clearcoatRoughnessFactor?: number;
-        clearcoatRoughnessTexture?: { index: number };
-        clearcoatNormalTexture?: { index: number; scale?: number };
+        clearcoatRoughnessTexture?: GltfTextureInfo;
+        clearcoatNormalTexture?: GltfTextureInfo & { scale?: number };
       };
       KHR_materials_sheen?: {
         sheenColorFactor?: number[];
-        sheenColorTexture?: { index: number };
+        sheenColorTexture?: GltfTextureInfo;
         sheenRoughnessFactor?: number;
-        sheenRoughnessTexture?: { index: number };
+        sheenRoughnessTexture?: GltfTextureInfo;
       };
       KHR_materials_transmission?: {
         transmissionFactor?: number;
-        transmissionTexture?: { index: number };
+        transmissionTexture?: GltfTextureInfo;
       };
       KHR_materials_volume?: {
         thicknessFactor?: number;
-        thicknessTexture?: { index: number };
+        thicknessTexture?: GltfTextureInfo;
         attenuationDistance?: number;
         attenuationColor?: number[];
       };

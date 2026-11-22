@@ -19,8 +19,8 @@ import {
 describe("WebGL2 GlobalUniforms UBO-Byte-Konvention (Real-Probe gegen GlobalUniformLayout)", () => {
   it("pins the sealed total size and the contiguous light array placement of the engine layout", () => {
     const L = WebGL2GlobalUniformLayout;
-    // Versiegelt: Die Engine-Tabelle deklariert exakt 2112 Bytes für das GlobalUniforms-UBO.
-    expect(L.totalBytes).toBe(2112);
+    // Versiegelt: Die Engine-Tabelle deklariert exakt 2128 Bytes für das GlobalUniforms-UBO (inkl. trailing u_ambientGround).
+    expect(L.totalBytes).toBe(2128);
 
     // Die drei Licht-Arrays sind kontigent und ohne Lücken aneinander gereiht: Ende von
     // pointLights == Anfang von spotLights == Ende spotLights == Anfang areaLights ...
@@ -59,6 +59,7 @@ describe("WebGL2 GlobalUniforms UBO-Byte-Konvention (Real-Probe gegen GlobalUnif
     const areas = L.fields.areaLights as { offset: number; size: number };
     const tile = L.fields.tileSizePx as { offset: number; size: number };
     const cluster = L.fields.clusterDims as { offset: number; size: number };
+    const ambientGround = L.fields.ambientGround as { offset: number; size: number };
 
     // Einzig autoritative Quelle ist die Engine-Tabelle; wir spiegeln hier keine Bytes nach,
     // sondern prüfen die INVARIANTE. `clusterDims` ist ein vec4u und std140-16-Byte-aligniert:
@@ -68,8 +69,9 @@ describe("WebGL2 GlobalUniforms UBO-Byte-Konvention (Real-Probe gegen GlobalUnif
     expect(tile.offset).toBeGreaterThanOrEqual(areas.offset + areas.size); // nach den Licht-Arrays
     expect(cluster.offset).toBeGreaterThanOrEqual(tile.offset + tile.size); // danach, ohne Überlappung
     expect(cluster.offset % 16).toBe(0); // vec4u -> std140 16-Byte-Ausrichtung
+    expect(ambientGround.offset).toBeGreaterThanOrEqual(cluster.offset + cluster.size);
     // Kein Feld ragt über totalBytes hinaus (sonst lägen die Shader-Bindings daneben).
-    expect(cluster.offset + cluster.size).toBeLessThanOrEqual(L.totalBytes);
+    expect(ambientGround.offset + ambientGround.size).toBeLessThanOrEqual(L.totalBytes);
     for (const [, f] of Object.entries(L.fields)) {
       expect(f.offset).toBeGreaterThanOrEqual(0);
       expect(f.offset + f.size).toBeLessThanOrEqual(L.totalBytes);

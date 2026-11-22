@@ -228,6 +228,10 @@ export class WebGPURenderer
       lastUsedFrame: number;
     }
   >();
+  private _uvTransformBuffers = new Map<
+    string,
+    { buf: GPUBuffer; bindingRes: GPUBufferBinding; lastUsedFrame: number }
+  >();
   /** Reused by `_getMaterialBindGroup()` so the per-batch lookup allocates nothing on a hit. */
   private readonly _scratchBgBindings: number[] = [];
   private readonly _scratchBgResources: GPUBindingResource[] = [];
@@ -1803,9 +1807,11 @@ export class WebGPURenderer
    */
   private _computeStructsChunk(): string {
     // assemble(): the chunk nests [WGSL_TONE_OPERATORS]; raw getChunk would leave the token in.
+    // Strip any #ifdef blocks (e.g. Out.uv1 under USE_UV1) so compute shaders compiling outside
+    // GPUPipelineCache never receive raw preprocessor directives.
     const raw = this.context.shaderRegistry.assemble(`[${ShaderChunkId.WGSL_STRUCTS}]`, "wgsl");
     const group0Only = raw.split("@group(1)")[0] ?? raw;
-    return "const USE_DECAL_GRADIENTS: bool = false;\n" + group0Only;
+    return "const USE_DECAL_GRADIENTS: bool = false;\n" + preprocessConditionals(group0Only, []);
   }
 
   /** Public access to the shared compute-structs chunk (global bindings + structs), for
@@ -1979,11 +1985,13 @@ export class WebGPURenderer
       manifest,
       cache.bgLayouts[1]!,
       cache.materialTextureNames,
+      cache.hasUvTransforms,
     );
     rp.setBindGroup(1, matBindGroup);
     rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
 
     const usesVertexColor = effManifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
+    const usesUv1 = effManifest.flags?.includes(ShaderFlag.UV1) === true;
     // Line-quad shadow draw (ADR 0045): the caster's edge ribbon replaces its own buffers.
     const lineQuads = effManifest.state?.lineQuads === true;
 
@@ -2066,7 +2074,12 @@ export class WebGPURenderer
           this._fallback.ensureDummyBufferSize(gCache.vertexCount);
           rp.setVertexBuffer(0, morphed.vb);
           rp.setVertexBuffer(1, morphed.nb || gCache.nb || this._fallback.dummyNormalBuffer);
-          rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+          rp.setVertexBuffer(
+            2,
+            usesUv1
+              ? this._geometryCache.getInterleavedUv01Buffer(obj.geometry, gCache)
+              : gCache.uvb || this._fallback.dummyUvBuffer,
+          );
           rp.setVertexBuffer(3, morphed.tb || gCache.tb || this._fallback.dummyTangentBuffer);
           rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
           rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
@@ -2076,7 +2089,12 @@ export class WebGPURenderer
           this._fallback.ensureDummyBufferSize(gCache.vertexCount);
           rp.setVertexBuffer(0, gCache.vb);
           rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
-          rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+          rp.setVertexBuffer(
+            2,
+            usesUv1
+              ? this._geometryCache.getInterleavedUv01Buffer(obj.geometry, gCache)
+              : gCache.uvb || this._fallback.dummyUvBuffer,
+          );
           rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
           rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
           rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
@@ -2261,12 +2279,14 @@ export class WebGPURenderer
         manifest,
         cache.bgLayouts[1]!,
         cache.materialTextureNames,
+        cache.hasUvTransforms,
       ),
     );
     rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
 
     const runObjects = this._scratchRunObjects;
     const runs = this._scratchRuns;
+    const usesUv1 = effManifest.flags?.includes(ShaderFlag.UV1) === true;
 
     // Keyed by the manifest, not an object: the slot never collides with a per-object slot.
     const slot = this._objectRing.acquireObjectSlot(manifest, matUuid);
@@ -2298,7 +2318,12 @@ export class WebGPURenderer
       this._fallback.ensureDummyBufferSize(Math.max(gCache.vertexCount, count));
       rp.setVertexBuffer(0, gCache.vb);
       rp.setVertexBuffer(1, gCache.nb || this._fallback.dummyNormalBuffer);
-      rp.setVertexBuffer(2, gCache.uvb || this._fallback.dummyUvBuffer);
+      rp.setVertexBuffer(
+        2,
+        usesUv1
+          ? this._geometryCache.getInterleavedUv01Buffer(geo, gCache)
+          : gCache.uvb || this._fallback.dummyUvBuffer,
+      );
       rp.setVertexBuffer(3, gCache.tb || this._fallback.dummyTangentBuffer);
       rp.setVertexBuffer(4, gCache.jb || this._fallback.dummyJointsBuffer);
       rp.setVertexBuffer(5, gCache.wb || this._fallback.dummyWeightsBuffer);
@@ -2522,11 +2547,31 @@ export class WebGPURenderer
     return this._textures.getTextureView(m.textures[name] as Texture, this._quality);
   }
 
+  private _getUvTransformBindingResource(matUuid: string, m: RenderManifest): GPUBufferBinding {
+    let entry = this._uvTransformBuffers.get(matUuid);
+    if (!entry) {
+      const buf = this._device!.createBuffer({
+        size: 38 * 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      entry = { buf, bindingRes: { buffer: buf }, lastUsedFrame: this._frameCount };
+      this._uvTransformBuffers.set(matUuid, entry);
+    } else {
+      entry.lastUsedFrame = this._frameCount;
+    }
+    const data = m.properties["u_uvTransforms"] as Float32Array | undefined;
+    if (data) {
+      this._device!.queue.writeBuffer(entry.buf, 0, data.buffer, data.byteOffset, 38 * 16);
+    }
+    return entry.bindingRes;
+  }
+
   protected _getMaterialBindGroup(
     matUuid: string,
     m: RenderManifest,
     layout: GPUBindGroupLayout,
     materialTextureNames: readonly string[],
+    hasUvTransforms: boolean = false,
   ): GPUBindGroup {
     const envOrSkybox = m.textures["u_skybox"] || m.textures["u_envMap"];
     const samplerTex = (m.textures["u_diffuseMap"] ?? m.textures["u_normalMap"]) as
@@ -2556,6 +2601,10 @@ export class WebGPURenderer
       const name = materialTextureNames[i]!;
       bindings.push(bindingInfo[name]!.binding);
       resources.push(this._resolveOptionalMaterialTexture(name, m));
+    }
+    if (hasUvTransforms) {
+      bindings.push(35);
+      resources.push(this._getUvTransformBindingResource(matUuid, m));
     }
 
     const cache = this._materialBindGroups.get(matUuid);
@@ -2594,6 +2643,12 @@ export class WebGPURenderer
     for (const [uuid, entry] of this._materialBindGroups) {
       if (this._frameCount - entry.lastUsedFrame > MATERIAL_BIND_GROUP_IDLE_FRAMES) {
         this._materialBindGroups.delete(uuid);
+      }
+    }
+    for (const [uuid, entry] of this._uvTransformBuffers) {
+      if (this._frameCount - entry.lastUsedFrame > MATERIAL_BIND_GROUP_IDLE_FRAMES) {
+        this._fallback.deferDestroyBuffer(entry.buf);
+        this._uvTransformBuffers.delete(uuid);
       }
     }
   }
@@ -2778,6 +2833,8 @@ export class WebGPURenderer
     for (let i = 0; i < fields.length; i++) fields[i]!.dispose();
     fields.length = 0;
 
+    for (const entry of this._uvTransformBuffers.values()) entry.buf.destroy();
+    this._uvTransformBuffers.clear();
     this._materialBindGroups.clear();
     this._shadowMaps.clear();
 

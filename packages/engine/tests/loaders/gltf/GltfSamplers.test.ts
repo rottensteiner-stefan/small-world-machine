@@ -80,7 +80,7 @@ describe("glTF samplers", () => {
     expect(mat.normalMap!.addressModeU).toBe(TextureWrap.MIRRORED_REPEAT);
   });
 
-  it("keeps sampler modes on the per-transform sibling texture", async () => {
+  it("keeps sampler modes on the shared texture while recording KHR_texture_transform on the material", async () => {
     const j = base();
     j.materials = [
       {
@@ -92,8 +92,10 @@ describe("glTF samplers", () => {
         },
       } as never,
     ];
-    const tex = (await parse(j)).diffuseMap!;
-    expect(tex.repeat.x).toBe(2);
+    const mat = await parse(j);
+    const tex = mat.diffuseMap!;
+    expect(tex.repeat.x).toBe(1);
+    expect(mat.textureTransforms?.diffuse?.scale).toEqual([2, 2]);
     expect(tex.addressModeU).toBe(TextureWrap.CLAMP_TO_EDGE);
     expect(tex.magFilter).toBe(TextureFilter.NEAREST);
   });

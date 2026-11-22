@@ -406,7 +406,7 @@ fn fieldColorShade(i: FieldVertOut, frontFacing: bool) -> vec4f {
     // when the scene has one, the flat ambient colour otherwise.
     var ambient = sRGBToLinear(textureSampleLevel(u_irradianceMap, globalSampler, N, 0.0).rgb) * global.envIntensity;
     if (dot(ambient, ambient) < 1e-6) {
-        ambient = global.ambientColor.rgb;
+        ambient = mix(global.ambientGround.rgb, global.ambientColor.rgb, clamp(N.y * 0.5 + 0.5, 0.0, 1.0)) * invPi;
     }
     ambient *= fieldCanopyAmbient(i.wp);
     var lit = albedo * sun * (dotNL * shadow) + ambient * albedo;

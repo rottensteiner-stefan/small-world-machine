@@ -102,8 +102,8 @@ const BODY = `
     <div class="section-title">🌑 Ambient Fill & Shadows</div>
     <div class="hud-row">
       <label>Walkway Ambient</label>
-      <input type="range" id="slAmbient" min="0.0" max="0.5" step="0.01" value="0.08" />
-      <span class="val-label" id="valAmbient">0.08</span>
+      <input type="range" id="slAmbient" min="0.0" max="1.6" step="0.02" value="0.25" />
+      <span class="val-label" id="valAmbient">0.25</span>
     </div>
     <div class="hud-row">
       <label>HBAO Occlusion</label>

@@ -80,7 +80,7 @@ describe("glTF texture sharing per parse", () => {
     expect(loadImage).toHaveBeenCalledTimes(1);
   });
 
-  it("gives slots with different KHR_texture_transform their own Texture without mutating the shared one", async () => {
+  it("shares one Texture across slots with different KHR_texture_transform and stores transforms per slot", async () => {
     const { am, loadImage } = makeAssetManager();
     const j = json([
       {
@@ -95,13 +95,12 @@ describe("glTF texture sharing per parse", () => {
       },
     ]);
     const mat = await parse(j, am);
-    expect(mat.diffuseMap).not.toBe(mat.metallicMap);
-    expect(mat.diffuseMap!.offset.x).toBe(0.5);
-    expect(mat.diffuseMap!.repeat.x).toBe(2);
-    expect(mat.metallicMap!.offset.x).toBe(0);
-    expect(mat.metallicMap!.repeat.x).toBe(1);
+    expect(mat.diffuseMap).toBe(mat.metallicMap);
     expect(mat.emissiveMap).toBe(mat.metallicMap);
-    expect(mat.diffuseMap!.image).toBe(mat.metallicMap!.image);
+    expect(mat.textureTransforms?.diffuse).toEqual({ offset: [0.5, 0], scale: [2, 2] });
+    expect(mat.textureTransforms?.metallic).toBeUndefined();
+    expect(mat.diffuseMap!.offset.x).toBe(0);
+    expect(mat.diffuseMap!.repeat.x).toBe(1);
     expect(loadImage).toHaveBeenCalledTimes(1);
   });
 
@@ -151,7 +150,7 @@ describe("glTF material slot parameters", () => {
     expect(mat.normalScale.y).toBeCloseTo(0.4);
   });
 
-  it("warns once per slot for texCoord != 0 and stays silent for texCoord 0", async () => {
+  it("accepts texCoord 0 and 1 silently and warns only for texCoord > 1", async () => {
     const { am } = makeAssetManager();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const j = json([
@@ -164,9 +163,10 @@ describe("glTF material slot parameters", () => {
         emissiveTexture: { index: 0, texCoord: 0 },
       },
     ]);
-    await parse(j, am);
-    expect(warn).toHaveBeenCalledTimes(2);
-    expect(String(warn.mock.calls[0]![0])).toContain("texCoord 1");
-    expect(String(warn.mock.calls[1]![0])).toContain("texCoord 2");
+    const mat = await parse(j, am);
+    expect(mat.textureTransforms?.diffuse).toEqual({ texCoord: 1 });
+    expect(mat.textureTransforms?.ao).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]![0])).toContain("texCoord 2");
   });
 });

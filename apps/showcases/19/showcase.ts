@@ -181,7 +181,7 @@ export class Showcase extends AbstractShowcase {
     this.camera.addBehavior(this._flyController);
 
     // Lights
-    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 0.35 }));
+    this.scene.add(new AmbientLight({ color: Color.WHITE, intensity: 1.1 }));
 
     const dirLight = new DirectionalLight({ color: Color.WHITE, intensity: 1.2 });
     dirLight.position.set(12, 24, 12);

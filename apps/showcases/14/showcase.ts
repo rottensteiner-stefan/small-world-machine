@@ -609,7 +609,7 @@ function buildInterrogationRoom(
   // Ambient Light (Dropped from 0.4 to 0.06 to create deep shadows and mystery)
   const ambientLight = new AmbientLight({
     color: new Color(0.422, 0.447, 0.502), // Cold blue ambient fill
-    intensity: 0.06,
+    intensity: 0.19,
   });
   scene.add(ambientLight);
 

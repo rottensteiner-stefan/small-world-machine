@@ -33,7 +33,7 @@ export async function setupWetScene(scene: Scene, camera: Camera): Promise<void>
   });
   sun.direction.set(0, -1, 0);
   scene.add(sun);
-  scene.add(new AmbientLight({ color: Color.WHITE, intensity: 1.0 }));
+  scene.add(new AmbientLight({ color: Color.WHITE, intensity: Math.PI }));
 
   const floor = new Object3D("Floor");
   floor.geometry = new Ground({ width: 40, depth: 40 }).getGeometryData();

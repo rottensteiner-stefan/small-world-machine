@@ -160,8 +160,8 @@ export class Hud {
           </div>
           <div class="hud-row">
             <label for="slAmbInt" title="Ambient fill light intensity (controls shadow darkness)">Ambient Fill</label>
-            <input id="slAmbInt" type="range" min="0" max="0.5" step="0.01" value="0.12" />
-            <span id="valAmbInt" class="val-label">0.12</span>
+            <input id="slAmbInt" type="range" min="0" max="1.5" step="0.01" value="0.38" />
+            <span id="valAmbInt" class="val-label">0.38</span>
           </div>
           <div class="hud-row">
             <label for="slBias" title="Depth bias: too low = shadow acne, too high = peter-panning">Depth Bias</label>

@@ -61,7 +61,7 @@ export class Showcase extends AbstractShowcase {
 
     this._ambientLight = new AmbientLight({
       color: new Color(0.533, 0.561, 0.596),
-      intensity: 0.55,
+      intensity: 1.73,
     });
     this.scene.add(this._ambientLight);
     this._sunLight = new DirectionalLight({ color: new Color(1, 0.991, 0.963), intensity: 1.4 });

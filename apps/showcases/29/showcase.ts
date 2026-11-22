@@ -139,7 +139,7 @@ export class Showcase extends AbstractShowcase {
     // A. Deep Ambient Shadow: Low ambient creates dark, moody shaded arcade corridors
     this._ambientLight = new AmbientLight({
       color: new Color(0.481, 0.459, 0.435),
-      intensity: 0.08, // Low intensity so covered walkways are in deep shadow
+      intensity: 0.25, // Low intensity so covered walkways are in deep shadow
     });
     this.scene.add(this._ambientLight);
 
@@ -401,11 +401,11 @@ export class Showcase extends AbstractShowcase {
       setToggle: (toggle, enabled) => this._applyToggle(toggle, enabled),
       applyPreset: (preset) => {
         if (preset === "crytek") {
-          this._applyPreset(5.5, -0.45, -0.75, -0.45, 0.08, 1.5, 32, 1.05, 0.4, 0.35, false);
+          this._applyPreset(5.5, -0.45, -0.75, -0.45, 0.25, 1.5, 32, 1.05, 0.4, 0.35, false);
         } else if (preset === "noon") {
-          this._applyPreset(6.5, -0.2, -0.92, -0.3, 0.22, 1.2, 22, 1.15, 0.6, 0.25, false);
+          this._applyPreset(6.5, -0.2, -0.92, -0.3, 0.69, 1.2, 22, 1.15, 0.6, 0.25, false);
         } else {
-          this._applyPreset(1.5, 0.0, -1.0, 0.0, 0.42, 0.8, 0, 0.9, 0.1, 0.15, false);
+          this._applyPreset(1.5, 0.0, -1.0, 0.0, 1.32, 0.8, 0, 0.9, 0.1, 0.15, false);
         }
       },
       onPanelClosed: () => this._onLightingLabClosed(),

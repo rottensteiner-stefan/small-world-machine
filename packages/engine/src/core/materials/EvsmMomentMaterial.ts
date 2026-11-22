@@ -4,10 +4,23 @@ import fragWGSL from "./shaders/EvsmMoment.frag.wgsl?raw";
 import lineVertGLSL from "./shaders/LineShadow.vert.glsl?raw";
 import lineVertWGSL from "./shaders/LineShadow.vert.wgsl?raw";
 import { AbstractMaterial } from "./AbstractMaterial.js";
-import { CullMode, MaterialType, ShaderPropertyType, Topology } from "../../enums/index.js";
+import {
+  CullMode,
+  MaterialType,
+  ShaderFlag,
+  ShaderPropertyType,
+  Topology,
+} from "../../enums/index.js";
 import type { Texture } from "../textures/index.js";
 import type { RenderManifest, ShaderDefinition } from "../../renderers/shaders/index.js";
 import { StandardWebGPULayout } from "../../renderers/shaders/index.js";
+import {
+  UV_TRANSFORM_FLOAT_COUNT,
+  cloneTextureTransforms,
+  isIdentityTextureTransform,
+  packUvTransformSlot,
+  type TextureTransform,
+} from "./TextureTransform.js";
 
 /**
  * Configuration options for EvsmMomentMaterial.
@@ -15,6 +28,8 @@ import { StandardWebGPULayout } from "../../renderers/shaders/index.js";
 export type EvsmMomentMaterialOptions = {
   diffuseMap?: Texture;
   alphaTest?: number;
+  /** Optional slot-0 UV transform override (`KHR_texture_transform` / `texCoord`) for alpha cutouts. */
+  diffuseTransform?: TextureTransform;
   /** Draw line casters as world-width quads (`LINE_QUADS_SHADER_ID`, ADR 0045). */
   lineQuads?: boolean;
 };
@@ -32,25 +47,39 @@ export class EvsmMomentMaterial extends AbstractMaterial {
   /** Shader id of the line-quad variant (`lineQuads: true`). */
   public static readonly LINE_QUADS_SHADER_ID = `${MaterialType.EVSM}_LineQuads`;
 
-  /** The diffuse texture map used exclusively for alpha testing. */
+  /** @domain The diffuse texture map used exclusively for alpha testing. */
   public diffuseMap: Texture | undefined;
 
-  /** Alpha cutoff threshold. */
+  /** @domain Alpha cutoff threshold. */
   public alphaTest: number;
 
-  /** Line-quad mode only: half the caster's `shadowWidth`, in meters. Set per batch by the pass. */
+  /** @domain Optional slot-0 UV transform (`KHR_texture_transform` / `texCoord`) for alpha cutouts. */
+  public diffuseTransform: TextureTransform | undefined;
+
+  /** @derived Line-quad mode only: half the caster's `shadowWidth`, in meters. Set per batch by the pass. */
   public lineHalfWidth: number = 0;
 
-  /** Line-quad mode only: one shadow-map texel in NDC (`2 / resolution`). Set by the pass. */
+  /** @derived Line-quad mode only: one shadow-map texel in NDC (`2 / resolution`). Set by the pass. */
   public shadowTexelNdc: number = 0;
 
   private readonly _lineQuads: boolean;
+  private readonly _uvTransformsData = new Float32Array(UV_TRANSFORM_FLOAT_COUNT);
 
   constructor(options?: EvsmMomentMaterialOptions) {
     super(options?.lineQuads ? EvsmMomentMaterial.LINE_QUADS_SHADER_ID : MaterialType.EVSM);
     this.diffuseMap = options?.diffuseMap;
     this.alphaTest = options?.alphaTest ?? 0.0;
+    this.diffuseTransform = options?.diffuseTransform;
     this._lineQuads = options?.lineQuads ?? false;
+  }
+
+  /** @inheritdoc */
+  public override clone(): EvsmMomentMaterial {
+    const copy = super.clone() as EvsmMomentMaterial;
+    if (this.diffuseTransform) {
+      copy.diffuseTransform = cloneTextureTransforms({ diffuse: this.diffuseTransform })?.diffuse;
+    }
+    return copy;
   }
 
   /** @inheritdoc */
@@ -85,11 +114,22 @@ export class EvsmMomentMaterial extends AbstractMaterial {
     extra[2] = this.shadowTexelNdc;
     extra[3] = this.lineHalfWidth;
 
+    const hasSlotTransform = Boolean(
+      this.diffuseMap && this.alphaTest > 0 && !isIdentityTextureTransform(this.diffuseTransform),
+    );
+
     if (this.diffuseMap) {
-      (props["u_texOffset"] as number[])[0] = this.diffuseMap.offset.x;
-      (props["u_texOffset"] as number[])[1] = this.diffuseMap.offset.y;
-      (props["u_texRepeat"] as number[])[0] = this.diffuseMap.repeat.x;
-      (props["u_texRepeat"] as number[])[1] = this.diffuseMap.repeat.y;
+      if (hasSlotTransform) {
+        (props["u_texOffset"] as number[])[0] = 0;
+        (props["u_texOffset"] as number[])[1] = 0;
+        (props["u_texRepeat"] as number[])[0] = 1;
+        (props["u_texRepeat"] as number[])[1] = 1;
+      } else {
+        (props["u_texOffset"] as number[])[0] = this.diffuseMap.offset.x;
+        (props["u_texOffset"] as number[])[1] = this.diffuseMap.offset.y;
+        (props["u_texRepeat"] as number[])[0] = this.diffuseMap.repeat.x;
+        (props["u_texRepeat"] as number[])[1] = this.diffuseMap.repeat.y;
+      }
       texs["u_diffuseMap"] = this.diffuseMap;
     } else {
       (props["u_texOffset"] as number[])[0] = 0;
@@ -101,6 +141,18 @@ export class EvsmMomentMaterial extends AbstractMaterial {
       // diffuse texture.
       delete texs["u_diffuseMap"];
     }
+
+    const flags = this._manifestFlags;
+    flags.length = 0;
+    if (hasSlotTransform) {
+      packUvTransformSlot(this._uvTransformsData, 0, this.diffuseTransform, this.diffuseMap);
+      props["u_uvTransforms"] = this._uvTransformsData;
+      flags.push(ShaderFlag.UV_TRANSFORMS);
+      if (this._uvTransformsData[6]! > 0.5) flags.push(ShaderFlag.UV1);
+    } else {
+      delete props["u_uvTransforms"];
+    }
+    this._commitFlags();
 
     // The edge ribbon is two-sided triangles, so a line-quad caster is never culled.
     this._renderManifest.state = {

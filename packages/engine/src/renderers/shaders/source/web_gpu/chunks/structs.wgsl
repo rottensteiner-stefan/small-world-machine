@@ -74,10 +74,11 @@ struct GlobalUniforms {
     pointShadowMatrices: array<mat4x4f, 12>,
     pointShadowInfo: array<vec4f, 2>, // [bias, normalBias, pLights index (-1 = unused), castShadow]
 
-    // --- 9. Forward Tone Curve (16 bytes) ---
+    // --- 9. Forward Tone Curve & Hemisphere Ground (32 bytes) ---
     // x = ToneMappingMode of the forward pass (0 while post-processing owns tone mapping),
     // y = REINHARD_EXTENDED white point, z/w reserved.
     toneMapping: vec4f,
+    ambientGround: vec4f,
 }
 
 // ObjectUniforms: 512-byte uniform block (32 vec4 / 128 floats)
@@ -149,7 +150,11 @@ struct Out {
     @location(4) b: vec3f,
     @location(5) original_uv: vec2f,
     @location(6) texIndex: f32,
-    @location(7) instColor: vec4f
+    @location(7) instColor: vec4f,
+    @location(8) uv0: vec2f,
+#ifdef USE_UV1
+    @location(9) uv1: vec2f,
+#endif
 }
 
 struct PointLight {
@@ -298,6 +303,9 @@ fn worldDirToScreen(dir: vec3f) -> vec2f {
 #ifndef USE_IRIDESCENCE_MAPS_SHARED
 @group(1) @binding(34) var u_iridescenceThicknessMap: texture_2d<f32>;
 #endif
+#endif
+#ifdef USE_UV_TRANSFORMS
+@group(1) @binding(35) var<uniform> u_uvTransforms: array<vec4f, 38>;
 #endif
 
 @group(2) @binding(0) var<uniform> obj: ObjectUniforms;

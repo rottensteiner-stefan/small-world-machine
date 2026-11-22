@@ -68,7 +68,7 @@ export class Showcase extends AbstractShowcase {
   private _frames: number = 0;
   private _lastReadoutUpdate: number = 0;
   private _keyIntensity: number = 3.2;
-  private _ambientIntensity: number = 0.12;
+  private _ambientIntensity: number = 0.12 * Math.PI;
   private _rimIntensity: number = 1.6;
 
   constructor(options: EngineOptions = {}) {

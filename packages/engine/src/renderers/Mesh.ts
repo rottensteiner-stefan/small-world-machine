@@ -4,6 +4,8 @@ import { buildLineShadowRibbon } from "./LineShadowRibbon.js";
 
 /** Fixed WebGL2 attribute location of `a_color` (see `WebGLProgramCache`). */
 export const VERTEX_COLOR_LOCATION = 11;
+/** Fixed WebGL2 attribute location of `a_uv1` (`TEXCOORD_1`, see `WebGLProgramCache`). */
+export const UV1_LOCATION = 14;
 
 /** GL copy of a geometry's `LineShadowRibbon` (attribute locations 0-2 of the line-quad draw). */
 export interface GLLineRibbon {
@@ -33,6 +35,8 @@ export class Mesh {
   public tanbo: WebGLBuffer | undefined = undefined;
   /** The texture coordinate buffer object. */
   public tbo: WebGLBuffer | undefined = undefined;
+  /** The secondary texture coordinate buffer object (`TEXCOORD_1`). */
+  public tbo1: WebGLBuffer | undefined = undefined;
   /** The per-vertex color (RGBA) buffer object. */
   public cbo: WebGLBuffer | undefined = undefined;
   /** The skinning joints buffer object. */
@@ -101,6 +105,13 @@ export class Mesh {
       gl.bufferData(gl.ARRAY_BUFFER, data.uvs, gl.STATIC_DRAW);
     }
 
+    // 4a. Secondary UVs Buffer (TEXCOORD_1)
+    if (data.uvs1 && 0 < data.uvs1.length) {
+      this.tbo1 = gl.createBuffer() ?? undefined;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.tbo1 ?? null);
+      gl.bufferData(gl.ARRAY_BUFFER, data.uvs1, gl.STATIC_DRAW);
+    }
+
     // 4b. Vertex Colors Buffer
     if (data.colors && 0 < data.colors.length) {
       this.cbo = gl.createBuffer() ?? undefined;
@@ -155,6 +166,10 @@ export class Mesh {
    * @param jointLoc The location of the joints attribute.
    * @param weightLoc The location of the weights attribute.
    * @param colorLoc The location of the vertex color attribute.
+   * @param vboOverride Optional morphed position buffer.
+   * @param nboOverride Optional morphed normal buffer.
+   * @param tanboOverride Optional morphed tangent buffer.
+   * @param uv1Loc The location of the secondary UV (`TEXCOORD_1`) attribute.
    */
   public bind(
     posLoc: number,
@@ -167,6 +182,7 @@ export class Mesh {
     vboOverride?: WebGLBuffer,
     nboOverride?: WebGLBuffer,
     tanboOverride?: WebGLBuffer,
+    uv1Loc: number = -1,
   ): void {
     this._gl.bindBuffer(this._gl.ARRAY_BUFFER, vboOverride ?? this.vbo ?? null);
     this._gl.vertexAttribPointer(posLoc, 3, this._gl.FLOAT, false, 0, 0);
@@ -190,6 +206,17 @@ export class Mesh {
         this._gl.enableVertexAttribArray(uvLoc);
       } else {
         this._gl.disableVertexAttribArray(uvLoc);
+      }
+    }
+
+    if (0 <= uv1Loc) {
+      if (this.tbo1) {
+        this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.tbo1);
+        this._gl.vertexAttribPointer(uv1Loc, 2, this._gl.FLOAT, false, 0, 0);
+        this._gl.enableVertexAttribArray(uv1Loc);
+      } else {
+        this._gl.disableVertexAttribArray(uv1Loc);
+        this._gl.vertexAttrib2f(uv1Loc, 0, 0);
       }
     }
 
@@ -259,11 +286,12 @@ export class Mesh {
 
   /**
    * Captures the attribute pointers for locations 0-5 (position/normal/uv/tangent/joints/
-   * weights) and the vertex color at location 11 (the fixed reservations from
-   * `WebGLProgramCache`) into a fresh VAO. Missing buffers disable their location so a later
-   * program sees the GL default constant, matching what `bind()` does per draw. The color
-   * constant is set to opaque white (the GL default would be black) -- generic attribute values
-   * are context state, not VAO state, so this holds for every mesh without colors.
+   * weights), vertex color at location 11, and secondary UV at location 14 (the fixed
+   * reservations from `WebGLProgramCache`) into a fresh VAO. Missing buffers disable their
+   * location so a later program sees the GL default constant, matching what `bind()` does per
+   * draw. The color constant is set to opaque white (the GL default would be black) -- generic
+   * attribute values are context state, not VAO state, so this holds for every mesh without
+   * colors.
    */
   private _buildVAO(gl: WebGL2RenderingContext): void {
     const vao = gl.createVertexArray();
@@ -278,6 +306,8 @@ export class Mesh {
     this._setupAttribute(gl, 5, this.wbo, 4, this._gl.FLOAT);
     this._setupAttribute(gl, VERTEX_COLOR_LOCATION, this.cbo, 4, this._gl.FLOAT);
     if (!this.cbo) gl.vertexAttrib4f(VERTEX_COLOR_LOCATION, 1, 1, 1, 1);
+    this._setupAttribute(gl, UV1_LOCATION, this.tbo1, 2, this._gl.FLOAT);
+    if (!this.tbo1) gl.vertexAttrib2f(UV1_LOCATION, 0, 0);
     gl.bindVertexArray(null);
     this.vao = vao;
   }
@@ -419,6 +449,11 @@ export class Mesh {
       this._gl.bufferData(this._gl.ARRAY_BUFFER, data.tangents, this._gl.STATIC_DRAW);
     }
 
+    if (this.tbo1 && data.uvs1) {
+      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.tbo1);
+      this._gl.bufferData(this._gl.ARRAY_BUFFER, data.uvs1, this._gl.STATIC_DRAW);
+    }
+
     if (this.cbo && data.colors) {
       this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this.cbo);
       this._gl.bufferData(this._gl.ARRAY_BUFFER, data.colors, this._gl.STATIC_DRAW);
@@ -433,6 +468,7 @@ export class Mesh {
     if (this.nbo) this._gl.deleteBuffer(this.nbo);
     if (this.tanbo) this._gl.deleteBuffer(this.tanbo);
     if (this.tbo) this._gl.deleteBuffer(this.tbo);
+    if (this.tbo1) this._gl.deleteBuffer(this.tbo1);
     if (this.cbo) this._gl.deleteBuffer(this.cbo);
     if (this.jbo) this._gl.deleteBuffer(this.jbo);
     if (this.wbo) this._gl.deleteBuffer(this.wbo);
