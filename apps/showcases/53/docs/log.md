@@ -166,3 +166,12 @@ Living log. Newest entries at the bottom, nothing is deleted.
 ## 2026-11-22 — Ambient `1/π` Irradiance Alignment
 
 - Rescaled `ATMOSPHERES` (`ambientIntensity`), lightning-flash ambient boost (`1.35 -> 4.24`), and initial `AmbientLight` intensity (`0.75 -> 2.36`) in `showcase.ts` (`× π`) to preserve calibrated night/storm exposure under ADR 0063's `1 / π` PBR ambient normalization.
+
+## 2026-11-22 — Ocean Geometry Selector: Radial Polar Grid vs. CDLOD Quadtree
+
+- **Dual-Backend Ocean Geometry (`showcase.ts`, `Hud.ts`):**
+  - Added interactive ocean geometry switcher between the baseline camera-tracking polar concentric disc (`OceanGridGeometry`, `radius: 4400 m`, `128×160` rings) and CDLOD cartesian quadtree ocean (`WaterQuadtree`, `worldSize: 8192 m`, `waterLevel: FORTRESS_WATER_Y`, `maxLevel: 6`, `tileSegments: 16`, `lodDistanceFactor: 2.2`, `maxWaveHeight: 14`).
+  - Added URL parameter query support `?oceanGeom=radial|quadtree` (and `?quadtree=1`), defaulting to `"radial"` so existing visual baselines, screenshot tests, and goldens remain 100% byte-identical.
+  - Added interactive HUD toggle buttons in `Hud.ts` under `🌊 Ocean & Surf` (`Radial Polar Grid` vs. `CDLOD Quadtree`), keyboard shortcut `O` (`Keys.O`), and wired `window.__qaSwm53.setOceanGeometry`.
+  - Excluded `WaterQuadtree.root` from `PlanarReflectionNode` and synchronized dynamic per-frame updates in `update()` (`OceanGridGeometry.snapToTarget` when radial, `WaterQuadtree.update` when quadtree). Analytical wave buoyancy for buoys continues sampling `OceanMaterial.sampleWaveAt(...)` identically under both geometry backends.
+

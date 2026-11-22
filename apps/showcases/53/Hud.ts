@@ -22,6 +22,8 @@ export interface OceanTuningState {
   foamCoverage: number;
 }
 
+export type OceanGeometryType = "radial" | "quadtree";
+
 export interface FortressHudState {
   cameraPreset: CameraPresetKey;
   atmosphere: AtmosphereKey;
@@ -31,6 +33,7 @@ export interface FortressHudState {
   hbao: boolean;
   hiDpi: boolean;
   searchlights: boolean;
+  oceanGeometry: OceanGeometryType;
   oceanParams: OceanTuningState;
 }
 
@@ -45,6 +48,7 @@ export interface FortressHudActions {
   toggleSearchlights(): void;
   triggerLightning(): void;
   resetView(): void;
+  setOceanGeometry(type: OceanGeometryType): void;
   setWaveScale(value: number): void;
   setWindSpeed(value: number): void;
   setChoppiness(value: number): void;
@@ -164,7 +168,11 @@ export class Hud {
         ${hudSection(
           "🌊 Ocean & Surf",
           "Live tuning",
-          `<div class="hud-row">
+          `<div class="preset-group two-col" style="margin-bottom:8px;">
+            <button id="btnOceanGeom_radial" class="btn-preset" title="Concentric radial grid snapped to camera">Radial Polar Grid</button>
+            <button id="btnOceanGeom_quadtree" class="btn-preset" title="CDLOD hierarchical quadtree ocean">CDLOD Quadtree</button>
+          </div>
+          <div class="hud-row">
             <label for="slWaveScale">Wave Scale</label>
             <input type="range" id="slWaveScale" min="0" max="2.2" step="0.05" value="1.05" />
             <span class="val-label" id="valWaveScale">1.05</span>
@@ -233,6 +241,12 @@ export class Hud {
       this._actions.triggerLightning(),
     );
     d.query("#btnResetView")?.addEventListener("click", (): void => this._actions.resetView());
+    d.query("#btnOceanGeom_radial")?.addEventListener("click", (): void =>
+      this._actions.setOceanGeometry("radial"),
+    );
+    d.query("#btnOceanGeom_quadtree")?.addEventListener("click", (): void =>
+      this._actions.setOceanGeometry("quadtree"),
+    );
 
     this._oceanSliders = OCEAN_SLIDER_SPECS.map((spec): OceanSliderBinding => {
       const slider = d.query<HTMLInputElement>(`#${spec.sliderId}`);
@@ -270,6 +284,11 @@ export class Hud {
     d.query("#btnHbao")?.classList.toggle("active", state.hbao);
     d.query("#btnHiDpi")?.classList.toggle("active", state.hiDpi);
     d.query("#btnSearchlights")?.classList.toggle("active", state.searchlights);
+    d.query("#btnOceanGeom_radial")?.classList.toggle("active", state.oceanGeometry === "radial");
+    d.query("#btnOceanGeom_quadtree")?.classList.toggle(
+      "active",
+      state.oceanGeometry === "quadtree",
+    );
 
     for (const binding of this._oceanSliders) {
       const formatted = state.oceanParams[binding.key].toFixed(2);

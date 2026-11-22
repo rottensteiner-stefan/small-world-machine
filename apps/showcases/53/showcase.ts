@@ -26,6 +26,7 @@ import {
   ToneMappingMode,
   Vector2D,
   Vector3D,
+  WaterQuadtree,
 } from "@small-world-machine/engine";
 import type {
   AbstractMaterial,
@@ -59,7 +60,7 @@ import {
 } from "./FortressMaterials.js";
 import type { FortressPbrMaps } from "./FortressMaterials.js";
 import { ATMOSPHERE_KEYS, Hud } from "./Hud.js";
-import type { AtmosphereKey, CameraPresetKey, FortressHudState } from "./Hud.js";
+import type { AtmosphereKey, CameraPresetKey, FortressHudState, OceanGeometryType } from "./Hud.js";
 
 interface CameraView {
   position: Vector3D;
@@ -119,6 +120,7 @@ interface QaSwm53Hook {
   setHbao(on: boolean): void;
   setHiDpi(on: boolean): void;
   setSearchlights(on: boolean): void;
+  setOceanGeometry(type: OceanGeometryType): void;
   triggerLightning(): void;
 }
 
@@ -281,6 +283,8 @@ export class Showcase extends AbstractShowcase {
   private _hbaoEnabled: boolean = false;
   private _hiDpiEnabled: boolean = false;
   private _searchlightsEnabled: boolean = true;
+  private _oceanGeometryType: OceanGeometryType = "radial";
+  private _quadtree: WaterQuadtree | undefined = undefined;
   private _waveScale: number = 1.05;
   private _windSpeed: number = 1.28;
   private _choppiness: number = 1.15;
@@ -298,6 +302,12 @@ export class Showcase extends AbstractShowcase {
       quality: { maxPixelRatio: DEFAULT_MAX_PIXEL_RATIO },
       ...options,
     });
+    const urlParams = new URLSearchParams(window.location.search);
+    const oceanParam =
+      urlParams.get("oceanGeom") ?? (urlParams.has("quadtree") ? "quadtree" : "radial");
+    if (oceanParam === "quadtree") {
+      this._oceanGeometryType = "quadtree";
+    }
     this.defaultCameraController = "fly";
     this.defaultMoveSpeed = FLY_SPEED_DEFAULT;
     this.defaultFov = MathUtils.degToRad(40);
@@ -636,13 +646,17 @@ export class Showcase extends AbstractShowcase {
       this._oceanMaterial.downwashStrength = 0.78 - bobOffset * 0.1;
     }
     this._updateBuoys();
-    if (this._oceanMesh) {
-      OceanGridGeometry.snapToTarget(
-        this._oceanMesh,
-        this.camera.position.x,
-        this.camera.position.z,
-        8,
-      );
+    if (this._oceanGeometryType === "radial") {
+      if (this._oceanMesh) {
+        OceanGridGeometry.snapToTarget(
+          this._oceanMesh,
+          this.camera.position.x,
+          this.camera.position.z,
+          8,
+        );
+      }
+    } else if (this._quadtree) {
+      this._quadtree.update(this.camera);
     }
 
     const searchlightIntensity = this._searchlightsEnabled ? SEARCHLIGHT_INTENSITY : 0;
@@ -710,6 +724,8 @@ export class Showcase extends AbstractShowcase {
       this._setAtmosphere(ATMOSPHERE_KEYS[nextIdx]!);
     } else if (event.code === Keys.F) {
       this._manualLightningTimer = 0.55;
+    } else if (event.code === Keys.O) {
+      this._setOceanGeometry(this._oceanGeometryType === "radial" ? "quadtree" : "radial");
     }
   }
 
@@ -905,10 +921,30 @@ export class Showcase extends AbstractShowcase {
     ocean.position.set(0, FORTRESS_WATER_Y, 0);
     ocean.receiveShadow = true;
     ocean.frustumCulled = false;
+    ocean.isVisible = this._oceanGeometryType === "radial";
     this._oceanMesh = ocean;
     OceanGridGeometry.snapToTarget(ocean, this.camera.position.x, this.camera.position.z, 8);
     this._reflection.excludedObjects.push(ocean);
     this.scene.add(ocean);
+
+    const quadtree = new WaterQuadtree({
+      worldSize: 8192,
+      maxLevel: 6,
+      tileSegments: 16,
+      lodDistanceFactor: 2.2,
+      maxWaveHeight: 14,
+      waterLevel: FORTRESS_WATER_Y,
+      followCamera: true,
+      frustumCulling: true,
+      material: this._oceanMaterial,
+    });
+    quadtree.root.isVisible = this._oceanGeometryType === "quadtree";
+    this._quadtree = quadtree;
+    this._reflection.excludedObjects.push(quadtree.root);
+    this.scene.add(quadtree.root);
+    if (this._oceanGeometryType === "quadtree") {
+      quadtree.update(this.camera);
+    }
     this._updateBuoys();
   }
 
@@ -1582,6 +1618,29 @@ export class Showcase extends AbstractShowcase {
     this._syncHud();
   }
 
+  private _setOceanGeometry(type: OceanGeometryType): void {
+    if (this._oceanGeometryType === type) return;
+    this._oceanGeometryType = type;
+    if (this._oceanMesh) {
+      this._oceanMesh.isVisible = type === "radial";
+      if (type === "radial") {
+        OceanGridGeometry.snapToTarget(
+          this._oceanMesh,
+          this.camera.position.x,
+          this.camera.position.z,
+          8,
+        );
+      }
+    }
+    if (this._quadtree) {
+      this._quadtree.root.isVisible = type === "quadtree";
+      if (type === "quadtree") {
+        this._quadtree.update(this.camera);
+      }
+    }
+    this._syncHud();
+  }
+
   private _state(): FortressHudState {
     return {
       cameraPreset: this._cameraPreset,
@@ -1592,6 +1651,7 @@ export class Showcase extends AbstractShowcase {
       hbao: this._hbaoEnabled,
       hiDpi: this._hiDpiEnabled,
       searchlights: this._searchlightsEnabled,
+      oceanGeometry: this._oceanGeometryType,
       oceanParams: {
         waveScale: this._waveScale,
         windSpeed: this._windSpeed,
@@ -1612,6 +1672,7 @@ export class Showcase extends AbstractShowcase {
       toggleHbao: (): void => this._setHbao(!this._hbaoEnabled),
       toggleHiDpi: (): void => this._setHiDpi(!this._hiDpiEnabled),
       toggleSearchlights: (): void => this._setSearchlights(!this._searchlightsEnabled),
+      setOceanGeometry: (type: OceanGeometryType): void => this._setOceanGeometry(type),
       triggerLightning: (): void => {
         this._manualLightningTimer = 0.55;
       },
@@ -1664,6 +1725,7 @@ export class Showcase extends AbstractShowcase {
       setHbao: (on: boolean): void => this._setHbao(on),
       setHiDpi: (on: boolean): void => this._setHiDpi(on),
       setSearchlights: (on: boolean): void => this._setSearchlights(on),
+      setOceanGeometry: (type: OceanGeometryType): void => this._setOceanGeometry(type),
       triggerLightning: (): void => {
         this._manualLightningTimer = 0.55;
       },
