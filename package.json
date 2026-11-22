@@ -69,6 +69,7 @@
     "docs:build-all": "npm run docs:api && npm run docs:build",
     "ibl:bake": "tsx .agents/scripts/ibl-bake.ts",
     "swm": "node packages/tools/src/cli/swm.mjs",
+    "release:pack": "node .agents/scripts/release/pack-release.mjs",
     "test:ibl": "tsx .agents/scripts/ibl-bake.ts --seed 11 --out .agents/scratches/ibl-bake"
   },
   "devDependencies": {
