@@ -1,8 +1,8 @@
-import type { Behavior, EngineOptions, GeometryDataInterface } from "@small-world-machine/engine";
 import {
   AbstractShowcase,
   AmbientLight,
   BasicMaterial,
+  type Behavior,
   BillboardInstancer,
   BobbingBehavior,
   BoundingBox,
@@ -11,9 +11,12 @@ import {
   Cube,
   Cylinder,
   DirectionalLight,
+  type EngineOptions,
   FPSController,
+  FluidVolume,
   Fog,
   FogMode,
+  type GeometryDataInterface,
   GltfLoader,
   Ground,
   LambertMaterial,
@@ -34,8 +37,10 @@ import {
   TextureWrap,
   ToneMappingMode,
   Vector3D,
+  WaterQuadtree,
+  type WaterQuadtreeStats,
+  WireframeMaterial,
   ZoomController,
-  FluidVolume,
 } from "@small-world-machine/engine";
 import { NoirWaterMaterial } from "@small-world-machine/liquid-extras";
 import type { GoldenSpec } from "./GoldenCapture.js";
@@ -46,6 +51,7 @@ import {
   parseGoldenSpec,
 } from "./GoldenCapture.js";
 import { LiveTunePad } from "./LiveTunePad.js";
+import { Hud, type HudHost } from "./Hud.js";
 import { PoolHomeBehavior, SplashDropBehavior } from "./PoolBehaviors.js";
 import type { PoolKey } from "./PoolLayout.js";
 import {
@@ -103,7 +109,7 @@ interface BuiltPool {
  * on a lush meadow landscape, showcasing all engine-known liquid materials, shader presets, and
  * extension hooks side-by-side. The pools themselves are data: see `PoolPresets.ts`.
  */
-export class Showcase extends AbstractShowcase {
+export class Showcase extends AbstractShowcase implements HudHost {
   private readonly _moveSpeed: number = 12.0;
   private readonly _startEyeHeight: number = 18.0;
   private readonly _minEyeHeight: number = 0.1;
@@ -131,6 +137,18 @@ export class Showcase extends AbstractShowcase {
   private _goldenCapture: GoldenCapture | undefined;
   /** Random source of the procedural tile textures; seeded in golden mode. */
   private _random: RandomSource = (): number => Math.random();
+
+  // WaterQuadtree continuous CDLOD water layer
+  private _quadtree: WaterQuadtree | undefined;
+  private _quadtreeMaterial: OpenWaterMaterial | undefined;
+  private _quadtreeWireMaterial: WireframeMaterial | undefined;
+  private _quadtreeStats: WaterQuadtreeStats | undefined;
+  private _quadtreeActive: boolean = false;
+  private _quadtreeWireframe: boolean = false;
+  private _quadtreeMaxLevel: number = 5;
+  private _quadtreeSegments: number = 16;
+  private _quadtreeDistanceFactor: number = 2.4;
+  private _hud: Hud | undefined;
 
   constructor(options: EngineOptions = {}) {
     const aniso = Number(new URLSearchParams(window.location.search).get("aniso"));
@@ -161,6 +179,9 @@ export class Showcase extends AbstractShowcase {
       this._random = createGoldenRandom();
     }
     await super.start();
+    if (undefined === this._golden && this._hud) {
+      window.addEventListener("keydown", this._onKeyDown);
+    }
     if (golden) {
       this._goldenCapture = new GoldenCapture(this, (): void => {
         this._time = 0;
@@ -170,9 +191,15 @@ export class Showcase extends AbstractShowcase {
     }
   }
 
+  private readonly _onKeyDown = (e: KeyboardEvent): void => {
+    this._hud?.handleKey(e.code);
+  };
+
   public override destroy(): void {
+    window.removeEventListener("keydown", this._onKeyDown);
     this._goldenCapture?.dispose();
     this._liveTunePad?.detach();
+    this._hud?.dispose();
     this._disposeProceduralTextures(this.scene.root);
     super.destroy();
   }
@@ -377,6 +404,12 @@ export class Showcase extends AbstractShowcase {
       const { x, z } = poolWorldPosition(key);
       const yaw = MathUtils.degToRad(POOL_CELLS[key].row === POOL_GRID_ROWS - 1 ? -12 : 12);
       this._createSignboard(sign[0], sign[1], x - 3.9, z + 1.4, yaw);
+    }
+
+    this._setupQuadtree();
+
+    if (undefined === this._golden) {
+      this._hud = new Hud(this);
     }
 
     this.scene.update();
@@ -906,6 +939,130 @@ export class Showcase extends AbstractShowcase {
       if (floater1) this._noirWater.rippleCenter = this._rippleAt(floater1);
       if (floater2) this._noirWater.rippleCenter2 = this._rippleAt(floater2);
       if (dropper) this._noirWater.rippleCenter3 = this._rippleAt(dropper);
+    }
+
+    if (this._quadtreeActive && this._quadtree) {
+      if (this._quadtreeMaterial) {
+        this._quadtreeMaterial.time = this._time;
+      }
+      this._quadtreeStats = this._quadtree.update(this.camera);
+    }
+    this._hud?.update();
+  }
+
+  // --- HudHost Implementation ---
+
+  public get quadtreeActive(): boolean {
+    return this._quadtreeActive;
+  }
+
+  public get quadtreeWireframe(): boolean {
+    return this._quadtreeWireframe;
+  }
+
+  public get quadtreeMaxLevel(): number {
+    return this._quadtreeMaxLevel;
+  }
+
+  public get quadtreeSegments(): number {
+    return this._quadtreeSegments;
+  }
+
+  public get quadtreeDistanceFactor(): number {
+    return this._quadtreeDistanceFactor;
+  }
+
+  public getQuadtreeStats(): WaterQuadtreeStats | undefined {
+    return this._quadtreeStats;
+  }
+
+  public setQuadtreeActive(active: boolean): void {
+    if (this._quadtreeActive === active) return;
+    this._quadtreeActive = active;
+    if (this._quadtree) {
+      this._quadtree.root.isVisible = active;
+    }
+  }
+
+  public setQuadtreeWireframe(wireframe: boolean): void {
+    this._quadtreeWireframe = wireframe;
+    if (this._quadtree) {
+      this._quadtree.material = wireframe ? this._quadtreeWireMaterial : this._quadtreeMaterial;
+    }
+  }
+
+  public setQuadtreeMaxLevel(level: number): void {
+    if (this._quadtreeMaxLevel === level) return;
+    this._quadtreeMaxLevel = level;
+    this._rebuildQuadtree();
+  }
+
+  public setQuadtreeSegments(segments: number): void {
+    if (this._quadtreeSegments === segments) return;
+    this._quadtreeSegments = segments;
+    this._rebuildQuadtree();
+  }
+
+  public setQuadtreeDistanceFactor(factor: number): void {
+    if (this._quadtreeDistanceFactor === factor) return;
+    this._quadtreeDistanceFactor = factor;
+    this._rebuildQuadtree();
+  }
+
+  private _setupQuadtree(): void {
+    const quadtreeParam = new URLSearchParams(window.location.search).get("quadtree");
+    this._quadtreeActive = "1" === quadtreeParam;
+
+    this._quadtreeMaterial = new OpenWaterMaterial({
+      waterColor: new Color(0.04, 0.42, 0.65),
+      deepWaterColor: new Color(0.01, 0.1, 0.2),
+      edgeColor: new Color(0.85, 0.98, 1.0),
+      edgeSoftness: 0.8,
+      speed: 0.85,
+      wave1: [1.0, 0.3, 0.12, 6.0],
+      wave2: [0.35, 0.92, 0.08, 3.8],
+      wave3: [-0.45, 0.65, 0.05, 2.2],
+      refractionStrength: 0.03,
+      foamColor: new Color(1.0, 1.0, 1.0),
+      foamCutoff: 0.5,
+    });
+    if (this._reflection) {
+      this._quadtreeMaterial.reflectionMap = this._reflection.renderTarget;
+    }
+
+    this._quadtreeWireMaterial = new WireframeMaterial({
+      color: new Color(0.0, 0.9, 1.0),
+    });
+
+    this._buildQuadtreeInstance();
+  }
+
+  private _buildQuadtreeInstance(): void {
+    if (this._quadtree) {
+      this.scene.remove(this._quadtree.root);
+    }
+
+    const mat = (this._quadtreeWireframe ? this._quadtreeWireMaterial : this._quadtreeMaterial)!;
+    this._quadtree = new WaterQuadtree({
+      worldSize: 1024,
+      maxLevel: this._quadtreeMaxLevel,
+      tileSegments: this._quadtreeSegments,
+      lodDistanceFactor: this._quadtreeDistanceFactor,
+      maxWaveHeight: 8,
+      waterLevel: LIQUID_Y + 0.02,
+      followCamera: true,
+      frustumCulling: true,
+      material: mat,
+    });
+
+    this._quadtree.root.isVisible = this._quadtreeActive;
+    this.scene.add(this._quadtree.root);
+  }
+
+  private _rebuildQuadtree(): void {
+    this._buildQuadtreeInstance();
+    if (this._quadtree) {
+      this._quadtreeStats = this._quadtree.update(this.camera);
     }
   }
 

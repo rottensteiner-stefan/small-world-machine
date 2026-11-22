@@ -580,4 +580,14 @@ overlap (throughput baseline, not placement art) — accepted.
 - Tree field now computes yaw-invariant tight cylinder bounds (`hzbRadiusXZ`, `hzbMinY`, `hzbMaxY`) per prototype alongside `boundingRadius`; `GroundCoverSystem` populates the same tight cylinder bounds per grass variety.
 - Added `?occlusion=two-phase` (and `?twoPhase=1`) wiring `InstanceFieldSystem.setTwoPhaseOcclusion(true)` for Wihlidal / Haar & Aaltonen two-phase HZB culling (prev-frame reject capture -> current-frame HZB rescue -> depth patch -> main color `equal`).
 - Headless Chrome SwiftShader WebGPU verified across `occ-a`, `occ-b`, `two-phase`, camera-cut skip (`cutEvery=10`), ground-cover ON, `jacaranda` (`n=2000`), and `n=50000` (`45 630` placed: `occ-a` `14 053` vs `occ-b`/`two-phase` `14 041`, 12 self-occluded trees dropped), 0 errors.
+## 2026-11-22 — CanopyShell (ADR 0059 Step 4) & OctahedralImpostor (Step 3) Integration
 
+- **Far Canopy Shell (`CanopyShellMaterial` + `buildCanopyShellGeometry`):**
+  - Synthesizes an $O(1)$-draw procedural crown dome mesh over the population's `CanopyCoverageMap` with distance-based Bayer 4×4 dither handover `100m..160m`, Crevice-AO, macro-hue noise, and wind-shimmer.
+  - Interactive opt-in via `?canopyShell=1`, key `K`, or HUD switch; updates animated time `setTime(t)` each frame.
+- **Octahedral Impostors (`OctahedralImpostorMaterial` + `buildOctahedralImpostorGeometry`):**
+  - Instantiates 32 perimeter demonstration trees with procedural hemi-octahedral atlas (`createProceduralImpostorAtlas`), 3-cell barycentric frame blend, normal-depth parallax UV offset, and foliage wind sway.
+  - Interactive opt-in via `?impostor=1`, key `O`, or HUD switch; updates animated time `setTime(t)` each frame.
+- **Preservation & Verification:**
+  - Standard baseline runs and golden captures (`veg51`) stay 100% bit-identical (both features default off in golden/benchmark modes).
+  - 3-tier canary verification: `SHOWCASE_TEST_CONCURRENCY=1 node .agents/scripts/check-showcases.js 51` passes all 3 tiers (`WEB_GL1`, `WEB_GL2`, `WEB_GPU`, 0 failures).

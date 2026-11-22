@@ -49,6 +49,10 @@ export interface VegHudStats {
   readonly cover: number;
   /** Live TAA state (`?taa=1` arms the engine `TaaElement`; dither-mode sighting condition). */
   readonly taa: boolean;
+  /** Far-field canopy shell mesh (ADR 0059 step 4). */
+  readonly canopyShell?: boolean;
+  /** Octahedral impostor trees (ADR 0059 step 3). */
+  readonly impostors?: boolean;
   /** Optional P2 LOD-transition live state of the field lane (ADR 0059 step 2); absent when the
    *  field lane is inactive. `band` 0 = candidate C (hard switch), > 0 = candidate A band.
    *  `mode` = DECISIVE MODE SWITCH preset name when one is armed (absent = legacy raw-knob mode). */
@@ -76,6 +80,10 @@ export interface VegHudOptions {
   /** Called when the user cycles the P2 LOD transition mode (candidate A <-> C; key `L` or the
    *  button). No-op when the host engine / field lane predates the P2 surface. */
   onCycleLodMode?(): void;
+  /** Called when the user toggles the far-field canopy shell (key `K` or the button). */
+  onToggleCanopyShell?(): void;
+  /** Called when the user toggles octahedral impostors (key `O` or the button). */
+  onToggleImpostors?(): void;
 }
 
 /** Drawer toggle shortcuts. `H` opens/closes the panel (ADR step 0 layout: keys 1-3 + H). */
@@ -194,8 +202,24 @@ export class Hud {
               "P2 DECISIVE MODE SWITCH (ADR 0059 step 2): `L` cycles the transition strategies — off / hysteresis / dither / dither-hysteresis (one declarative switch, bounded cost per mode). `?lodMode=` preselects.",
             ),
         )}
+        ${hudSection(
+          "🍃 Far Canopy Shell",
+          "K",
+          `<div class="preset-group"><button class="btn-preset" data-canopy-shell>Canopy Shell: off</button></div>` +
+            hudNote(
+              "Procedural far-field canopy shell mesh (ADR 0059 step 4) with Bayer dither handover (`K`).",
+            ),
+        )}
+        ${hudSection(
+          "🎭 Octahedral Impostors",
+          "O",
+          `<div class="preset-group"><button class="btn-preset" data-impostor>Impostors: off</button></div>` +
+            hudNote(
+              "Octahedral impostor trees with 3-cell barycentric blend and depth parallax (ADR 0059 step 3; `O`).",
+            ),
+        )}
         <div class="hud-section hud-keys">
-          <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>F</kbd> Wind · <kbd>L</kbd> LOD · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
+          <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>F</kbd> Wind · <kbd>L</kbd> LOD · <kbd>K</kbd> Shell · <kbd>O</kbd> Impostors · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
         </div>
       `,
     });
@@ -218,6 +242,18 @@ export class Hud {
         this.sync(this._lastStats);
       });
     });
+    this._root.querySelectorAll<HTMLButtonElement>("[data-canopy-shell]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._options.onToggleCanopyShell?.();
+        this.sync(this._lastStats);
+      });
+    });
+    this._root.querySelectorAll<HTMLButtonElement>("[data-impostor]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._options.onToggleImpostors?.();
+        this.sync(this._lastStats);
+      });
+    });
     this.sync(undefined);
   }
 
@@ -229,8 +265,8 @@ export class Hud {
 
   /**
    * Applies a lab shortcut. Returns true when the key was consumed. Digits select the camera
-   * path, `F` toggles the field-lane wind, `L` cycles the P2 LOD transition mode, `I`/`H`
-   * toggle the panel (handled by the shared drawer).
+   * path, `F` toggles the field-lane wind, `L` cycles the P2 LOD transition mode, `K` toggles
+   * canopy shell, `O` toggles octahedral impostors, `I`/`H` toggle the panel (handled by the shared drawer).
    */
   public handleKey(event: KeyboardEvent): boolean {
     if (this._drawer.handleKey(event)) return true;
@@ -246,6 +282,16 @@ export class Hud {
     }
     if (event.code === "KeyL") {
       this._options.onCycleLodMode?.();
+      this.sync(this._lastStats);
+      return true;
+    }
+    if (event.code === "KeyK") {
+      this._options.onToggleCanopyShell?.();
+      this.sync(this._lastStats);
+      return true;
+    }
+    if (event.code === "KeyO") {
+      this._options.onToggleImpostors?.();
       this.sync(this._lastStats);
       return true;
     }
@@ -283,6 +329,20 @@ export class Hud {
             : `LOD: ${lodHard ? "hard" : "crossfade"}`;
       if (btn.textContent !== label) btn.textContent = label;
     });
+    // Canopy shell toggle mirrors live showcase state
+    const shellOn = stats?.canopyShell === true;
+    this._root.querySelectorAll<HTMLButtonElement>("[data-canopy-shell]").forEach((btn) => {
+      btn.classList.toggle("active", shellOn);
+      const label = `Canopy Shell: ${shellOn ? "on" : "off"}`;
+      if (btn.textContent !== label) btn.textContent = label;
+    });
+    // Octahedral impostor toggle mirrors live showcase state
+    const impostorsOn = stats?.impostors === true;
+    this._root.querySelectorAll<HTMLButtonElement>("[data-impostor]").forEach((btn) => {
+      btn.classList.toggle("active", impostorsOn);
+      const label = `Impostors: ${impostorsOn ? "on" : "off"}`;
+      if (btn.textContent !== label) btn.textContent = label;
+    });
     this._refreshReadout();
   }
 
@@ -317,7 +377,7 @@ export class Hud {
     const cpu = stats.cpuMs;
     const lines = [
       `${stats.fps >= 0 ? stats.fps.toFixed(1) : "--"} | ${fmtMs(cpu)} | ${fmtMs(gpu)} | ${fmtCount(stats.visible)} / ${fmtCount(stats.triangles)}`,
-      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}  taa=${stats.taa ? "on" : "off"}${stats.cover > 0 ? `  cover=${fmtCount(stats.cover)}` : ""}`,
+      `?n=${stats.instances.toLocaleString("en-US")}  mode=${stats.mode}  path=${this._path}  wind=${stats.wind ? "on" : "off"}  taa=${stats.taa ? "on" : "off"}${stats.cover > 0 ? `  cover=${fmtCount(stats.cover)}` : ""}${stats.canopyShell ? "  shell=on" : ""}${stats.impostors ? "  impostors=on" : ""}`,
     ];
     const lod = stats.lod;
     if (lod !== undefined) {

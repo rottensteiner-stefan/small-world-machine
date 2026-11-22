@@ -97,4 +97,13 @@ Upgraded the flat ground plane to full PBR lighting and 3D silhouette foliage:
 * **Root cause:** `OilSlickMaterial` called `waterHash()` inside `oilValueNoise()`, while `liquid_worley_noise.glsl` (`fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123)`) and `liquid_worley_noise.wgsl` (Dave Hoskins polynomial hash) used different hash functions. On `petroleum-oil`, the resulting `oilFlow` noise mismatch shifted both patch placement and thin-film interference phase (`grey-blue` on WebGPU vs `reddish` on GL2). `toxic-slime` was already parity-clean on HEAD (0.0000–0.0002% vs baseline).
 * **Fix:** `OilSlickMaterial.ts` now defines an identical self-contained `oilHash(p)` across GLSL and WGSL matching `liquid_worley_noise.glsl`, leaving GL2 golden baselines 0.0000% byte-identical while aligning WebGPU sheen patches and hues with GL2.
 * **Verification:** `gl2` vs `.agents/goldens/liquid/baseline` (`petroleum-oil` top/oblique = `0.0000%` byte-identical); `gpu` vs `gl2` (`petroleum-oil__top` `0.1149%`, `petroleum-oil__oblique` `0.3560%`), visually confirmed matching sheen patches and colors.
+## 2026-11-22 · WaterQuadtree CDLOD Integration (Backlog 2026-10-10)
 
+* **Integration:** Mounted continuous `WaterQuadtree` (`CDLOD` quadtree ocean plane at `LIQUID_Y + 0.02`, size 1024m, 16 edge-stitching LOD boundary variants) as an interactive opt-in mode (`?quadtree=1`).
+* **HUD & Controls:** Added interactive `ShowcaseDrawer` HUD (`Hud.ts`) with live quadtree controls:
+  - Toggle quadtree ocean (`Q` key or switch in HUD)
+  - Wireframe mode (`W` key or switch in HUD)
+  - Slider controls: Max Level (1–8), Leaf Segments (4–32), LOD Distance Factor (0.5–4.0)
+  - Live quadtree telemetry display (visible leaves, nodes rendered, camera distance, memory overhead)
+* **Preservation:** Default showcase runs remain strictly on individual 4x4 pool grid; golden baselines remain 100% byte-identical (`__golden` runs keep quadtree disabled).
+* **Verification:** `SHOWCASE_TEST_CONCURRENCY=1 node .agents/scripts/check-showcases.js 10` passes all 3 tiers (`WEB_GL1`, `WEB_GL2`, `WEB_GPU`, 0 failures).

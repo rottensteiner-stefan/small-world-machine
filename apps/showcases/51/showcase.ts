@@ -53,9 +53,15 @@ import {
 import {
   applyFoliageLook,
   buildCanopyCoverage,
+  buildCanopyShellGeometry,
+  buildOctahedralImpostorGeometry,
+  CanopyShellMaterial,
   canopyCoverageAt,
   canopyHeightFade,
   createCanopyGroundAoTexture,
+  createOctahedralImpostorManifest,
+  createProceduralImpostorAtlas,
+  createTexturesFromImpostorAtlas,
   FOLIAGE_LOOKS,
   ForestLookBlender,
   collectVegetationParts,
@@ -63,6 +69,7 @@ import {
   loadVegetationSpecies,
   MEADOW_GRASS_VARIETIES,
   mergeVegetationParts,
+  OctahedralImpostorMaterial,
   WindField,
   type SpeciesManifest,
   type VegetationPart,
@@ -563,6 +570,17 @@ export class Showcase extends AbstractShowcase {
   private _lastCpuTotal = 0;
   /** CPU-side conservative cull verdict of the last probed frame (`?cullref=1`). */
   private _lastCullVerdict = "";
+  /** Far canopy shell mesh (ADR 0059 step 4). `?canopyShell=1` or HUD `K`. */
+  private _canopyShellEnabled: boolean;
+  private _canopyShellNode: Object3D | undefined = undefined;
+  private _canopyShellMaterial: CanopyShellMaterial | undefined = undefined;
+
+  /** Octahedral impostor trees (ADR 0059 step 3). `?impostor=1` or HUD `O`. */
+  private _impostorEnabled: boolean;
+  private _impostorNodes: Object3D[] = [];
+  private _impostorMaterial: OctahedralImpostorMaterial | undefined = undefined;
+  private _elapsedTime = 0;
+
   /** Reused pose-decode scratch (no per-record allocation in the reference cull). */
   private readonly _poseOut: InstancePose = { yawRadians: 0, uniformScale: 0 };
   private readonly _poseBits = new Float32Array(1);
@@ -650,6 +668,8 @@ export class Showcase extends AbstractShowcase {
     // display condition for the live human A/B. Applied after `super.start()` (the renderer is
     // only assigned by `start()`); MEASURE + HUD report the live state.
     this._taaLive = params.get("taa") === "1";
+    this._canopyShellEnabled = params.get("canopyShell") === "1";
+    this._impostorEnabled = params.get("impostor") === "1";
 
     const rawTree = params.get("tree") ?? (interactive ? INTERACTIVE_TREE_STEM : null);
     this._treeStem =
@@ -768,6 +788,9 @@ export class Showcase extends AbstractShowcase {
       this._buildInstanced(instances, this._prototype);
     }
 
+    this._setupCanopyShell(instances);
+    this._setupImpostors();
+
     if (this._isAutomated) {
       this._state = "warmup";
       this._writeStatus(
@@ -819,6 +842,8 @@ export class Showcase extends AbstractShowcase {
         ...(this._path !== undefined ? { initialPath: this._path } : {}),
         onToggleWind: (): void => this._toggleWindLive(),
         onCycleLodMode: (): void => this._toggleLodMode(),
+        onToggleCanopyShell: (): void => this.toggleCanopyShell(),
+        onToggleImpostors: (): void => this.toggleImpostors(),
       });
     }
   }
@@ -1350,6 +1375,93 @@ export class Showcase extends AbstractShowcase {
     return this._groundCover?.instanceCount ?? 0;
   }
 
+  /**
+   * Sets up procedural far-field canopy shell mesh (ADR 0059 step 4) over the population.
+   */
+  private _setupCanopyShell(instances: readonly ScatterInstance[]): void {
+    let canopy = this._canopy;
+    if (!canopy && this._prototype) {
+      const records = this._fieldRecords ?? this._buildFieldRecords(instances);
+      const merged = this._mergeTreeGeometry(this._prototype);
+      const windHeight = this._treeMaxHeight(merged);
+      canopy = this._buildCanopy(records, merged, windHeight);
+    }
+    if (!canopy) return;
+    const geom = buildCanopyShellGeometry(canopy, {
+      canopyHeight: canopy.canopyHeight,
+      minCoverage: 0.05,
+    });
+    this._canopyShellMaterial = new CanopyShellMaterial({
+      color: new Color(0.14, 0.25, 0.09),
+      handoverStart: 100,
+      handoverEnd: 160,
+      ambientFloor: CANOPY_AMBIENT_FLOOR,
+    });
+    const node = new Object3D();
+    node.geometry = geom;
+    node.material = this._canopyShellMaterial;
+    node.isVisible = this._canopyShellEnabled;
+    this.scene.add(node);
+    this._canopyShellNode = node;
+  }
+
+  /**
+   * Sets up octahedral impostor demonstration trees (ADR 0059 step 3) around the perimeter.
+   */
+  private _setupImpostors(): void {
+    const radius = 6.0;
+    const manifest = createOctahedralImpostorManifest({
+      gridSize: 12,
+      tileResolution: 64,
+      boundingRadius: radius,
+      pivotOffsetY: radius,
+    });
+    const atlas = createProceduralImpostorAtlas(manifest, {
+      foliageColor: [0.18, 0.35, 0.12],
+      trunkColor: [0.26, 0.19, 0.13],
+      seed: this._seed,
+    });
+    const textures = createTexturesFromImpostorAtlas(atlas);
+    const geom = buildOctahedralImpostorGeometry(manifest);
+    this._impostorMaterial = new OctahedralImpostorMaterial({
+      manifest,
+      albedoMap: textures.albedoMap,
+      normalDepthMap: textures.normalDepthMap,
+      color: new Color(1, 1, 1),
+      windSwayAmplitude: 0.12,
+    });
+
+    const count = 32;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const dist = 75 + (i % 3) * 12;
+      const x = Math.cos(angle) * dist;
+      const z = Math.sin(angle) * dist;
+      const node = new Object3D();
+      node.geometry = geom;
+      node.material = this._impostorMaterial;
+      node.position.set(x, 0, z);
+      node.scale.set(1.2, 1.2, 1.2);
+      node.isVisible = this._impostorEnabled;
+      this.scene.add(node);
+      this._impostorNodes.push(node);
+    }
+  }
+
+  public toggleCanopyShell(): void {
+    this._canopyShellEnabled = !this._canopyShellEnabled;
+    if (this._canopyShellNode) {
+      this._canopyShellNode.isVisible = this._canopyShellEnabled;
+    }
+  }
+
+  public toggleImpostors(): void {
+    this._impostorEnabled = !this._impostorEnabled;
+    for (const node of this._impostorNodes) {
+      node.isVisible = this._impostorEnabled;
+    }
+  }
+
   /** Applies the CURRENT live wind state to the registered field system (`setWind` patch, hard
    *  off = height 0 -> pulled shader gate static). No-op without a field or a wind field. */
   private _applyWindState(): void {
@@ -1619,10 +1731,22 @@ export class Showcase extends AbstractShowcase {
     this._golden?.dispose();
     this._golden = undefined;
     this._unregisterFieldLane();
+    this._canopyShellNode = undefined;
+    this._canopyShellMaterial = undefined;
+    this._impostorNodes = [];
+    this._impostorMaterial = undefined;
     super.destroy();
   }
 
   protected override update(deltaTime: number): void {
+    this._elapsedTime += deltaTime;
+    if (this._canopyShellMaterial && this._canopyShellEnabled) {
+      this._canopyShellMaterial.setTime(this._elapsedTime);
+    }
+    if (this._impostorMaterial && this._impostorEnabled) {
+      this._impostorMaterial.setTime(this._elapsedTime);
+    }
+
     // ADR 0059 step 6a: `?look=auto` follows the canopy above the camera (eased, cheap).
     if (this._look === "auto" && this.renderer.postProcessing.enabled) {
       this._updateAutoLook(deltaTime);
@@ -1733,6 +1857,8 @@ export class Showcase extends AbstractShowcase {
       cover: this._coverInstanceCount(),
       // Live TAA state (`?taa=1`) — the dither-mode sighting display condition.
       taa: this._taaLive,
+      canopyShell: this._canopyShellEnabled,
+      impostors: this._impostorEnabled,
       // P2 LOD-transition live state (field lane only): the applied band/hysteresis/bias knobs
       // and — when a DECISIVE MODE SWITCH preset is armed — the mode name. Key omitted when the
       // field lane is inactive (`exactOptionalPropertyTypes` contract).
