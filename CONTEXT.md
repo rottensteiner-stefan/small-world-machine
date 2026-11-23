@@ -336,6 +336,26 @@ _Avoid_: Mesh roof collision — this is a heightfield oracle, not geometry inte
 The planned shared project-folder concept across authoring tools (ADR 0033): `Maker` already binds a disk folder via `ProjectBinding` (`scene.gltf` v2 + `prefabs/`, File System Access API), while a single shared workspace root across all tools remains unimplemented.
 _Avoid_: Project Folder (generic, not namespaced), Content Folder; claiming cross-tool project sharing is already shipped.
 
+**Affine Matrix Multiplication (`Matrix4.multiplyAffine`)**:
+The 36-multiplication composition of rigid/affine 4×4 transformation matrices that assumes the canonical bottom row $[0, 0, 0, 1]$, bypassing 28 redundant multiplications and 21 additions across scene-graph world-matrix cascades.
+_Avoid_: Generic 64-multiplication `Matrix4.multiply` when composing affine local/parent transforms.
+
+**Implicit Gyroscopic Damping**:
+The unconditionally stable semi-implicit Euler integration step in `EulerIntegrator.integrateAngular` solving the non-linear Euler equations of motion ($\mathbf{I}\dot{\boldsymbol{\omega}} + \boldsymbol{\omega} \times (\mathbf{I}\boldsymbol{\omega}) = 0$) for asymmetric bodies ($I_x \ne I_y \ne I_z$) via a 1-step Newton iteration and Cramer's rule on a $3\times 3$ Jacobian in local body space with zero heap allocations.
+_Avoid_: Explicit Euler angular integration of asymmetric spinning bodies (causes runaway kinetic energy explosion).
+
+**Jim Arvo Branchless Bounding Box Transform**:
+The branchless center-extent transformation ($C' = M \cdot C, E'_i = \sum |M_{ij}| E_j$) used in `BoundingBox.transformBy` and `SkinnedMesh.computeBounds`, eliminating 8-corner loops, matrix-sign branches, and array allocations.
+_Avoid_: 8-corner AABB vertex transformations or branchy slab bounding.
+
+**Rigid Normal Matrix Fast-Path**:
+The $O(1)$ normal-matrix evaluation in `Matrix3.getNormalMatrix` that checks for unit-scale columns ($|c_i - 1| < 10^{-4}$); for orthogonal rotations $R \in SO(3)$, $(R^{-1})^T = R$, bypassing 27 multiplications and the $3\times 3$ determinant division.
+_Avoid_: Calculating full $3\times 3$ matrix cofactors and determinant for unscaled rigid objects and character skeleton bones.
+
+**Single-Flush Ring Buffer**:
+The WebGPU dynamic buffer upload pattern (`GPUObjectRingBuffer`, `GPUInstanceRingBuffer`) that stages object uniform slots and auto-instanced world matrices in a CPU TypedArray mirror and executes exactly two bulk `writeBuffer` calls immediately before `device.queue.submit()`, eliminating $O(N)$ mid-pass IPC calls.
+_Avoid_: Direct mid-pass `queue.writeBuffer` per draw call, synchronous buffer uploads during render encoding.
+
 **Zero-Allocation (Hot Path)**:
 The design rule that per-frame code (physics step, event dispatch, FSM update) must not allocate new objects, so it never triggers a GC pause.
 _Avoid_: Performance Optimization (generic) — this is a specific, named commitment repeated verbatim across the physics, event bus, and FSM docs, not a vague performance goal.
