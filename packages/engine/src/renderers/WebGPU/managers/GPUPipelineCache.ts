@@ -706,8 +706,12 @@ export class GPUPipelineCache {
     normalMode: NormalTargetMode = NormalTargetMode.DEFAULT,
   ): string {
     const shaderId = manifest.shaderId;
-    const flags = normalizeShaderFlags(manifest.flags || []);
-    const flagKey = flags.length > 0 ? "_" + flags.join("|") : "";
+    const rawFlags = manifest.flags;
+    let flagKey = "";
+    if (rawFlags && rawFlags.length > 0) {
+      const flags = normalizeShaderFlags(rawFlags);
+      flagKey = "_" + flags.join("|");
+    }
     const state = manifest.state || {};
     return (
       shaderId +

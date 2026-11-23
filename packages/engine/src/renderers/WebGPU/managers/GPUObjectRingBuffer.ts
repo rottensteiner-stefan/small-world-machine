@@ -46,6 +46,9 @@ export class GPUObjectRingBuffer {
   private _objectSlots = new WeakMap<object, Map<string, ObjectSlotRecord>>();
   private _frameId = 0;
   private _epoch = 0;
+  /** Single-flush CPU staging buffer eliminating per-draw WebGPU queue.writeBuffer IPC. */
+  private _staging = new Float32Array(0);
+  private _bytesWritten = 0;
   /** Whether the last `acquireObjectSlot()` returned an already-written slot (no result object). */
   public lastAcquireCached = false;
 
@@ -103,10 +106,31 @@ export class GPUObjectRingBuffer {
     // happens *before* this frame's draws are recorded, so the old buffer is still what those
     // draws' already-taken slot offsets refer to until we submit. Deferred to `endFrame()`'s
     // post-submit cleanup instead of destroying it here.
-    if (this._buffer) this._pendingDestroy.push(this._buffer);
+    if (this._buffer) {
+      if (this._bytesWritten > 0) {
+        this._device.queue.writeBuffer(
+          this._buffer,
+          0,
+          this._staging.buffer,
+          0,
+          this._bytesWritten,
+        );
+        this._bytesWritten = 0;
+      }
+      this._pendingDestroy.push(this._buffer);
+    }
     this._buffer = newBuffer;
     this._bindGroup = newBindGroup;
     this._capacity = newCapacity;
+
+    const neededFloats = (newCapacity * this._stride) >>> 2;
+    if (this._staging.length < neededFloats) {
+      const newStaging = new Float32Array(neededFloats);
+      if (this._staging.length > 0) {
+        newStaging.set(this._staging);
+      }
+      this._staging = newStaging;
+    }
   }
 
   /** Resets per-frame dedup/slot state and grows capacity from last frame's actual usage (with
@@ -115,6 +139,7 @@ export class GPUObjectRingBuffer {
   public beginFrame(): void {
     this._slotMap.clear();
     this._slotCount = 0;
+    this._bytesWritten = 0;
     this._frameId++;
     this.ensureCapacity(Math.max(DEFAULT_CAPACITY, Math.ceil(this._lastFrameSlotCount * 1.5)));
   }
@@ -194,7 +219,23 @@ export class GPUObjectRingBuffer {
   }
 
   public write(offset: number, data: Float32Array): void {
-    this._device.queue.writeBuffer(this._buffer, offset, data);
+    const floatOffset = offset >>> 2;
+    this._staging.set(data, floatOffset);
+    const endByte = offset + data.byteLength;
+    if (endByte > this._bytesWritten) {
+      this._bytesWritten = endByte;
+    }
+  }
+
+  /**
+   * Flushes all staged object uniform data to the GPU buffer in a single writeBuffer call.
+   * Call once per frame immediately before `queue.submit()`.
+   */
+  public flush(): void {
+    if (this._bytesWritten > 0) {
+      this._device.queue.writeBuffer(this._buffer, 0, this._staging.buffer, 0, this._bytesWritten);
+      this._bytesWritten = 0;
+    }
   }
 
   public dispose(): void {

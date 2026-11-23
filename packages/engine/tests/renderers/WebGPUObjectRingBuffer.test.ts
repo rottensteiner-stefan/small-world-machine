@@ -198,4 +198,31 @@ describe("GPUObjectRingBuffer", () => {
     expect(again.cached).toBe(false);
     expect(ring.capacity).toBeGreaterThanOrEqual(4096);
   });
+
+  it("stages multiple write calls into CPU memory and flushes in a single writeBuffer call", () => {
+    const device = makeMockDevice();
+    const ring = new GPUObjectRingBuffer(device, {
+      mock: "objectBGL",
+    } as unknown as GPUBindGroupLayout);
+
+    const slot0 = ring.acquireSlot("obj0").offset;
+    const slot1 = ring.acquireSlot("obj1").offset;
+
+    const data0 = new Float32Array([1, 2, 3, 4]);
+    const data1 = new Float32Array([5, 6, 7, 8]);
+
+    ring.write(slot0, data0);
+    ring.write(slot1, data1);
+
+    // No writeBuffer IPC call during render encoding loop
+    expect(device.queue.writeBuffer).not.toHaveBeenCalled();
+
+    // Single flush before queue.submit
+    ring.flush();
+    expect(device.queue.writeBuffer).toHaveBeenCalledTimes(1);
+
+    // Repeated flush does not issue redundant calls
+    ring.flush();
+    expect(device.queue.writeBuffer).toHaveBeenCalledTimes(1);
+  });
 });

@@ -96,17 +96,106 @@ export class EulerIntegrator {
     }
 
     // angularAcceleration = R * I^-1 * R^T * torque (world-space inverse inertia tensor)
-    sharedRigidBodyMath.applyInvInertiaWorld(
-      rb,
-      obj.rotation,
-      rb.torque,
-      rb.angularAcceleration,
-    );
+    sharedRigidBodyMath.applyInvInertiaWorld(rb, obj.rotation, rb.torque, rb.angularAcceleration);
 
     // w = w + alpha * dt
     rb.angularVelocity.x += rb.angularAcceleration.x * dt;
     rb.angularVelocity.y += rb.angularAcceleration.y * dt;
     rb.angularVelocity.z += rb.angularAcceleration.z * dt;
+
+    // Erin Catto implicit gyroscopic damping for asymmetric bodies (Euler equations w x (I w))
+    const Ix = rb.inertiaTensor.x;
+    const Iy = rb.inertiaTensor.y;
+    const Iz = rb.inertiaTensor.z;
+    const isAnisotropic = Math.abs(Ix - Iy) > 1e-5 || Math.abs(Iy - Iz) > 1e-5;
+
+    if (isAnisotropic) {
+      let qx: number;
+      let qy: number;
+      let qz: number;
+      let qw: number;
+      if (obj.quaternion) {
+        qx = obj.quaternion.x;
+        qy = obj.quaternion.y;
+        qz = obj.quaternion.z;
+        qw = obj.quaternion.w;
+      } else {
+        const scratchQ = MathPool.acquireQuaternion();
+        scratchQ.setFromEuler(obj.rotation);
+        qx = scratchQ.x;
+        qy = scratchQ.y;
+        qz = scratchQ.z;
+        qw = scratchQ.w;
+        MathPool.releaseQuaternion(scratchQ);
+      }
+
+      // Rotate w from world to body frame: w_body = q^* * w_world * q
+      const tx = 2 * (qz * rb.angularVelocity.y - qy * rb.angularVelocity.z);
+      const ty = 2 * (qx * rb.angularVelocity.z - qz * rb.angularVelocity.x);
+      const tz = 2 * (qy * rb.angularVelocity.x - qx * rb.angularVelocity.y);
+      const bx = rb.angularVelocity.x + qw * tx + (qz * ty - qy * tz);
+      const by = rb.angularVelocity.y + qw * ty + (qx * tz - qz * tx);
+      const bz = rb.angularVelocity.z + qw * tz + (qy * tx - qx * ty);
+
+      // Residual gyroscopic torque: c = w x (I w)
+      const cx = (Iz - Iy) * by * bz;
+      const cy = (Ix - Iz) * bz * bx;
+      const cz = (Iy - Ix) * bx * by;
+
+      if (Math.abs(cx) + Math.abs(cy) + Math.abs(cz) > 1e-9) {
+        // Jacobian J = I + dt * d/dw (w x (I w))
+        const j00 = Ix;
+        const j01 = dt * (Iz - Iy) * bz;
+        const j02 = dt * (Iz - Iy) * by;
+        const j10 = dt * (Ix - Iz) * bz;
+        const j11 = Iy;
+        const j12 = dt * (Ix - Iz) * bx;
+        const j20 = dt * (Iy - Ix) * by;
+        const j21 = dt * (Iy - Ix) * bx;
+        const j22 = Iz;
+
+        // Solve J * deltaB = -dt * c via Cramer's rule on 3x3
+        const rhsX = -dt * cx;
+        const rhsY = -dt * cy;
+        const rhsZ = -dt * cz;
+
+        const det =
+          j00 * (j11 * j22 - j12 * j21) -
+          j01 * (j10 * j22 - j12 * j20) +
+          j02 * (j10 * j21 - j11 * j20);
+
+        if (Math.abs(det) > 1e-12) {
+          const invDet = 1 / det;
+          const deltaBx =
+            (rhsX * (j11 * j22 - j12 * j21) -
+              j01 * (rhsY * j22 - j12 * rhsZ) +
+              j02 * (rhsY * j21 - j11 * rhsZ)) *
+            invDet;
+          const deltaBy =
+            (j00 * (rhsY * j22 - j12 * rhsZ) -
+              rhsX * (j10 * j22 - j12 * j20) +
+              j02 * (j10 * rhsZ - rhsY * j20)) *
+            invDet;
+          const deltaBz =
+            (j00 * (j11 * rhsZ - rhsY * j21) -
+              j01 * (j10 * rhsZ - rhsY * j20) +
+              rhsX * (j10 * j21 - j11 * j20)) *
+            invDet;
+
+          const newBx = bx + deltaBx;
+          const newBy = by + deltaBy;
+          const newBz = bz + deltaBz;
+
+          // Rotate new w_body back to world frame: w_world = q * w_body * q^*
+          const rx = 2 * (qy * newBz - qz * newBy);
+          const ry = 2 * (qz * newBx - qx * newBz);
+          const rz = 2 * (qx * newBy - qy * newBx);
+          rb.angularVelocity.x = newBx + qw * rx + (qy * rz - qz * ry);
+          rb.angularVelocity.y = newBy + qw * ry + (qz * rx - qx * rz);
+          rb.angularVelocity.z = newBz + qw * rz + (qx * ry - qy * rx);
+        }
+      }
+    }
 
     // Apply angular damping
     const rawDamping = rb.angularDamping * fluidAngularDrag;
@@ -244,4 +333,3 @@ export class EulerIntegrator {
     }
   }
 }
-

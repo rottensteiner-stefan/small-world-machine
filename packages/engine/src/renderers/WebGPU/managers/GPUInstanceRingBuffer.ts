@@ -44,21 +44,38 @@ export class GPUInstanceRingBuffer {
   }
 
   /**
-   * Uploads the world matrices of `objects[start..end)` and returns the byte offset to bind at
-   * slot 6. Read `buffer` after this call: a growth swaps it.
+   * Appends the world matrices of `objects[start..end)` to the CPU staging buffer and returns
+   * the byte offset to bind at slot 6. Read `buffer` after this call: a growth swaps it.
    */
   public writeRun(objects: readonly Object3D[], start: number, end: number): number {
     const count = end - start;
     if (this._used + count > this._capacity) this._ensureCapacity(this._used + count);
-    if (this._staging.length < count * 16) this._staging = new Float32Array(count * 16 * 2);
 
     const staging = this._staging;
-    for (let i = 0; i < count; i++) staging.set(objects[start + i]!.worldMatrix.data, i * 16);
+    const dstIdx = this._used * 16;
+    for (let i = 0; i < count; i++) {
+      staging.set(objects[start + i]!.worldMatrix.data, dstIdx + i * 16);
+    }
 
     const offset = this._used * MATRIX_BYTES;
-    this._device.queue.writeBuffer(this._buffer, offset, staging, 0, count * 16);
     this._used += count;
     return offset;
+  }
+
+  /**
+   * Flushes all staged instance matrices to the GPU buffer in a single writeBuffer call.
+   * Call once per frame immediately before `queue.submit()`.
+   */
+  public flush(): void {
+    if (this._used > 0) {
+      this._device.queue.writeBuffer(
+        this._buffer,
+        0,
+        this._staging.buffer,
+        0,
+        this._used * MATRIX_BYTES,
+      );
+    }
   }
 
   public destroy(): void {
@@ -70,11 +87,29 @@ export class GPUInstanceRingBuffer {
   private _ensureCapacity(needed: number): void {
     if (this._buffer && this._capacity >= needed) return;
     const capacity = Math.max(needed, this._capacity * 2);
-    if (this._buffer) this._pendingDestroy.push(this._buffer);
+    if (this._buffer) {
+      if (this._used > 0) {
+        this._device.queue.writeBuffer(
+          this._buffer,
+          0,
+          this._staging.buffer,
+          0,
+          this._used * MATRIX_BYTES,
+        );
+      }
+      this._pendingDestroy.push(this._buffer);
+    }
     this._buffer = this._device.createBuffer({
       size: capacity * MATRIX_BYTES,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     this._capacity = capacity;
+    if (this._staging.length < capacity * 16) {
+      const newStaging = new Float32Array(capacity * 16);
+      if (this._used > 0) {
+        newStaging.set(this._staging.subarray(0, this._used * 16));
+      }
+      this._staging = newStaging;
+    }
   }
 }

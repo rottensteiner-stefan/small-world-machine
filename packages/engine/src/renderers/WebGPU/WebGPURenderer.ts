@@ -1743,6 +1743,10 @@ export class WebGPURenderer
     // on the readback completing).
     this._recordFieldProbeCopies(ce);
 
+    // Single-flush staging: upload all per-draw object uniforms & instance matrices in 2 calls
+    this._objectRing.flush();
+    this._instanceRing.flush();
+
     this._device.queue.submit([ce.finish()]);
     if (
       this._activeRenderTarget instanceof RenderTarget &&

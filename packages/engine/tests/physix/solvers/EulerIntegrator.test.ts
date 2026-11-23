@@ -115,4 +115,27 @@ describe("EulerIntegrator", () => {
 
     expect(obj120.rigidBody.velocity.x).toBeCloseTo(obj60.rigidBody.velocity.x, 6);
   });
+
+  it("stably integrates gyroscopic motion for an asymmetric body without energy blowup", () => {
+    const obj = new Object3D("TennisRacket");
+    obj.rigidBody = new RigidBody(1.0);
+    obj.rigidBody.angularDamping = 1.0; // zero damping
+    // Asymmetric inertia tensor (I1 < I2 < I3)
+    obj.rigidBody.inertiaTensor.set(1.0, 2.0, 3.0);
+    obj.rigidBody.inverseInertiaTensor.set(1.0, 0.5, 1.0 / 3.0);
+
+    // Initial spin primarily around intermediate axis (Y) with small perturbation on X
+    obj.rigidBody.angularVelocity.set(0.1, 5.0, 0.0);
+
+    const dt = 1 / 120;
+    for (let step = 0; step < 120; step++) {
+      EulerIntegrator.integrateAngular(obj, 1.0, dt);
+    }
+
+    // Angular velocity magnitude must remain strictly bounded (no exponential divergence)
+    const wLen = obj.rigidBody.angularVelocity.length();
+    expect(wLen).toBeLessThan(10.0);
+    // Gyroscopic coupling must have transferred angular velocity into the Z axis
+    expect(Math.abs(obj.rigidBody.angularVelocity.z)).toBeGreaterThan(0.001);
+  });
 });

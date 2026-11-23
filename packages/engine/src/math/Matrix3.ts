@@ -73,6 +73,25 @@ export class Matrix3 {
       n32: number = me[6]!,
       n33: number = me[10]!;
 
+    // Rigid fast-path: if scale is unit (common case for rigid objects and character skeletons),
+    // the upper 3x3 rotation is orthogonal (R^-1 = R^T), so (R^-1)^T = R.
+    const c0 = n11 * n11 + n21 * n21 + n31 * n31;
+    const c1 = n12 * n12 + n22 * n22 + n32 * n32;
+    const c2 = n13 * n13 + n23 * n23 + n33 * n33;
+
+    if (Math.abs(c0 - 1.0) < 1e-4 && Math.abs(c1 - 1.0) < 1e-4 && Math.abs(c2 - 1.0) < 1e-4) {
+      te[0] = n11;
+      te[1] = n21;
+      te[2] = n31;
+      te[3] = n12;
+      te[4] = n22;
+      te[5] = n32;
+      te[6] = n13;
+      te[7] = n23;
+      te[8] = n33;
+      return this;
+    }
+
     const t11: number = n33 * n22 - n32 * n23;
     const t12: number = n32 * n13 - n33 * n12;
     const t13: number = n23 * n12 - n22 * n13;
