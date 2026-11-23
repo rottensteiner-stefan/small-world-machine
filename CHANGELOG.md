@@ -2,6 +2,28 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.129.0] - 2026-11-24
+
+### "The laws of nature are but the mathematical thoughts of God." - Euclid
+
+- **Features:**
+  - _WebGPU single-flush ring buffers (`GPUObjectRingBuffer`, `GPUInstanceRingBuffer`, `WebGPURenderer`):_ staged all per-draw object uniforms and auto-instanced world matrices into persistent CPU TypedArrays, executing exactly two bulk uploads immediately before `queue.submit()` to drop render-loop driver IPC from O(N) to O(1).
+  - _Implicit gyroscopic dynamics (`EulerIntegrator.integrateAngular`):_ implemented Erin Catto implicit 1-step Newton solver with Cramer rule on a 3x3 Jacobian in local body space to stably integrate asymmetric rigid bodies without runaway energy growth or heap allocations.
+  - _Affine 4x4 matrix multiplication & rigid normal fast-path (`Matrix4.multiplyAffine`, `Matrix3.getNormalMatrix`):_ added 36-multiply affine composition cutting 44% of matrix float operations in scene cascades, plus O(1) direct normal matrix assignment on unit-scale rotations.
+  - _Branchless center-extent bounding volumes (`BoundingBox.ts`, `SkinnedMesh.ts`):_ implemented Jim Arvo center-extent transform eliminating 8-corner loops, sign-branches, and array allocations (8x faster skinned mesh bounds updates).
+
+- **Architecture & Bugfixes:**
+  - _Camera TAA jitter & physical scaling (`Camera.ts`, `SmallWorldMachine.ts`):_ corrected TAA jitter accumulation to row3 clip translation and scaled jitter by physical render-target pixels (`canvas.width * renderScale`) rather than client CSS pixels.
+  - _Local-axis camera shake (`Camera.ts`):_ rotated view direction around camera local right axis preventing vertical shake collapse when facing +/-X.
+  - _PBR multi-scattering & un-clamped anisotropic visibility (`lighting_pbr.wgsl`, `light_calc_pbr.frag.glsl`):_ grounded Fdez-Aguera multi-scattering on F0, removed unphysical 1.0 clamp on Heitz anisotropic visibility V, and guarded shadow sampling at N.L > 0.0.
+  - _Workgroup-shared cluster light culling (`cluster_cull.wgsl`):_ loaded lights in 64-element shared-memory batches to cut light evaluations by up to 64x across all 8,192 cells, with native orthographic projection support.
+  - _Froxel loop hoisting & depth simplification (`froxel_integrate.wgsl`):_ hoisted camera ray reconstruction and phase evaluation outside the Z-loop, eliminating 192 matrix multiplies per column, and simplified depth to single-pow progression.
+  - _Water quadtree 2:1 balancing & crack fix (`WaterQuadtree.ts`):_ added 8-point edge probing and 2:1 split propagation across neighbor boundaries to eliminate T-junction cracks.
+  - _Rigid-body cached world inverse inertia (`RigidBody.ts`, `RigidBodyMath.ts`):_ cached 6-element symmetric tensor updated once per step, eliminating repeated trigonometric transformations during PGS contact solving.
+
+- **Housekeeping & Docs:**
+  - _Documentation & References refresh (`README.md`, `CONTEXT.md`, `REFERENCES.md`, `MEMORY.md`, `BACKLOG.md`):_ added Jim Arvo (1990), Erin Catto (2015), Single-Flush Ring Buffer, and Affine Matrix Multiplication references, updated ubiquitous vocabulary, and recorded full thermo-nuclear audit ledger.
+
 ## [0.128.0] - 2026-11-22
 
 ### "The real voyage of discovery consists not in seeking new landscapes, but in having new eyes." - Marcel Proust
