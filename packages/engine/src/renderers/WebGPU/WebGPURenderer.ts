@@ -221,12 +221,15 @@ export class WebGPURenderer
 
   protected _materialBindGroups = new Map<
     string,
-    {
-      bg: GPUBindGroup;
-      resources: unknown[];
-      /** `_frameCount` of the last draw that used this entry; see `_sweepMaterialBindGroups()`. */
-      lastUsedFrame: number;
-    }
+    Map<
+      GPUBindGroupLayout,
+      {
+        bg: GPUBindGroup;
+        resources: unknown[];
+        /** `_frameCount` of the last draw that used this entry; see `_sweepMaterialBindGroups()`. */
+        lastUsedFrame: number;
+      }
+    >
   >();
   private _uvTransformBuffers = new Map<
     string,
@@ -343,6 +346,7 @@ export class WebGPURenderer
   private _scratchInstancedObjects: Object3D[] = [];
   private _scratchStandardObjects: Object3D[] = [];
   private readonly _batchSplit: InstancingSplit = { standard: [], instanced: [] };
+  private readonly _dynamicOffset1 = new Uint32Array(1);
 
   /** Reused every frame (never reallocated) -- see `GlobalUniformWriter`. */
   public get scratchGlobalBufferData(): Float32Array {
@@ -1988,7 +1992,8 @@ export class WebGPURenderer
       cache.hasUvTransforms,
     );
     rp.setBindGroup(1, matBindGroup);
-    rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
+    this._dynamicOffset1[0] = viewOffset;
+    rp.setBindGroup(3, this._viewBindGroup, this._dynamicOffset1);
 
     const usesVertexColor = effManifest.flags?.includes(VERTEX_COLOR_FLAG) === true;
     const usesUv1 = effManifest.flags?.includes(ShaderFlag.UV1) === true;
@@ -2049,7 +2054,8 @@ export class WebGPURenderer
       this._textures.acquireTextures(obj, manifest.textures, texVersion);
 
       const objOffset = this._getObjectSlotOffset(obj, manifest, matUuid, vMat);
-      rp.setBindGroup(2, this._objectRing.bindGroup, [objOffset]);
+      this._dynamicOffset1[0] = objOffset;
+      rp.setBindGroup(2, this._objectRing.bindGroup, this._dynamicOffset1);
 
       const gCache = this._geometryCache.getGeoCache(obj, obj.geometry!);
       let ribbon: WebGPULineRibbon | undefined;
@@ -2282,7 +2288,8 @@ export class WebGPURenderer
         cache.hasUvTransforms,
       ),
     );
-    rp.setBindGroup(3, this._viewBindGroup, [viewOffset]);
+    this._dynamicOffset1[0] = viewOffset;
+    rp.setBindGroup(3, this._viewBindGroup, this._dynamicOffset1);
 
     const runObjects = this._scratchRunObjects;
     const runs = this._scratchRuns;
@@ -2296,7 +2303,8 @@ export class WebGPURenderer
     ) {
       this._objectRing.write(slot, this._scratchObjBufferData);
     }
-    rp.setBindGroup(2, this._objectRing.bindGroup, [slot]);
+    this._dynamicOffset1[0] = slot;
+    rp.setBindGroup(2, this._objectRing.bindGroup, this._dynamicOffset1);
 
     const texVersion = this._textures.textureSetVersion(manifest.textures);
     for (let r = 0; r < runs.length; r += 2) {
@@ -2607,7 +2615,13 @@ export class WebGPURenderer
       resources.push(this._getUvTransformBindingResource(matUuid, m));
     }
 
-    const cache = this._materialBindGroups.get(matUuid);
+    let layoutMap = this._materialBindGroups.get(matUuid);
+    if (!layoutMap) {
+      layoutMap = new Map();
+      this._materialBindGroups.set(matUuid, layoutMap);
+    }
+
+    const cache = layoutMap.get(layout);
     if (cache && cache.resources.length === resources.length) {
       let same = true;
       for (let i = 0; i < resources.length; i++) {
@@ -2628,7 +2642,7 @@ export class WebGPURenderer
     }
     const bg = this._device!.createBindGroup({ layout, entries });
 
-    this._materialBindGroups.set(matUuid, {
+    layoutMap.set(layout, {
       bg,
       resources: resources.slice(),
       lastUsedFrame: this._frameCount,
@@ -2640,8 +2654,13 @@ export class WebGPURenderer
    * left the scene would pin those GPU textures forever. Swept lazily: anything not drawn for
    * `MATERIAL_BIND_GROUP_IDLE_FRAMES` frames is dropped (a still-live material just rebuilds). */
   private _sweepMaterialBindGroups(): void {
-    for (const [uuid, entry] of this._materialBindGroups) {
-      if (this._frameCount - entry.lastUsedFrame > MATERIAL_BIND_GROUP_IDLE_FRAMES) {
+    for (const [uuid, layoutMap] of this._materialBindGroups) {
+      for (const [layout, entry] of layoutMap) {
+        if (this._frameCount - entry.lastUsedFrame > MATERIAL_BIND_GROUP_IDLE_FRAMES) {
+          layoutMap.delete(layout);
+        }
+      }
+      if (layoutMap.size === 0) {
         this._materialBindGroups.delete(uuid);
       }
     }

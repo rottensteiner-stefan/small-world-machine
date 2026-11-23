@@ -25,7 +25,7 @@ import {
 } from "@small-world-machine/engine";
 import { HierarchyPanel, PropertyPanel, UndoStack } from "@small-world-machine/tools";
 import { Pane } from "tweakpane";
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
 /** Lab parameters the inspector reads and writes; owned by the showcase, which applies them every frame. */
 export interface HudState {
@@ -58,8 +58,8 @@ const STYLE_ID = "swm-showcase28-inspector-styles";
 // Only what differs from shared.css: the tool-theme look of drawer, header and footer button, the
 // flat full-width sections and the hierarchy tree.
 const STYLE = `
-  .swm-inspector-btn:hover,
-  .swm-inspector-btn.active {
+  .swm-settings-toggle:hover,
+  .swm-settings-toggle.active {
     border-color: var(--tool-accent, #b000ff);
     color: var(--tool-accent, #b000ff);
   }
@@ -67,19 +67,19 @@ const STYLE = `
     color: var(--tool-text, #f8fafc);
     font-family: var(--tool-font-ui, sans-serif);
   }
-  #labInspectorDrawer .hud-header {
+  #labInspectorDrawer .settings-header {
     border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
     background: var(--tool-panel-solid, #0e121c);
   }
-  #labInspectorDrawer .hud-title {
+  #labInspectorDrawer .settings-title {
     font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 1px;
   }
-  #labInspectorDrawer .hud-close-btn {
+  #labInspectorDrawer .settings-close-btn {
     padding: 2px 6px;
   }
-  #labInspectorDrawer .swm-inspector-section {
+  #labInspectorDrawer .settings-section {
     border-bottom: 1px solid var(--tool-border, rgba(148, 163, 184, 0.15));
     display: flex;
     flex-direction: column;
@@ -175,15 +175,15 @@ const STYLE = `
 `;
 
 const BODY = `
-  <div class="swm-inspector-section">
+  <div class="settings-section">
     <div class="swm-inspector-section-header">Lab Parameters</div>
     <div id="swmInspectorParams" class="swm-inspector-pane-wrap"></div>
   </div>
-  <div class="swm-inspector-section">
+  <div class="settings-section">
     <div class="swm-inspector-section-header">Scene Hierarchy</div>
     <div id="swmInspectorHierarchy" class="swm-inspector-hierarchy-wrap"></div>
   </div>
-  <div class="swm-inspector-section">
+  <div class="settings-section">
     <div class="swm-inspector-section-header">Selected Object</div>
     <div id="swmInspectorProps" class="swm-inspector-pane-wrap"></div>
   </div>
@@ -194,7 +194,7 @@ const BODY = `
  * property panel, viewport picking and a selection highlight.
  */
 export class Hud {
-  private _drawer: ShowcaseDrawer | undefined = undefined;
+  private _drawer: ShowcaseSettingsPanel | undefined = undefined;
   private _isHoveringInspector = false;
   private _isDraggingInspector = false;
   private _undo = new UndoStack();
@@ -368,7 +368,7 @@ export class Hud {
       document.head.appendChild(style);
     }
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "labInspectorDrawer",
       title: "Lab Inspector",
       icon: "⚙",

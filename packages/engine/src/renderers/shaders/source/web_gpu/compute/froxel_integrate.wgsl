@@ -48,18 +48,11 @@ fn hgPhase(cosTheta: f32, g: f32) -> f32 {
 fn sliceDepth(slice: f32, near: f32, far: f32, slices: f32) -> f32 {
     let n = max(near, 1e-6);
     let f = max(far, n + 1e-6);
-    let low = pow(f / n, slice / slices) * n;
-    let high = pow(f / n, (slice + 1.0) / slices) * n;
-    return max(n * 1.001, sqrt(low * high));
+    return max(n * 1.001, n * pow(f / n, (slice + 0.5) / slices));
 }
 
-// Slice boundaries for calculating slice thickness Δz.
-fn sliceBounds(slice: f32, near: f32, far: f32, slices: f32) -> vec2f {
-    let n = max(near, 1e-6);
-    let f = max(far, n + 1e-6);
-    let zNear = pow(f / n, slice / slices) * n;
-    let zFar = pow(f / n, (slice + 1.0) / slices) * n;
-    return vec2f(zNear, zFar);
+fn webGpuClipZ(zVal: f32, near: f32, far: f32) -> f32 {
+    return (far * (zVal - near)) / max(zVal * (far - near), 1e-6);
 }
 
 // Shadow of one cascade at a world position (1 = lit). Outside the cascade's map counts as lit.
@@ -137,6 +130,30 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let ndcX = (f32(x) + 0.5) / f32(dims.x) * 2.0 - 1.0;
     let ndcY = 1.0 - (f32(y) + 0.5) / f32(dims.y) * 2.0;
 
+    // Unproject near and far plane points for this column ray
+    let clipPosFar = vec4f(ndcX, ndcY, 1.0, 1.0);
+    let worldHF = uni.invViewProj * clipPosFar;
+    let worldFar = worldHF.xyz / max(worldHF.w, 1e-6);
+
+    let clipPosNear = vec4f(ndcX, ndcY, 0.0, 1.0);
+    let worldHN = uni.invViewProj * clipPosNear;
+    let worldNear = worldHN.xyz / max(worldHN.w, 1e-6);
+
+    let rayDelta = worldFar - worldNear;
+    let viewDir = normalize(rayDelta);
+    let cosTheta = dot(viewDir, sunDir);
+    let phase = hgPhase(cosTheta, asymmetry);
+
+    // Slices are slabs of view-space depth; ray crosses slab off-axis over slabThickness * rayFactor
+    let rayFactor = max(length(worldFar - uni.camPos.xyz) / max(far, 1e-6), 1.0);
+
+    // Exponential slice progression constants
+    let n = max(near, 1e-6);
+    let f = max(far, n + 1e-6);
+    let sliceRatio = pow(f / n, 1.0 / slices);
+    let sliceRatioHalf = sqrt(sliceRatio);
+    var prevZFar = n;
+
     var accumulatedRadiance = vec3f(0.0);
     var accumulatedTransmittance = 1.0;
     var accumTau = 0.0;
@@ -148,9 +165,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let localInScatter = cellData.rgb;
         let extinction = max(cellData.a, 0.0);
 
-        let bounds = sliceBounds(f32(z), near, far, slices);
-        let zMid = sliceDepth(f32(z), near, far, slices);
-        let slabThickness = max(bounds.y - bounds.x, 1e-5);
+        let zNear = prevZFar;
+        let zFar = zNear * sliceRatio;
+        prevZFar = zFar;
+        let zMid = zNear * sliceRatioHalf;
+        let slabThickness = max(zFar - zNear, 1e-5);
 
         if (zMid > maxDist) {
             // Beyond maximum distance: keep the accumulated values (froxel_inject.wgsl already faded the
@@ -159,16 +178,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             continue;
         }
 
-        // Reconstruct world position for directional lighting and shadow sampling. WebGPU clip-Z
-        // is [0, 1] (Matrix4.ZO_CORRECTION applied to the VP): the OpenGL [-1, 1] formula would
-        // feed a wrong depth into the [0, 1]-corrected invViewProj and skew the ray (COMP-01).
+        // Reconstruct world position along the ray.
+        let worldPos = uni.camPos.xyz + viewDir * (zMid * rayFactor);
         let clipZ = (far * (zMid - near)) / max(zMid * (far - near), 1e-6);
-        let clipPos = vec4f(ndcX, ndcY, clipZ, 1.0);
-        let worldH = uni.invViewProj * clipPos;
-        let worldPos = worldH.xyz / max(worldH.w, 1e-6);
-        let viewDir = normalize(worldPos - uni.camPos.xyz);
-        // Slices are slabs of view-space depth; the ray crosses a slab off-axis over
-        // slabThickness / cos(theta) = slabThickness * rayDistance / viewDepth.
         let stepLen = slabThickness * max(length(worldPos - uni.camPos.xyz) / max(zMid, 1e-6), 1.0);
 
         // Directional sun in-scattering: sigma_s * L, with sigma_s == extinction (same convention
@@ -180,23 +192,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
             // identity placeholder keeps an absent mask at a factor of exactly 1.0.
             let maskUVW = clamp((worldPos - uni.elementMaskPosition.xyz) / (2.0 * uni.elementMaskSize.xyz) + 0.5, vec3f(0.0), vec3f(1.0));
             let maskAlbedo = textureSampleLevel(globalDensityMask, globalMaskSampler, maskUVW, 0.0).g;
-            // sunDir points TO the sun, viewDir camera -> point: forward scattering is dot = +1
-            // (same convention as the local lights in froxel_inject.wgsl).
-            let cosTheta = dot(viewDir, sunDir);
-            let phase = hgPhase(cosTheta, asymmetry);
             var shadow = sampleCascadeShadow(worldPos, zMid);
-            // Stratified sub-slab shadow quadrature across [bounds.x, bounds.y] so diagonal light
+            // Stratified sub-slab shadow quadrature across [zNear, zFar] so diagonal light
             // shafts crossing slice boundaries preserve constant energy without staircase blotches.
             for (var sub = 0u; sub < 3u; sub++) {
-                let tSub = (f32(sub) + 0.5) * (1.0 / 3.0);
-                // Skip midpoint (tSub == 0.5) which is already sampled above via zMid.
-                let zSub = mix(bounds.x, bounds.y, select(0.833333, 0.166667, sub == 0u));
                 if (sub != 1u) {
-                    // Same WebGPU [0, 1] clip-Z as the main slice above (COMP-01): the OpenGL
-                    // [-1, 1] form would distort the sub-slab shadow probe world position.
-                    let clipZSub = (far * (zSub - near)) / max(zSub * (far - near), 1e-6);
-                    let worldHSub = uni.invViewProj * vec4f(ndcX, ndcY, clipZSub, 1.0);
-                    let worldPosSub = worldHSub.xyz / max(worldHSub.w, 1e-6);
+                    let zSub = mix(zNear, zFar, select(0.833333, 0.166667, sub == 0u));
+                    let worldPosSub = uni.camPos.xyz + viewDir * (zSub * rayFactor);
                     shadow += sampleCascadeShadow(worldPosSub, zSub);
                 }
             }

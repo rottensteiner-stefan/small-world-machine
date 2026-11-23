@@ -1,11 +1,11 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   type FrameTelemetrySource,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 
 /** Sliders the panel exposes. */
 export type HelmetSlider =
@@ -59,10 +59,10 @@ const PRESETS: readonly { id: LightingPresetId; label: string }[] = [
 ];
 
 /**
- * Helmet Inspector panel for Showcase 13 on the shared {@link ShowcaseDrawer}.
+ * Helmet Inspector panel for Showcase 13 on the shared {@link ShowcaseSettingsPanel}.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
 
   constructor(
     private readonly _actions: HudActions,
@@ -73,7 +73,7 @@ export class Hud {
         `<button id="st13Preset_${p.id}" class="btn-preset" title="${p.label} Mood (Key ${i + 1})">${i + 1} · ${p.label}</button>`,
     ).join("");
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "helmet-inspector-drawer",
       title: "Damaged Helmet Lab",
       icon: "🪖",

@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 import { bindRange } from "../shared/hudBindings.js";
 
 export type ReliefDisplayMode = "fullscreen" | "diorama" | "studio";
@@ -66,9 +66,9 @@ const PRESET_BUTTON_IDS: readonly string[] = [
 // Only what differs from shared.css: denser rows and buttons, the tool-theme accent on the footer
 // button, and the photo drop zone.
 const STYLE = `
-  #reliefTuningHud .hud-body { gap: 12px; }
-  #reliefTuningHud .hud-row { margin-bottom: 6px; }
-  #reliefTuningHud .hud-row:last-child { margin-bottom: 0; }
+  #reliefTuningHud .settings-body { gap: 12px; }
+  #reliefTuningHud .settings-row { margin-bottom: 6px; }
+  #reliefTuningHud .settings-row:last-child { margin-bottom: 0; }
   #reliefTuningHud select { border: 1px solid #4a5568; padding: 3px 6px; }
   #reliefTuningHud .btn-preset { padding: 6px 4px; }
   #reliefPanelOpenBtn:hover {
@@ -97,9 +97,9 @@ const STYLE = `
 
 const BODY = `
   <!-- Display Mode -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🖼️ Mode & Technique</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label for="selMode">Display Mode</label>
       <select id="selMode">
         <option value="fullscreen" selected>Photo-to-Metal Converter (Split)</option>
@@ -110,9 +110,9 @@ const BODY = `
   </div>
 
   <!-- Before / After Wipe -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">↔️ Before / After Split Wipe</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Divider Position</label>
       <input type="range" id="slSplit" min="0" max="1" step="0.01" value="0.50" />
       <span class="val-label" id="valSplit">0.50</span>
@@ -125,7 +125,7 @@ const BODY = `
   </div>
 
   <!-- Presets & Upload -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">⚡ Realistic Photo Presets</div>
     <div class="preset-group three-col">
       <button class="btn-preset active" id="btnPresetParis">🗼 Paris</button>
@@ -139,24 +139,24 @@ const BODY = `
   </div>
 
   <!-- Palette Knife & Relief Depth -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🔪 Impasto & Relief Depth</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Sobel Relief</label>
       <input type="range" id="slSobel" min="0" max="3" step="0.05" value="1.50" />
       <span class="val-label" id="valSobel">1.50</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Palette Knife</label>
       <input type="range" id="slRelief" min="0" max="2" step="0.05" value="0.50" />
       <span class="val-label" id="valRelief">0.50</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Grind Marks (Flex)</label>
       <input type="range" id="slScratches" min="0" max="1" step="0.05" value="0.40" />
       <span class="val-label" id="valScratches">0.40</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Welded Edge Glint</label>
       <input type="range" id="slBevel" min="0" max="2.5" step="0.05" value="1.20" />
       <span class="val-label" id="valBevel">1.20</span>
@@ -164,24 +164,24 @@ const BODY = `
   </div>
 
   <!-- Industrial Patina -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">⚙️ Industrial Patina & Pop</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Iron Oxide Rust</label>
       <input type="range" id="slRust" min="0" max="1" step="0.05" value="0.80" />
       <span class="val-label" id="valRust">0.80</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Desaturation</label>
       <input type="range" id="slDesat" min="0" max="1" step="0.05" value="0.95" />
       <span class="val-label" id="valDesat">0.95</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Accent Hue Pop</label>
       <input type="range" id="slHue" min="0" max="1" step="0.01" value="0.00" />
       <span class="val-label" id="valHue">0.00</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Wet Rain Sheen</label>
       <input type="range" id="slRain" min="0" max="1" step="0.05" value="0.50" />
       <span class="val-label" id="valRain">0.50</span>
@@ -189,24 +189,24 @@ const BODY = `
   </div>
 
   <!-- Palette Knife Studio -->
-  <div class="hud-section" id="studioSection" style="display:none;">
+  <div class="settings-section" id="studioSection" style="display:none;">
     <div class="section-title">🎨 Palette Knife Studio</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Brush Size</label>
       <input type="range" id="slBrushSize" min="3" max="120" step="1" value="12" />
       <span class="val-label" id="valBrushSize">12</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Impasto Height</label>
       <input type="range" id="slBrushRelief" min="0" max="2" step="0.05" value="1.00" />
       <span class="val-label" id="valBrushRelief">1.00</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Knife Smear</label>
       <input type="range" id="slBrushSmear" min="0" max="1" step="0.02" value="0.28" />
       <span class="val-label" id="valBrushSmear">0.28</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Metallic</label>
       <input type="range" id="slBrushMetallic" min="0" max="1" step="0.05" value="0.55" />
       <span class="val-label" id="valBrushMetallic">0.55</span>
@@ -225,18 +225,18 @@ const BODY = `
       <button class="btn-preset" id="btnClear">🗑 Clear (C)</button>
       <button class="btn-preset" id="btnBaseToggle">🖼 Base</button>
     </div>
-    <div class="hud-row" style="margin-top:8px;">
+    <div class="settings-row" style="margin-top:8px;">
       <span style="font-size:11px;color:#94a3b8;">Keys: [ ] size · 1-6 palette · Q base (steel/photo) · P leave studio</span>
     </div>
   </div>
 `;
 
 /**
- * Metal Relief Lab panel of showcase 41 on the shared {@link ShowcaseDrawer}. Owns the controls
+ * Metal Relief Lab panel of showcase 41 on the shared {@link ShowcaseSettingsPanel}. Owns the controls
  * and their sync; every change goes to the {@link HudActions}.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
 
   constructor(private readonly _host: HudActions) {
@@ -247,7 +247,7 @@ export class Hud {
     style.textContent = STYLE;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "reliefTuningHud",
       title: "Metal Relief Lab",
       icon: "🎨",

@@ -45,7 +45,7 @@ declare global {
  *
  * Loads the official Khronos glTF-Sample-Assets model as a neutral PBR reference grid and lets
  * the user compare the three renderer tiers (`?rendererType=`, or Option/Alt+1/2/3) against each
- * other under an identical studio setup. The HUD (ShowcaseDrawer + perf footer) controls studio
+ * other under an identical studio setup. The HUD (ShowcaseSettingsPanel + perf footer) controls studio
  * lights and the post-processing chain (ACES tone mapping, bloom) and shows a live readout of
  * scene complexity. The reference model ships untouched (single shared material, CC-BY 4.0).
  * `?tone=off` disables the ToneMappingElement natively at load (WP-C2 parity knob): the post pass

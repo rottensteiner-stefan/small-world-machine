@@ -1,10 +1,10 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 
 export type DragPlaneMode = "camera" | "ground";
 export type ColorPalette = "rainbow" | "cyber" | "sunset" | "emerald" | "minimal";
@@ -96,10 +96,10 @@ const SLIDERS: readonly SliderConfig[] = [
 ];
 
 /**
- * Interactive inspector drawer for Showcase 19 (Gamification & Picking Lab).
+ * Interactive settings drawer for Showcase 19 (Gamification & Picking Lab).
  */
 export class PickingLabHud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _root: HTMLElement;
   private readonly _settings: PickingLabSettings;
   private readonly _actions: PickingLabActions;
@@ -108,7 +108,7 @@ export class PickingLabHud {
     this._settings = { ...initialSettings };
     this._actions = actions;
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "picking-lab-hud",
       title: "Picking & Gamification Lab",
       icon: "🎯",
@@ -122,7 +122,7 @@ export class PickingLabHud {
           "Mouse picking",
           hudSwitch("sw_hoverEnabled", "Hover effect enabled") +
             hudSwitch("sw_dragEnabled", "3D drag & drop enabled") +
-            `<div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
+            `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
               <span style="font-size:11px;color:#94a3b8;">Drag plane:</span>
               <div class="preset-group two-col" id="dragModeGroup">
                 <button class="btn-preset active" data-mode="ground">🏓 Ground (XZ table)</button>
@@ -130,7 +130,7 @@ export class PickingLabHud {
               </div>
             </div>` +
             hudSwitch("sw_clickRecolorEnabled", "Click to recolor") +
-            `<div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
+            `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
               <span style="font-size:11px;color:#94a3b8;">Click palette:</span>
               <div class="preset-group three-col" id="paletteGroup">
                 <button class="btn-preset active" data-palette="cyber">⚡ Cyber</button>
@@ -148,7 +148,7 @@ export class PickingLabHud {
           "Shader-Emission",
           hudSlider("sl_hoverScale", "Hover scale", 1.0, 2.5, 0.1) +
             hudSlider("sl_glowIntensity", "Glow intensity", 0.0, 6.0, 0.2) +
-            `<div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
+            `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
               <span style="font-size:11px;color:#94a3b8;">Hover glow color:</span>
               <div class="preset-group four-col" id="glowColorGroup">
                 <button class="btn-preset active" data-glow="cyan">Cyan</button>
@@ -162,7 +162,7 @@ export class PickingLabHud {
         ${hudSection(
           "🎲 Playfield & Physics Waves",
           "Grid & actions",
-          `<div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:4px 0 8px 0;">
+          `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:4px 0 8px 0;">
             <span style="font-size:11px;color:#94a3b8;">Field size:</span>
             <div class="preset-group four-col" id="gridSizeGroup">
               <button class="btn-preset" data-size="10">10×10</button>
@@ -189,7 +189,7 @@ export class PickingLabHud {
         ${hudSection(
           "🎥 Camera & Rendering",
           "Orbit / lighting",
-          `<div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:4px 0 8px 0;">
+          `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:4px 0 8px 0;">
             <span style="font-size:11px;color:#94a3b8;">Camera mode:</span>
             <div class="preset-group two-col" id="cameraModeGroup">
               <button class="btn-preset active" data-cam="orbit">🪐 Orbit (right-click/free space)</button>
@@ -212,7 +212,7 @@ export class PickingLabHud {
           </div>`,
         )}
 
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>I</kbd> / <kbd>H</kbd> Toggle panel · <kbd>Click</kbd> Recolor · <kbd>Drag</kbd> Move · <kbd>Right-click</kbd> Orbit
         </div>
       `,

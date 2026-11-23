@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 import { Hud as Hud29, type HudActions as Actions29 } from "../29/Hud.js";
 import { Hud as Hud41, type HudActions as Actions41 } from "../41/Hud.js";
 import { Hud as Hud42, type HudActions as Actions42 } from "../42/Hud.js";
@@ -10,7 +10,7 @@ import { Hud as Hud46, defaultHudState as state46 } from "../46/Hud.js";
 // The drawer's shared style (has an id) is intentionally persistent; only per-Hud tags count.
 const styleCount = (): number => document.head.querySelectorAll("style:not([id])").length;
 const drawerCount = (): number =>
-  document.body.querySelectorAll("aside.swm-inspector-drawer").length;
+  document.body.querySelectorAll("aside.swm-settings-drawer").length;
 
 afterEach(() => {
   document.head.innerHTML = "";
@@ -18,10 +18,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("ShowcaseDrawer.dispose", () => {
+describe("ShowcaseSettingsPanel.dispose", () => {
   it("cancels the delayed footer mount so a disposed button is not re-attached", () => {
     vi.useFakeTimers();
-    const drawer = new ShowcaseDrawer({ id: "t-late", icon: "x", title: "t", showPerf: false });
+    const drawer = new ShowcaseSettingsPanel({
+      id: "t-late",
+      icon: "x",
+      title: "t",
+      showPerf: false,
+    });
     drawer.dispose();
     const footer = document.createElement("footer");
     footer.className = "app-footer";
@@ -34,7 +39,7 @@ describe("ShowcaseDrawer.dispose", () => {
   it("stops the perf rAF loop", () => {
     const cancel = vi.spyOn(globalThis, "cancelAnimationFrame");
     vi.spyOn(globalThis, "requestAnimationFrame").mockReturnValue(7);
-    const drawer = new ShowcaseDrawer({ id: "t-perf", icon: "x", title: "t" });
+    const drawer = new ShowcaseSettingsPanel({ id: "t-perf", icon: "x", title: "t" });
     drawer.dispose();
     expect(cancel).toHaveBeenCalledWith(7);
     vi.restoreAllMocks();

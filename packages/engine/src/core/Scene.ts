@@ -56,11 +56,12 @@ export interface RenderList {
   decals: Object3D[];
 }
 
-/**
- * A scene that holds a collection of 3D objects.
- */
 export class Scene {
-  public readonly root: Object3D = new Object3D("SceneRoot");
+  public readonly root: Object3D = ((): Object3D => {
+    const r = new Object3D("SceneRoot");
+    r.isStatic = true;
+    return r;
+  })();
 
   public get objects(): readonly Object3D[] {
     return this.root.children;
@@ -569,6 +570,7 @@ export class Scene {
     // `inFrustum`. Always false on WebGL1/WebGL2, so this is a permanent no-op there.
     if (obj.occlusionCulled) {
       this.lastOcclusionCulledCount++;
+      this._collectVisibleChildren(obj, renderList);
       return;
     }
 

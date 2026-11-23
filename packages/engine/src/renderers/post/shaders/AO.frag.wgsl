@@ -14,8 +14,7 @@ struct AOUniforms {
 // See AO.frag.glsl for the full algorithm rationale -- same simplified HBAO approach, adapted
 // to WGSL's texel-fetch-only depth read (no sampler needed for a plain `texture_depth_2d`).
 fn linearizeDepth(d: f32) -> f32 {
-    let z = d * 2.0 - 1.0;
-    return (2.0 * u.near * u.far) / (u.far + u.near - z * (u.far - u.near));
+    return (u.near * u.far) / max(u.far - d * (u.far - u.near), 1e-6);
 }
 
 fn reconstructViewPos(uv: vec2f, linearZ: f32) -> vec3f {

@@ -140,26 +140,46 @@ export class Camera implements CameraInterfaceData {
     }
 
     if (0 !== this._yawOffset || 0 !== this._pitchOffset) {
-      // Rotate the view direction (not the position) around the camera, so shake can never
-      // clip it through geometry, and the effect stays independent of the target distance.
+      // Rotate the view direction around the camera's local axes (right and up), so shake
+      // is orientation-invariant and never collapses when facing world axes.
       const direction = MathPool.acquireVector().copyFrom(finalTarget).sub(finalPos);
-      const euler = MathPool.acquireVector().set(this._pitchOffset, this._yawOffset, 0);
-      this._effectQuat.setFromEuler(euler);
-      direction.applyQuaternion(this._effectQuat);
+      const right = MathPool.acquireVector().copyFrom(direction).cross(this.up).normalize();
+      if (right.lengthSq() < 1e-6) {
+        right.set(1, 0, 0);
+      }
+      if (0 !== this._pitchOffset) {
+        this._effectQuat.setFromAxisAngle(right, this._pitchOffset);
+        direction.applyQuaternion(this._effectQuat);
+      }
+      if (0 !== this._yawOffset) {
+        this._effectQuat.setFromAxisAngle(this.up, this._yawOffset);
+        direction.applyQuaternion(this._effectQuat);
+      }
       finalTarget.copyFrom(finalPos).add(direction);
       MathPool.releaseVector(direction);
-      MathPool.releaseVector(euler);
+      MathPool.releaseVector(right);
     }
 
     Matrix4.lookAt(finalPos, finalTarget, this.up, this._viewMatrix);
     Matrix4.multiply(this.projection.getMatrix(), this._viewMatrix, this._viewProjMatrix);
 
     if (0 !== this.jitterX || 0 !== this.jitterY) {
-      // Standard TAA jitter injection: add the offset into the projection's third column, so
-      // it scales with view-space z during the perspective divide (a constant NDC offset
-      // regardless of depth) rather than distorting near/far differently.
-      this._viewProjMatrix.data[8] = (this._viewProjMatrix.data[8] ?? 0) + this.jitterX;
-      this._viewProjMatrix.data[9] = (this._viewProjMatrix.data[9] ?? 0) + this.jitterY;
+      // Standard TAA jitter injection: left-multiply NDC translation T_ndc(jx, jy) into VP.
+      // In column-major layout, row 3 is data[3, 7, 11, 15] (clip-space w), so adding
+      // jx * w_clip to row 0 and jy * w_clip to row 1 gives an exact constant NDC offset
+      // for perspective, orthographic, and oblique projections alike.
+      const d = this._viewProjMatrix.data;
+      const jx = this.jitterX;
+      const jy = this.jitterY;
+      d[0] = (d[0] ?? 0) + jx * (d[3] ?? 0);
+      d[4] = (d[4] ?? 0) + jx * (d[7] ?? 0);
+      d[8] = (d[8] ?? 0) + jx * (d[11] ?? 0);
+      d[12] = (d[12] ?? 0) + jx * (d[15] ?? 0);
+
+      d[1] = (d[1] ?? 0) + jy * (d[3] ?? 0);
+      d[5] = (d[5] ?? 0) + jy * (d[7] ?? 0);
+      d[9] = (d[9] ?? 0) + jy * (d[11] ?? 0);
+      d[13] = (d[13] ?? 0) + jy * (d[15] ?? 0);
     }
 
     MathPool.releaseVector(finalPos);

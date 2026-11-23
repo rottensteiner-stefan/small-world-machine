@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
 /** One entry of the geometry dropdown. */
 export interface GeometryOption {
@@ -43,11 +43,11 @@ const formatWireShadowWidth = (meters: number): string =>
   meters > 0 ? `${(meters * 100).toFixed(1)} cm` : "1 texel";
 
 /**
- * Shape & Material panel of showcase 1 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Shape & Material panel of showcase 1 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls and their labels; mesh, materials and light stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
 
   constructor(
     geometries: readonly GeometryOption[],
@@ -55,7 +55,7 @@ export class Hud {
     state: HudState,
     private readonly _actions: HudActions,
   ) {
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "showcase1-inspector",
       title: "Shape & Material",
       icon: "🔷",
@@ -64,9 +64,9 @@ export class Hud {
       buttonId: "showcase1InspectorBtn",
       body: `
         <!-- Section 1: Geometry -->
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">🔷 3D Geometry Primitive</div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <label for="selGeometry">Active Primitive</label>
             <select id="selGeometry" style="width:100%;font-size:12px;padding:6px 8px;">
               ${geometries
@@ -83,7 +83,7 @@ export class Hud {
         </div>
 
         <!-- Section 2: Material & Color -->
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">🎨 Color & Material Palette</div>
 
           <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;margin-bottom:10px;">
@@ -104,7 +104,7 @@ export class Hud {
               .join("")}
           </div>
 
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="pickerColor">Custom Color</label>
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="val-label" id="valHex">${state.colorHex.toUpperCase()}</span>
@@ -112,7 +112,7 @@ export class Hud {
             </div>
           </div>
 
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <label for="sliderShininess">Phong Specular Shininess</label>
               <span class="val-label" id="valShininess">${state.shininess}</span>
@@ -122,44 +122,44 @@ export class Hud {
         </div>
 
         <!-- Section 3: Motion & Wireframe -->
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">🔄 Motion & Display Mode</div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="swAutoRotate">Auto-Rotate</label>
-            <label class="hud-switch">
+            <label class="settings-switch">
               <input type="checkbox" id="swAutoRotate" ${state.autoRotate ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
+              <span class="settings-switch-slider"></span>
             </label>
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <label for="sliderSpeed">Rotation Speed</label>
               <span class="val-label" id="valSpeed">${state.rotateSpeed.toFixed(1)}x</span>
             </div>
             <input type="range" id="sliderSpeed" min="0.2" max="3.0" step="0.1" value="${state.rotateSpeed}" />
           </div>
-          <div class="hud-row" style="margin-top:4px;">
+          <div class="settings-row" style="margin-top:4px;">
             <label for="swWireframe">Wireframe Mode</label>
-            <label class="hud-switch">
+            <label class="settings-switch">
               <input type="checkbox" id="swWireframe" ${state.wireframe ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
+              <span class="settings-switch-slider"></span>
             </label>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="swWireShadow">Wireframe casts shadow</label>
-            <label class="hud-switch">
+            <label class="settings-switch">
               <input type="checkbox" id="swWireShadow" ${state.wireframeCastsShadow ? "checked" : ""}>
-              <span class="hud-switch-slider"></span>
+              <span class="settings-switch-slider"></span>
             </label>
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <label for="sliderShadowRes">Shadow Map Resolution</label>
               <span class="val-label" id="valShadowRes">${state.shadowResolution} px</span>
             </div>
             <input type="range" id="sliderShadowRes" min="8" max="13" step="1" value="${Math.log2(state.shadowResolution)}" />
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <label for="sliderWireShadowWidth">Wire Shadow Width</label>
               <span class="val-label" id="valWireShadowWidth">${formatWireShadowWidth(state.wireShadowWidth)}</span>

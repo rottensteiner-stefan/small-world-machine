@@ -1,10 +1,10 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 
 /** Colour override for every fire; "original" keeps each fire's own palette. */
 export type PaletteChoice = "original" | "blackbody" | "spectral" | "wisp" | "cursed";
@@ -102,11 +102,11 @@ interface SliderSpec {
 const percent = (value: number): string => `${Math.round(value * 100)} %`;
 
 /**
- * Fire Lab panel of showcase 45 on the shared {@link ShowcaseDrawer}. Owns only its controls and
+ * Fire Lab panel of showcase 45 on the shared {@link ShowcaseSettingsPanel}. Owns only its controls and
  * the settings object; the showcase reads the settings and applies them in `onChange`.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -176,14 +176,14 @@ export class Hud {
     const times = TIME_SCALES.map(
       (t) => `<button class="btn-preset" data-time="${t}" title="Tempo ×${t}">×${t}</button>`,
     ).join("");
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "fire-lab-hud",
       title: "Fire Lab",
       icon: "🔥",
       // H toggles the ember layer here, so only I opens the panel.
       toggleKeys: ["KeyI"],
       body: `
-        <div class="hud-section"><pre id="fireLabReadout"></pre></div>
+        <div class="settings-section"><pre id="fireLabReadout"></pre></div>
         ${hudSection(
           "⚖️ Before / After",
           "F · G · L · H · R · B",
@@ -227,7 +227,7 @@ export class Hud {
             ),
         )}
         ${hudSection("🌗 Environment", "N", hudSwitch("sw_daylight", "Daylight"))}
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>F</kbd> Flicker · <kbd>G</kbd> Glow · <kbd>L</kbd> Lights · <kbd>H</kbd> Embers · <kbd>R</kbd> Smoke · <kbd>B</kbd> Ember bed · <kbd>X</kbd> Shadows · <kbd>P</kbd> Pause · <kbd>T</kbd> Speed ·
           <kbd>0–4</kbd> Color · <kbd>,</kbd><kbd>.</kbd> Wind direction · <kbd>+</kbd><kbd>−</kbd> Wind strength · <kbd>V</kbd> Budget ·
           <kbd>N</kbd> Tag/Nacht · <kbd>I</kbd> Panel · <kbd>WASD</kbd> Fly

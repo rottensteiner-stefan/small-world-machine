@@ -1,4 +1,4 @@
-import { Vector3D, Quaternion } from "../math/index.js";
+import { Vector3D } from "../math/index.js";
 import type { RigidBody } from "./RigidBody.js";
 
 /**
@@ -25,9 +25,6 @@ import type { RigidBody } from "./RigidBody.js";
  * under a rotated parent are unsupported; `PhysicsSystem` warns once about them.
  */
 export class RigidBodyMath {
-  private readonly _q = new Quaternion(0, 0, 0, 1);
-  private readonly _qc = new Quaternion(0, 0, 0, 1);
-  private readonly _l = new Vector3D();
   private readonly _tau = new Vector3D();
   private readonly _dW = new Vector3D();
   private readonly _dV = new Vector3D();
@@ -141,12 +138,7 @@ export class RigidBodyMath {
    * isotropic inverse inertia this reduces to the legacy per-axis scaling, keeping those paths
    * bit-identical to the original solver.
    */
-  public applyInvInertiaWorld(
-    rb: RigidBody,
-    rotation: Vector3D,
-    x: Vector3D,
-    out: Vector3D,
-  ): void {
+  public applyInvInertiaWorld(rb: RigidBody, rotation: Vector3D, x: Vector3D, out: Vector3D): void {
     this._applyInvInertiaWorld(rb, rotation, x, out);
   }
 
@@ -163,14 +155,19 @@ export class RigidBodyMath {
       out.set(x.x * ix, x.y * iy, x.z * iz);
       return;
     }
-    this._q.setFromEuler(rotation);
-    // Unit quaternion -> conjugate is the inverse: rotate the world vector into the body frame.
-    this._qc.set(-this._q.x, -this._q.y, -this._q.z, this._q.w);
-    this._l.copyFrom(x).applyQuaternion(this._qc);
-    this._l.x *= ix;
-    this._l.y *= iy;
-    this._l.z *= iz;
-    out.copyFrom(this._l).applyQuaternion(this._q);
+    rb.updateInertiaWorld(rotation);
+    const iw = rb.invInertiaWorld;
+    const i00 = iw[0]!,
+      i11 = iw[1]!,
+      i22 = iw[2]!,
+      i01 = iw[3]!,
+      i02 = iw[4]!,
+      i12 = iw[5]!;
+    out.set(
+      i00 * x.x + i01 * x.y + i02 * x.z,
+      i01 * x.x + i11 * x.y + i12 * x.z,
+      i02 * x.x + i12 * x.y + i22 * x.z,
+    );
   }
 }
 

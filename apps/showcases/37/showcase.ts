@@ -31,7 +31,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { box } from "../shared/prim.js";
-import { isTypingTarget } from "../shared/ShowcaseDrawer.js";
+import { isTypingTarget } from "../shared/ShowcaseSettingsPanel.js";
 import { Fire, FireSmokeEmitter, SmokeSpriteMaterial } from "@small-world-machine/vfx-extras";
 import { Hud } from "./Hud.js";
 import {

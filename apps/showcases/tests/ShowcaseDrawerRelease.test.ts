@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
-describe("ShowcaseDrawer release events", () => {
-  const drawer = new ShowcaseDrawer({ id: "t-drawer", icon: "x", title: "t", showPerf: false });
+describe("ShowcaseSettingsPanel release events", () => {
+  const drawer = new ShowcaseSettingsPanel({
+    id: "t-drawer",
+    icon: "x",
+    title: "t",
+    showPerf: false,
+  });
 
   it.each(["mouseup", "pointerup", "touchend"])(
     "%s released inside the drawer still reaches window listeners",

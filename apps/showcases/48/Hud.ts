@@ -1,5 +1,10 @@
-import { hudNote, hudSection, hudSlider, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+import {
+  hudNote,
+  hudSection,
+  hudSlider,
+  ShowcaseSettingsPanel,
+} from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 import { bindRange } from "../shared/hudBindings.js";
 
 /** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
@@ -24,11 +29,11 @@ export interface FoxLabActions {
 }
 
 /**
- * Fox Skinning Lab panel of showcase 48 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Fox Skinning Lab panel of showcase 48 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; the skeleton, mixer and lights stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
@@ -57,7 +62,7 @@ export class Hud {
     `;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "fox-lab-hud",
       title: "Fox Skinning Lab",
       icon: "🦊",

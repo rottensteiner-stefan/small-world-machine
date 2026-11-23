@@ -69,6 +69,7 @@ export class HingeJoint extends Joint {
   public motorSpeed: number;
   /** Maximum motor torque in N*m. */
   public maxMotorTorque: number;
+  private _motorImpulse: number = 0;
 
   constructor(options: HingeJointOptions) {
     super(options);
@@ -80,6 +81,11 @@ export class HingeJoint extends Joint {
     this.enableMotor = options.enableMotor ?? false;
     this.motorSpeed = options.motorSpeed ?? 0;
     this.maxMotorTorque = options.maxMotorTorque ?? Infinity;
+  }
+
+  /** @inheritdoc */
+  public override applyForces(_dt: number): void {
+    this._motorImpulse = 0;
   }
 
   /** World-space hinge axis of bodyA. */
@@ -170,33 +176,45 @@ export class HingeJoint extends Joint {
     const localCanonical = MathPool.acquireVector();
     const worldCanonical = MathPool.acquireVector();
 
-    let angle = Number.NaN;
+    let bestMinLen = 1e-4;
+    let bestSin = 0;
+    let bestCos = 0;
+    let found = false;
+
     for (let i = 0; i < CANDIDATE_AXES.length; i++) {
       const cand = CANDIDATE_AXES[i]!;
       localCanonical.set(cand[0], cand[1], cand[2]);
 
       // Rotate the canonical axis into bodyA's world frame; degenerate if parallel to hinge axis.
       this._rotatedRef(this.bodyA, localCanonical, work);
-      if (this._projectOntoHingePlane(work, axis, refA) === 0) continue;
+      const lenA = this._projectOntoHingePlane(work, axis, refA);
+      if (lenA < 1e-4) continue;
 
+      let lenB: number;
       if (this.bodyB) {
         this._rotatedRef(this.bodyB, localCanonical, work);
-        if (this._projectOntoHingePlane(work, axisB, refB) === 0) continue;
+        lenB = this._projectOntoHingePlane(work, axisB, refB);
       } else {
         // Anchor to a fixed world frame: bodyB does not rotate, so a canonical world direction
         // projected on the hinge plane is a fixed reference for bodyA's rotation.
         worldCanonical.set(cand[0], cand[1], cand[2]);
-        if (this._projectOntoHingePlane(worldCanonical, axis, refB) === 0) continue;
+        lenB = this._projectOntoHingePlane(worldCanonical, axis, refB);
       }
+      if (lenB < 1e-4) continue;
 
-      const cx = refA.y * refB.z - refA.z * refB.y;
-      const cy = refA.z * refB.x - refA.x * refB.z;
-      const cz = refA.x * refB.y - refA.y * refB.x;
-      const sin = cx * axis.x + cy * axis.y + cz * axis.z;
-      const cos = refA.x * refB.x + refA.y * refB.y + refA.z * refB.z;
-      angle = Math.atan2(sin, cos);
-      break;
+      const minLen = lenA < lenB ? lenA : lenB;
+      if (minLen > bestMinLen) {
+        bestMinLen = minLen;
+        const cx = refA.y * refB.z - refA.z * refB.y;
+        const cy = refA.z * refB.x - refA.x * refB.z;
+        const cz = refA.x * refB.y - refA.y * refB.x;
+        bestSin = cx * axis.x + cy * axis.y + cz * axis.z;
+        bestCos = refA.x * refB.x + refA.y * refB.y + refA.z * refB.z;
+        found = true;
+      }
     }
+
+    const angle = found ? Math.atan2(bestSin, bestCos) : Number.NaN;
 
     MathPool.releaseVector(axis);
     MathPool.releaseVector(axisB);
@@ -299,13 +317,16 @@ export class HingeJoint extends Joint {
         if (!drivesIntoUpper && !drivesIntoLower) {
           // Impulse drives motorRel toward motorSpeed: j = (motorSpeed - motorRel) / k
           // increases motorRel by j*k (see _applyAngularImpulse convention).
-          let j = (this.motorSpeed - motorRel) / k;
+          const dImpulse = (this.motorSpeed - motorRel) / k;
           const maxImpulse = this.maxMotorTorque * dt;
+          let newMotorImpulse = this._motorImpulse + dImpulse;
           if (Number.isFinite(maxImpulse)) {
-            j = Math.max(-maxImpulse, Math.min(maxImpulse, j));
+            newMotorImpulse = Math.max(-maxImpulse, Math.min(maxImpulse, newMotorImpulse));
           }
-          if (Math.abs(j) > ANGULAR_EPSILON) {
-            this._applyAngularImpulse(axis, j);
+          const actualImpulse = newMotorImpulse - this._motorImpulse;
+          this._motorImpulse = newMotorImpulse;
+          if (Math.abs(actualImpulse) > ANGULAR_EPSILON) {
+            this._applyAngularImpulse(axis, actualImpulse);
           }
         }
       }

@@ -1,9 +1,9 @@
-import { ShowcaseDrawer, hudNote, hudSection } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel, hudNote, hudSection } from "../shared/ShowcaseSettingsPanel.js";
 import { CAMERA_PATH_NAMES, type PathName } from "./CameraPaths.js";
 
 /**
  * Measurement HUD of Showcase 51 (vegetation rig, ADR 0059 step 0). Built on the shared
- * {@link ShowcaseDrawer} exactly like the 45/46 labs; owns only its content and wiring.
+ * {@link ShowcaseSettingsPanel} exactly like the 45/46 labs; owns only its content and wiring.
  *
  * Surface (mirrored from the 45/46 Hud pattern): `VEG_HUD_TOGGLE_KEYS`, `Hud.handleKey`,
  * `Hud.sync`, `Hud.setReadout`, `Hud.dispose`.
@@ -67,7 +67,7 @@ export interface VegHudStats {
 export interface VegHudOptions {
   /** Engine GPU timing ring, adapted to {@link HudGpuTimings}; `null`/`undefined` = unsupported. */
   gpuTimings?: HudGpuTimings | null;
-  /** CPU frame time in ms; mirrors the ShowcaseDrawer telemetry footer (`getCpuTime`). */
+  /** CPU frame time in ms; mirrors the ShowcaseSettingsPanel telemetry footer (`getCpuTime`). */
   getCpuTime?: (() => number) | undefined;
   /** Called when the user switches the camera path (keys 1-3 or the buttons). */
   onSelectPath(path: PathName): void;
@@ -137,7 +137,7 @@ function fmtCount(value: number): string {
  * the path selection; the showcase reads nothing back from it except via {@link VegHudOptions}.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -170,14 +170,14 @@ export class Hud {
       ).join("") +
       `<button class="btn-preset" data-path="fly" title="Free fly: WASD + mouse look, Space/C up/down, Shift boost">🕹️ fly</button>`;
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "veg-lab-hud",
       title: "Vegetation Lab",
       icon: "🌲",
       toggleKeys: VEG_HUD_TOGGLE_KEYS,
       getCpuTime: options.getCpuTime,
       body: `
-        <div class="hud-section"><pre id="vegLabReadout"></pre></div>
+        <div class="settings-section"><pre id="vegLabReadout"></pre></div>
         ${hudSection(
           "📷 Camera",
           "0 · 1 · 2 · 3",
@@ -218,7 +218,7 @@ export class Hud {
               "Octahedral impostor trees with 3-cell barycentric blend and depth parallax (ADR 0059 step 3; `O`).",
             ),
         )}
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>1</kbd> Walk · <kbd>2</kbd> Flight · <kbd>3</kbd> Aerial · <kbd>F</kbd> Wind · <kbd>L</kbd> LOD · <kbd>K</kbd> Shell · <kbd>O</kbd> Impostors · <kbd>H</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Free fly
         </div>
       `,

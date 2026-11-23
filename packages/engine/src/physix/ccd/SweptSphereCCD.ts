@@ -111,7 +111,9 @@ export class SweptVolumeCCD {
       }
 
       if (earliestToi < 1) {
-        const clampedToi = Math.min(1, earliestToi + CCD_CONTACT_OVERSHOOT);
+        const deltaLen = delta.length();
+        const toiOffset = deltaLen > 1e-4 ? Math.min(CCD_CONTACT_OVERSHOOT, 0.01 / deltaLen) : 0;
+        const clampedToi = Math.min(1, earliestToi + toiOffset);
         obj.position.copyFrom(delta).scale(clampedToi).add(prevPos);
         obj.updateMatrixWorld();
         obj.computeBounds();

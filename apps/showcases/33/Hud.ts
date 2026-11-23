@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
 /** Occlusion culling parameters driven by a single slider. */
 export type HzbParam =
@@ -31,11 +31,11 @@ const SLIDER_IDS: Record<HzbParam, readonly [string, string]> = {
 
 // Showcase-specific styles overriding shared.css defaults.
 const STYLE = `
-  #hzbTuningHud .hud-body { gap: 12px; }
-  #hzbTuningHud .hud-row { margin-bottom: 6px; }
-  #hzbTuningHud .hud-row:last-child { margin-bottom: 0; }
-  .swm-inspector-btn:hover,
-  .swm-inspector-btn.active {
+  #hzbTuningHud .settings-body { gap: 12px; }
+  #hzbTuningHud .settings-row { margin-bottom: 6px; }
+  #hzbTuningHud .settings-row:last-child { margin-bottom: 0; }
+  .swm-settings-toggle:hover,
+  .swm-settings-toggle.active {
     border-color: var(--tool-accent, #f59e0b);
     color: var(--tool-accent, #f59e0b);
   }
@@ -43,19 +43,19 @@ const STYLE = `
 
 const BODY = `
   <!-- Lighting -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">☀️ Lighting</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Ambient Intensity</label>
       <input type="range" id="slAmbientIntensity" min="0" max="4" step="0.05" value="1.73" />
       <span class="val-label" id="valAmbientIntensity">1.73</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Sun Intensity</label>
       <input type="range" id="slSunIntensity" min="0" max="5" step="0.1" value="1.4" />
       <span class="val-label" id="valSunIntensity">1.4</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Shadow Resolution</label>
       <input type="range" id="slShadowResolution" min="512" max="4096" step="256" value="2048" />
       <span class="val-label" id="valShadowResolution">2048</span>
@@ -63,19 +63,19 @@ const BODY = `
   </div>
 
   <!-- Occluder Wall -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🧱 Occluder Wall</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Wall Width</label>
       <input type="range" id="slWallWidth" min="2" max="20" step="0.5" value="10" />
       <span class="val-label" id="valWallWidth">10</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Wall Roughness</label>
       <input type="range" id="slWallRoughness" min="0" max="1" step="0.05" value="0.7" />
       <span class="val-label" id="valWallRoughness">0.70</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Wall Metallic</label>
       <input type="range" id="slWallMetallic" min="0" max="1" step="0.05" value="0.1" />
       <span class="val-label" id="valWallMetallic">0.10</span>
@@ -83,9 +83,9 @@ const BODY = `
   </div>
 
   <!-- Ground -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🌍 Ground</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Ground Roughness</label>
       <input type="range" id="slGroundRoughness" min="0" max="1" step="0.05" value="0.9" />
       <span class="val-label" id="valGroundRoughness">0.90</span>
@@ -93,14 +93,14 @@ const BODY = `
   </div>
 
   <!-- Hidden Field -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🎲 Hidden Field (96 objects)</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Field Roughness</label>
       <input type="range" id="slFieldRoughness" min="0" max="1" step="0.05" value="0.5" />
       <span class="val-label" id="valFieldRoughness">0.50</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Field Metallic</label>
       <input type="range" id="slFieldMetallic" min="0" max="1" step="0.05" value="0.2" />
       <span class="val-label" id="valFieldMetallic">0.20</span>
@@ -116,11 +116,11 @@ const formatValue = (value: number): string =>
   Number.isInteger(value) ? value.toString() : value.toFixed(2);
 
 /**
- * "Hidden City" HZB Occlusion Culling panel on the shared {@link ShowcaseDrawer}.
+ * "Hidden City" HZB Occlusion Culling panel on the shared {@link ShowcaseSettingsPanel}.
  * Owns the controls and their sync; every change goes to the {@link HudActions}.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
 
   constructor(
@@ -134,7 +134,7 @@ export class Hud {
     style.textContent = STYLE;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "hzbTuningHud",
       title: "Hidden City: HZB Occlusion Culling",
       icon: "🏙️",

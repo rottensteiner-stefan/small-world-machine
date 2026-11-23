@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 import { bindRange } from "../shared/hudBindings.js";
 
 export type ProbeMode = "box" | "pole" | "steps";
@@ -58,11 +58,11 @@ export function formatSlider(name: ShadowLabSlider, value: number): string {
 }
 
 /**
- * Soft Shadow Lab panel of showcase 42 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Soft Shadow Lab panel of showcase 42 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; probes, lights and shadow settings stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
@@ -88,7 +88,7 @@ export class Hud {
     `;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "showcase-hud",
       title: "Soft Shadow Lab",
       icon: "🌒",
@@ -96,7 +96,7 @@ export class Hud {
       footerIcon: "⚙",
       buttonId: "shadowLabInspectorBtn",
       body: `
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">
             <span>📐 Probe Geometry</span>
             <span style="font-size: 9px; color: #64748b;">Keys 1–3</span>
@@ -106,7 +106,7 @@ export class Hud {
             <button id="btnProbePole" class="btn-preset" title="Thin Pole: sharp contact -> wide far penumbra (Key 2)">2 · Pole</button>
             <button id="btnProbeSteps" class="btn-preset" title="Multi-height bars + sphere: compare blocker distances (Key 3)">3 · Step Rig</button>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slLiftY" title="Lift the caster off the floor to watch the contact shadow soften">Caster Lift Y</label>
             <input id="slLiftY" type="range" min="0" max="2.5" step="0.02" value="0" />
             <span id="valLiftY" class="val-label">0.00 m</span>
@@ -116,7 +116,7 @@ export class Hud {
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">
             <span>🌗 Shadow Technique</span>
             <span style="font-size: 9px; color: #64748b;">ADR 0006 / 0043</span>
@@ -126,12 +126,12 @@ export class Hud {
             <button id="btnModeEvsm" class="btn-preset" title="Exponential Variance Shadow Maps (Warped Moment Filtering)">EVSM (Moments)</button>
           </div>
           <div id="pcssKernelRows">
-            <div class="hud-row">
+            <div class="settings-row">
               <label for="slSoftness" title="Scales penumbra growth with blocker distance (quality.shadowSoftness)">Penumbra Softness</label>
               <input id="slSoftness" type="range" min="0" max="5" step="0.05" value="1" />
               <span id="valSoftness" class="val-label">1.00</span>
             </div>
-            <div class="hud-row">
+            <div class="settings-row">
               <label for="slMaxRadius" title="Maximum PCF kernel radius in shadow-map texels (quality.shadowMaxPcfRadius)">Max PCF Radius</label>
               <input id="slMaxRadius" type="range" min="1" max="16" step="1" value="4" />
               <span id="valMaxRadius" class="val-label">4 px</span>
@@ -139,43 +139,43 @@ export class Hud {
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">
             <span>☀️ Sun & Shadow Bias</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slSunElev" title="Sun elevation angle above the horizon">Sun Elevation</label>
             <input id="slSunElev" type="range" min="12" max="75" step="1" value="45" />
             <span id="valSunElev" class="val-label">45°</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slSunAzim" title="Horizontal sun direction angle">Sun Azimuth</label>
             <input id="slSunAzim" type="range" min="-90" max="90" step="1" value="25" />
             <span id="valSunAzim" class="val-label">25°</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slSunInt" title="Directional light intensity">Sun Intensity</label>
             <input id="slSunInt" type="range" min="0.5" max="8" step="0.1" value="2.6" />
             <span id="valSunInt" class="val-label">2.60</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slAmbInt" title="Ambient fill light intensity (controls shadow darkness)">Ambient Fill</label>
             <input id="slAmbInt" type="range" min="0" max="1.5" step="0.01" value="0.38" />
             <span id="valAmbInt" class="val-label">0.38</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slBias" title="Depth bias: too low = shadow acne, too high = peter-panning">Depth Bias</label>
             <input id="slBias" type="range" min="0" max="0.005" step="0.0001" value="0.0006" />
             <span id="valBias" class="val-label">0.0006</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slNormalBias" title="Normal-offset bias along surface normal">Normal Bias</label>
             <input id="slNormalBias" type="range" min="0" max="0.08" step="0.002" value="0.02" />
             <span id="valNormalBias" class="val-label">0.020</span>
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">
             <span>🎥 Camera & GPU Readout</span>
             <span style="font-size: 9px; color: #64748b;">Drag / Wheel / R</span>

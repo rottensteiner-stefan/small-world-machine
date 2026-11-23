@@ -183,11 +183,18 @@ export class SkinnedMesh extends Object3D {
     const minL = localBounds.min;
     const maxL = localBounds.max;
 
+    const cx = (minL.x + maxL.x) * 0.5;
+    const cy = (minL.y + maxL.y) * 0.5;
+    const cz = (minL.z + maxL.z) * 0.5;
+
+    const ex = (maxL.x - minL.x) * 0.5;
+    const ey = (maxL.y - minL.y) * 0.5;
+    const ez = (maxL.z - minL.z) * 0.5;
+
     const bones = this.skeleton.bones;
     const invBinds = this.skeleton.boneInverses;
     const boneCount = Math.min(bones.length, MAX_SKINNED_BONES);
     const m = MathPool.acquireMatrix();
-    const scratch = MathPool.acquireVector();
 
     let minX = Infinity;
     let minY = Infinity;
@@ -202,27 +209,31 @@ export class SkinnedMesh extends Object3D {
       const invBind = invBinds[i] ?? bone.inverseBindMatrix;
       // M_i = bone.worldMatrix_i * inverseBind_i (the engine's skin transform, world space).
       Matrix4.multiply(bone.worldMatrix, invBind, m);
-      // 8 corners of the local AABB, enumerated bitwise (allocation-free).
-      for (let c = 0; c < 8; c++) {
-        scratch.set(
-          (c & 1) === 0 ? minL.x : maxL.x,
-          (c & 2) === 0 ? minL.y : maxL.y,
-          (c & 4) === 0 ? minL.z : maxL.z,
-        );
-        m.transformVector(scratch);
-        const x = scratch.x;
-        const y = scratch.y;
-        const z = scratch.z;
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (z < minZ) minZ = z;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-        if (z > maxZ) maxZ = z;
-      }
+      const e = m.data;
+
+      const bcX = e[0]! * cx + e[4]! * cy + e[8]! * cz + e[12]!;
+      const bcY = e[1]! * cx + e[5]! * cy + e[9]! * cz + e[13]!;
+      const bcZ = e[2]! * cx + e[6]! * cy + e[10]! * cz + e[14]!;
+
+      const beX = Math.abs(e[0]!) * ex + Math.abs(e[4]!) * ey + Math.abs(e[8]!) * ez;
+      const beY = Math.abs(e[1]!) * ex + Math.abs(e[5]!) * ey + Math.abs(e[9]!) * ez;
+      const beZ = Math.abs(e[2]!) * ex + Math.abs(e[6]!) * ey + Math.abs(e[10]!) * ez;
+
+      const bMinX = bcX - beX;
+      const bMinY = bcY - beY;
+      const bMinZ = bcZ - beZ;
+      const bMaxX = bcX + beX;
+      const bMaxY = bcY + beY;
+      const bMaxZ = bcZ + beZ;
+
+      if (bMinX < minX) minX = bMinX;
+      if (bMinY < minY) minY = bMinY;
+      if (bMinZ < minZ) minZ = bMinZ;
+      if (bMaxX > maxX) maxX = bMaxX;
+      if (bMaxY > maxY) maxY = bMaxY;
+      if (bMaxZ > maxZ) maxZ = bMaxZ;
     }
 
-    MathPool.releaseVector(scratch);
     MathPool.releaseMatrix(m);
 
     // Reuse an existing BOX bounds instance to stay allocation-free across frames.

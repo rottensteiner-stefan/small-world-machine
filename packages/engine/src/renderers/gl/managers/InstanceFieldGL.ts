@@ -1050,17 +1050,21 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
 
     // WebGL1 companion: yaw/scale as two f32 per record (frozen `unpackInstancePose`, the
     // engine cell sorter's own unpacking). GL2 never binds it (reads the packed u32 instead).
-    const companion = new Float32Array(this._totalInstances * GL1_COMPANION_FLOATS);
-    const words = this._recordWords;
-    for (let i = 0; i < this._totalInstances; i++) {
-      unpackInstancePose(words[i * 4 + 3]!, this._poseScratch);
-      companion[i * 2] = this._poseScratch.yawRadians;
-      companion[i * 2 + 1] = this._poseScratch.uniformScale;
+    const isWebGL2 =
+      typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
+    if (!isWebGL2) {
+      const companion = new Float32Array(this._totalInstances * GL1_COMPANION_FLOATS);
+      const words = this._recordWords;
+      for (let i = 0; i < this._totalInstances; i++) {
+        unpackInstancePose(words[i * 4 + 3]!, this._poseScratch);
+        companion[i * 2] = this._poseScratch.yawRadians;
+        companion[i * 2 + 1] = this._poseScratch.uniformScale;
+      }
+      this._gl1CompanionVbo ??= gl.createBuffer() ?? undefined;
+      if (!this._gl1CompanionVbo) return;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._gl1CompanionVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, companion, gl.STATIC_DRAW);
     }
-    this._gl1CompanionVbo ??= gl.createBuffer() ?? undefined;
-    if (!this._gl1CompanionVbo) return;
-    gl.bindBuffer(gl.ARRAY_BUFFER, this._gl1CompanionVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, companion, gl.STATIC_DRAW);
   }
 
   /** Deletes the GL buffers this manager owns (teardown path; the renderer destroys every
@@ -1174,47 +1178,54 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
     stack[sp++] = 0;
     stack[sp++] = length - 1;
     while (sp > 0) {
-      const hi = stack[--sp]!;
-      const lo = stack[--sp]!;
-      if (hi - lo < 24) {
-        for (let i = lo + 1; i <= hi; i++) {
-          const cur = indices[i]!;
-          const key = keys[cur]!;
-          let j = i - 1;
-          while (j >= lo && keys[indices[j]!]! > key) {
-            indices[j + 1] = indices[j]!;
-            j--;
-          }
-          indices[j + 1] = cur;
+      let hi = stack[--sp]!;
+      let lo = stack[--sp]!;
+      while (hi - lo >= 24) {
+        const mid = (lo + hi) >>> 1;
+        const ka = keys[lo]!;
+        const kb = keys[mid]!;
+        const kc = keys[hi]!;
+        let pivot: number;
+        if (ka < kb) pivot = kb < kc ? kb : ka < kc ? kc : ka;
+        else pivot = ka < kc ? ka : kb < kc ? kc : kb;
+        let i = lo - 1;
+        let j = hi + 1;
+        for (;;) {
+          do i++;
+          while (keys[i]! < pivot);
+          do j--;
+          while (keys[j]! > pivot);
+          if (i >= j) break;
+          const tIdx = indices[i]!;
+          indices[i] = indices[j]!;
+          indices[j] = tIdx;
+          const tKey = keys[i]!;
+          keys[i] = keys[j]!;
+          keys[j] = tKey;
         }
-        continue;
+        // Push the larger partition, continue loop on the smaller partition:
+        if (j - lo < hi - j) {
+          stack[sp++] = j + 1;
+          stack[sp++] = hi;
+          hi = j;
+        } else {
+          stack[sp++] = lo;
+          stack[sp++] = j;
+          lo = j + 1;
+        }
       }
-      const mid = (lo + hi) >>> 1;
-      const ka = keys[indices[lo]!]!;
-      const kb = keys[indices[mid]!]!;
-      const kc = keys[indices[hi]!]!;
-      let pivot: number;
-      if (ka < kb) pivot = kb < kc ? kb : ka < kc ? kc : ka;
-      else pivot = ka < kc ? ka : kb < kc ? kc : kb;
-      let i = lo - 1;
-      let j = hi + 1;
-      for (;;) {
-        do i++;
-        while (keys[indices[i]!]! < pivot);
-        do j--;
-        while (keys[indices[j]!]! > pivot);
-        if (i >= j) break;
-        const t = indices[i]!;
-        indices[i] = indices[j]!;
-        indices[j] = t;
-      }
-      // Push the LARGER partition, continue on the smaller -> stack depth stays O(log n).
-      if (j - lo < hi - j) {
-        stack[sp++] = j + 1;
-        stack[sp++] = hi;
-      } else {
-        stack[sp++] = lo;
-        stack[sp++] = j;
+      // Insertion sort for remaining slice [lo, hi]
+      for (let i = lo + 1; i <= hi; i++) {
+        const curIdx = indices[i]!;
+        const curKey = keys[i]!;
+        let j = i - 1;
+        while (j >= lo && keys[j]! > curKey) {
+          indices[j + 1] = indices[j]!;
+          keys[j + 1] = keys[j]!;
+          j--;
+        }
+        indices[j + 1] = curIdx;
+        keys[j + 1] = curKey;
       }
     }
   }
@@ -1222,51 +1233,55 @@ export class InstanceFieldGL implements InstanceFieldRuntimeApi {
   /** Sorts the kept-cell list by first-run index (VBO/cell order) for the merge pass. */
   private _sortKeptByFirstRun(cells: Uint32Array, length: number): void {
     if (length < 2) return;
+    const firstRuns = this._cellsFirstRun;
     const stack = this._sortStack;
     let sp = 0;
     stack[sp++] = 0;
     stack[sp++] = length - 1;
     while (sp > 0) {
-      const hi = stack[--sp]!;
-      const lo = stack[--sp]!;
-      if (hi - lo < 24) {
-        for (let i = lo + 1; i <= hi; i++) {
-          const cur = cells[i]!;
-          const key = this._cellsFirstRun[cur]!;
-          let j = i - 1;
-          while (j >= lo && this._cellsFirstRun[cells[j]!]! > key) {
-            cells[j + 1] = cells[j]!;
-            j--;
-          }
-          cells[j + 1] = cur;
+      let hi = stack[--sp]!;
+      let lo = stack[--sp]!;
+      while (hi - lo >= 24) {
+        const mid = (lo + hi) >>> 1;
+        const ka = firstRuns[cells[lo]!]!;
+        const kb = firstRuns[cells[mid]!]!;
+        const kc = firstRuns[cells[hi]!]!;
+        let pivot: number;
+        if (ka < kb) pivot = kb < kc ? kb : ka < kc ? kc : ka;
+        else pivot = ka < kc ? ka : kb < kc ? kc : kb;
+        let i = lo - 1;
+        let j = hi + 1;
+        for (;;) {
+          do i++;
+          while (firstRuns[cells[i]!]! < pivot);
+          do j--;
+          while (firstRuns[cells[j]!]! > pivot);
+          if (i >= j) break;
+          const t = cells[i]!;
+          cells[i] = cells[j]!;
+          cells[j] = t;
         }
-        continue;
+        // Push the larger partition, continue loop on the smaller partition:
+        if (j - lo < hi - j) {
+          stack[sp++] = j + 1;
+          stack[sp++] = hi;
+          hi = j;
+        } else {
+          stack[sp++] = lo;
+          stack[sp++] = j;
+          lo = j + 1;
+        }
       }
-      const mid = (lo + hi) >>> 1;
-      const ka = this._cellsFirstRun[cells[lo]!]!;
-      const kb = this._cellsFirstRun[cells[mid]!]!;
-      const kc = this._cellsFirstRun[cells[hi]!]!;
-      let pivot: number;
-      if (ka < kb) pivot = kb < kc ? kb : ka < kc ? kc : ka;
-      else pivot = ka < kc ? ka : kb < kc ? kc : kb;
-      let i = lo - 1;
-      let j = hi + 1;
-      for (;;) {
-        do i++;
-        while (this._cellsFirstRun[cells[i]!]! < pivot);
-        do j--;
-        while (this._cellsFirstRun[cells[j]!]! > pivot);
-        if (i >= j) break;
-        const t = cells[i]!;
-        cells[i] = cells[j]!;
-        cells[j] = t;
-      }
-      if (j - lo < hi - j) {
-        stack[sp++] = j + 1;
-        stack[sp++] = hi;
-      } else {
-        stack[sp++] = lo;
-        stack[sp++] = j;
+      // Insertion sort for remaining slice [lo, hi]
+      for (let i = lo + 1; i <= hi; i++) {
+        const cur = cells[i]!;
+        const key = firstRuns[cur]!;
+        let j = i - 1;
+        while (j >= lo && firstRuns[cells[j]!]! > key) {
+          cells[j + 1] = cells[j]!;
+          j--;
+        }
+        cells[j + 1] = cur;
       }
     }
   }

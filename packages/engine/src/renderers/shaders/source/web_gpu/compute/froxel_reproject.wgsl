@@ -21,9 +21,7 @@ struct FroxelReprojectSettings {
 fn sliceDepth(slice: f32, near: f32, far: f32, slices: f32) -> f32 {
     let n = max(near, 1e-6);
     let f = max(far, n + 1e-6);
-    let low = pow(f / n, slice / slices) * n;
-    let high = pow(f / n, (slice + 1.0) / slices) * n;
-    return max(n * 1.001, sqrt(low * high));
+    return max(n * 1.001, n * pow(f / n, (slice + 0.5) / slices));
 }
 
 // Inverse mapping: view-space depth -> normalized [0, 1] slice coordinate.
@@ -91,9 +89,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let prevClip = uni.prevViewProj * vec4f(worldPos, 1.0);
     var blendedResult = currentSample;
 
+    let prevIsOrtho = abs(prevClip.w - 1.0) < 1e-4;
     if (prevClip.w > 0.001) {
-        let prevUV = prevClip.xy / prevClip.w * vec2f(0.5, -0.5) + vec2f(0.5, 0.5);
-        let prevViewZ = prevClip.w;
+        let invW = select(1.0 / prevClip.w, 1.0, prevIsOrtho);
+        let prevUV = prevClip.xy * invW * vec2f(0.5, -0.5) + vec2f(0.5, 0.5);
+        let prevViewZ = select(prevClip.w, mix(near, far, clamp(prevClip.z, 0.0, 1.0)), prevIsOrtho);
         let prevSliceW = depthToNormalizedSlice(prevViewZ, near, far);
 
         // Check if previous position lies within previous view frustum.

@@ -1,4 +1,4 @@
-import { ShowcaseDrawer, hudSwitch } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel, hudSwitch } from "../shared/ShowcaseSettingsPanel.js";
 
 /** Scene state the panel mirrors. */
 export interface HudState {
@@ -15,11 +15,11 @@ export interface HudActions {
 }
 
 /**
- * Cyberpunk Albedo panel of showcase 30 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Cyberpunk Albedo panel of showcase 30 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; mood, camera and liquid state stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _mood: HTMLInputElement;
   private readonly _puddle: HTMLInputElement;
   private readonly _fluid: HTMLSelectElement;
@@ -31,7 +31,7 @@ export class Hud {
           `<option value="${idx}">${fluid.charAt(0).toUpperCase() + fluid.slice(1).replace(/_/g, " ")}</option>`,
       )
       .join("");
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "cyberpunk-hud",
       title: "Cyberpunk Albedo",
       icon: "🌧️",
@@ -39,15 +39,15 @@ export class Hud {
       footerIcon: "⚙",
       buttonId: "cyberpunkInspectorBtn",
       body: `
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">🌃 Environment & Camera</div>
           ${hudSwitch("swMood", "Night Mood")}
           ${hudSwitch("swPuddle", "Puddle Camera")}
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">💧 Fluid Surface</div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="selFluid">Liquid Preset</label>
             <select id="selFluid">${options}</select>
           </div>

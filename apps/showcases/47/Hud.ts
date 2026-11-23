@@ -3,9 +3,9 @@ import {
   hudSection,
   hudSlider,
   hudSwitch,
-  ShowcaseDrawer,
-} from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+  ShowcaseSettingsPanel,
+} from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 import { bindRange } from "../shared/hudBindings.js";
 import { ToneMappingMode } from "@small-world-machine/engine";
 
@@ -59,11 +59,11 @@ export function formatSlider(name: LabSlider, value: number): string {
 }
 
 /**
- * PBR Reference Lab panel of showcase 47 on the shared {@link ShowcaseDrawer}. Owns only its
+ * PBR Reference Lab panel of showcase 47 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; the reference grid, lights and post-processing stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
@@ -92,7 +92,7 @@ export class Hud {
     `;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "pbr-lab-hud",
       title: "PBR Reference Lab",
       icon: "🔬",

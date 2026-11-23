@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
 export type MaterialLabSlider =
   "Roughness" | "Metallic" | "Azimuth" | "Elevation" | "KeyIntensity" | "Ambient";
@@ -37,11 +37,11 @@ const SLIDERS: readonly MaterialLabSlider[] = [
 ];
 
 /**
- * Material Lab panel of showcase 43 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Material Lab panel of showcase 43 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; material, light and studio state stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _presetCount: number;
 
@@ -65,57 +65,57 @@ export class Hud {
       )
       .join("");
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "showcase-hud",
       title: "Material Lab",
       icon: "⚪",
       footerIcon: "⚙",
       body: `
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>🎨 Material</span><span style="font-size:9px;color:#64748b;">Keys 1–4 · [ ]</span></div>
           <div class="preset-group four-col" style="margin-bottom:8px;">${presetButtons}</div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43SlRoughness" title="Micro-surface roughness ([ / ])">Roughness</label>
             <input id="st43SlRoughness" type="range" min="0" max="1" step="0.01" />
             <span id="st43ValRoughness" class="val-label"></span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43SlMetallic" title="Dielectric (0) to metal (1) (Shift + [ / ])">Metallic</label>
             <input id="st43SlMetallic" type="range" min="0" max="1" step="0.01" />
             <span id="st43ValMetallic" class="val-label"></span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43Color">Base Color</label>
             <input id="st43Color" type="color" />
             <span class="val-label"></span>
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>☀️ Key Light</span><span style="font-size:9px;color:#64748b;">Arrows · Shift = fine</span></div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43SlAzimuth">Azimuth</label>
             <input id="st43SlAzimuth" type="range" min="-180" max="180" step="1" />
             <span id="st43ValAzimuth" class="val-label"></span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43SlElevation">Elevation</label>
             <input id="st43SlElevation" type="range" min="${elevationRange.min}" max="${elevationRange.max}" step="1" />
             <span id="st43ValElevation" class="val-label"></span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43SlKeyIntensity">Intensity</label>
             <input id="st43SlKeyIntensity" type="range" min="0" max="5" step="0.05" />
             <span id="st43ValKeyIntensity" class="val-label"></span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="st43SlAmbient" title="Flat fill light; controls how dark the shadow gets">Ambient</label>
             <input id="st43SlAmbient" type="range" min="0" max="3" step="0.01" />
             <span id="st43ValAmbient" class="val-label"></span>
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>🧭 Studio</span></div>
           <div class="preset-group two-col">
             <button id="st43BtnIbl" class="btn-preset" title="Image-based lighting (Key E)">E · IBL</button>
@@ -125,7 +125,7 @@ export class Hud {
           <button id="st43BtnReset" class="btn-preset" style="width:100%;margin-top:8px;" title="Golden reference state (Key 0)">0 · Reset to Reference</button>
         </div>
 
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>Drag</kbd> orbit · <kbd>Wheel</kbd> zoom · <kbd>R</kbd> camera reset · <kbd>I</kbd> panel
         </div>
       `,

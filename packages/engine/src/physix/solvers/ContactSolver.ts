@@ -519,7 +519,7 @@ export class ContactSolver {
     }
 
     if (effInvMassN > 0) {
-      const relaxation = iter > 0 ? 1.2 : 1.0;
+      const relaxation = 1.0;
       const delta = ((pair.bounceTarget - velAlongNormal) / effInvMassN) * relaxation;
       const newAcc = Math.max(0, pair.accNormalImpulse + delta);
       const applied = newAcc - pair.accNormalImpulse;

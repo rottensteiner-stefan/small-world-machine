@@ -358,47 +358,49 @@ for(var k=0u; k<pointCluster.y; k++) {
     }
     
     if (attenuation > 0.0) {
-        let H = normalize(V + L);
-        // Geometric (interpolated vertex) normal for the shadow bias, as WebGL2 pointShadowFactor(v_normal).
-        let geomN = normalize(i.n);
-        let pShadow = getPointShadow(u_spotShadowMap, shadowSampler, j, pLights[j].pos.xyz, i.wp, geomN, max(dot(geomN, L), 0.0));
-        let radiance = pLights[j].col.xyz * attenuation * pShadow;
-        
         let dotNL = max(dot(N, L), 0.0);
-        let dotNH = max(dot(N, H), 0.0);
-        let dotVH = max(dot(V, H), 0.0);
+        if (dotNL > 0.0) {
+            let H = normalize(V + L);
+            // Geometric (interpolated vertex) normal for the shadow bias, as WebGL2 pointShadowFactor(v_normal).
+            let geomN = normalize(i.n);
+            let pShadow = getPointShadow(u_spotShadowMap, shadowSampler, j, pLights[j].pos.xyz, i.wp, geomN, max(dot(geomN, L), 0.0));
+            let radiance = pLights[j].col.xyz * attenuation * pShadow;
+            
+            let dotNH = max(dot(N, H), 0.0);
+            let dotVH = max(dot(V, H), 0.0);
 
-        let D = D_GGX(dotNH, roughness);
-        let G = G_SchlickGGX(dotNL, dotNV, roughness);
-        let F = F_Schlick90(dotVH, F0, F90);
+            let D = D_GGX(dotNH, roughness);
+            let G = G_SchlickGGX(dotNL, dotNV, roughness);
+            let F = F_Schlick90(dotVH, F0, F90);
 
-        let kS = F;
-        let kD = (vec3f(1.0) - kS) * (1.0 - metallic);
-        var specular = (D * G * F) / (4.0 * dotNV * dotNL + 0.0001);
+            let kS = F;
+            let kD = (vec3f(1.0) - kS) * (1.0 - metallic);
+            var specular = (D * G * F) / (4.0 * dotNV * dotNL + 0.0001);
 #ifdef USE_ANISOTROPY
-        specular = F * specularAnisotropic(anisoT, anisoB, V, L, H, dotNL, dotNV, dotNH, anisoAlphaT, anisoAlpha);
+            specular = F * specularAnisotropic(anisoT, anisoB, V, L, H, dotNL, dotNV, dotNH, anisoAlphaT, anisoAlpha);
 #endif
-        var directLight = (kD * diffuseAlbedo / 3.14159265359 + specular) * radiance * dotNL;
+            var directLight = (kD * diffuseAlbedo / 3.14159265359 + specular) * radiance * dotNL;
 
-        if (sheenOn) {
-            let D_s = D_Charlie(dotNH, sheenRoughness);
-            let V_s = V_Neubelt(dotNL, dotNV);
-            let sheenSpecular = sheenColor * (D_s * V_s);
-            directLight = directLight * sheenEnergyComp + sheenSpecular * radiance * dotNL;
+            if (sheenOn) {
+                let D_s = D_Charlie(dotNH, sheenRoughness);
+                let V_s = V_Neubelt(dotNL, dotNV);
+                let sheenSpecular = sheenColor * (D_s * V_s);
+                directLight = directLight * sheenEnergyComp + sheenSpecular * radiance * dotNL;
+            }
+
+            if (clearcoat > 0.0) {
+                let dotNL_cc = max(dot(N_cc, L), 0.0);
+                let dotNH_cc = max(dot(N_cc, H), 0.0);
+                let dotVH_cc = max(dot(V, H), 0.0);
+                let D_cc = D_GGX(dotNH_cc, clearcoatRoughness);
+                let G_cc = G_Kelemen(dotVH_cc);
+                let F_cc = F_Schlick(dotVH_cc, vec3f(0.04));
+                let clearcoatSpecular = (D_cc * G_cc * F_cc) * clearcoat;
+                directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL_cc;
+            }
+
+            Lo += directLight;
         }
-
-        if (clearcoat > 0.0) {
-            let dotNL_cc = max(dot(N_cc, L), 0.0);
-            let dotNH_cc = max(dot(N_cc, H), 0.0);
-            let dotVH_cc = max(dot(V, H), 0.0);
-            let D_cc = D_GGX(dotNH_cc, clearcoatRoughness);
-            let G_cc = G_Kelemen(dotVH_cc);
-            let F_cc = F_Schlick(dotVH_cc, vec3f(0.04));
-            let clearcoatSpecular = (D_cc * G_cc * F_cc) * clearcoat;
-            directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL_cc;
-        }
-
-        Lo += directLight;
     }
 }
 
@@ -422,53 +424,55 @@ for(var k=0u; k<spotCluster.y; k++) {
     let intensity = clamp((theta - cosOuter) / epsilon, 0.0, 1.0);
     
     if (intensity > 0.0 && dist < maxDist) {
-        let H = normalize(V + L);
-        let distanceAttenuation = pow(clamp(1.0 - dist / maxDist, 0.0, 1.0), decay);
-        let attenuation = distanceAttenuation * intensity;
-        
-        var shadow: f32 = 1.0;
-        if (j < 4u && global.spotShadowInfo[j].z > 0.5) {
-            let shadowPos = global.spotShadowMatrices[j] * vec4f(i.wp + N * global.spotShadowInfo[j].y * (1.0 - max(dot(N, L), 0.0)), 1.0);
-            shadow = getShadowPCSS(u_spotShadowMap, shadowSampler, shadowPos, j, global.spotShadowInfo[j].x);
-        }
-        
-        let radiance = sLights[j].col.xyz * attenuation * shadow;
-
         let dotNL = max(dot(N, L), 0.0);
-        let dotNH = max(dot(N, H), 0.0);
-        let dotVH = max(dot(V, H), 0.0);
+        if (dotNL > 0.0) {
+            let H = normalize(V + L);
+            let distanceAttenuation = pow(clamp(1.0 - dist / maxDist, 0.0, 1.0), decay);
+            let attenuation = distanceAttenuation * intensity;
+            
+            var shadow: f32 = 1.0;
+            if (j < 4u && global.spotShadowInfo[j].z > 0.5) {
+                let shadowPos = global.spotShadowMatrices[j] * vec4f(i.wp + N * global.spotShadowInfo[j].y * (1.0 - dotNL), 1.0);
+                shadow = getShadowPCSS(u_spotShadowMap, shadowSampler, shadowPos, j, global.spotShadowInfo[j].x);
+            }
+            
+            let radiance = sLights[j].col.xyz * attenuation * shadow;
 
-        let D = D_GGX(dotNH, roughness);
-        let G = G_SchlickGGX(dotNL, dotNV, roughness);
-        let F = F_Schlick90(dotVH, F0, F90);
+            let dotNH = max(dot(N, H), 0.0);
+            let dotVH = max(dot(V, H), 0.0);
 
-        let kS = F;
-        let kD = (vec3f(1.0) - kS) * (1.0 - metallic);
-        var specular = (D * G * F) / (4.0 * dotNV * dotNL + 0.0001);
+            let D = D_GGX(dotNH, roughness);
+            let G = G_SchlickGGX(dotNL, dotNV, roughness);
+            let F = F_Schlick90(dotVH, F0, F90);
+
+            let kS = F;
+            let kD = (vec3f(1.0) - kS) * (1.0 - metallic);
+            var specular = (D * G * F) / (4.0 * dotNV * dotNL + 0.0001);
 #ifdef USE_ANISOTROPY
-        specular = F * specularAnisotropic(anisoT, anisoB, V, L, H, dotNL, dotNV, dotNH, anisoAlphaT, anisoAlpha);
+            specular = F * specularAnisotropic(anisoT, anisoB, V, L, H, dotNL, dotNV, dotNH, anisoAlphaT, anisoAlpha);
 #endif
-        var directLight = (kD * diffuseAlbedo / 3.14159265359 + specular) * radiance * dotNL;
+            var directLight = (kD * diffuseAlbedo / 3.14159265359 + specular) * radiance * dotNL;
 
-        if (sheenOn) {
-            let D_s = D_Charlie(dotNH, sheenRoughness);
-            let V_s = V_Neubelt(dotNL, dotNV);
-            let sheenSpecular = sheenColor * (D_s * V_s);
-            directLight = directLight * sheenEnergyComp + sheenSpecular * radiance * dotNL;
+            if (sheenOn) {
+                let D_s = D_Charlie(dotNH, sheenRoughness);
+                let V_s = V_Neubelt(dotNL, dotNV);
+                let sheenSpecular = sheenColor * (D_s * V_s);
+                directLight = directLight * sheenEnergyComp + sheenSpecular * radiance * dotNL;
+            }
+
+            if (clearcoat > 0.0) {
+                let dotNL_cc = max(dot(N_cc, L), 0.0);
+                let dotNH_cc = max(dot(N_cc, H), 0.0);
+                let dotVH_cc = max(dot(V, H), 0.0);
+                let D_cc = D_GGX(dotNH_cc, clearcoatRoughness);
+                let G_cc = G_Kelemen(dotVH_cc);
+                let F_cc = F_Schlick(dotVH_cc, vec3f(0.04));
+                let clearcoatSpecular = (D_cc * G_cc * F_cc) * clearcoat;
+                directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL_cc;
+            }
+
+            Lo += directLight;
         }
-
-        if (clearcoat > 0.0) {
-            let dotNL_cc = max(dot(N_cc, L), 0.0);
-            let dotNH_cc = max(dot(N_cc, H), 0.0);
-            let dotVH_cc = max(dot(V, H), 0.0);
-            let D_cc = D_GGX(dotNH_cc, clearcoatRoughness);
-            let G_cc = G_Kelemen(dotVH_cc);
-            let F_cc = F_Schlick(dotVH_cc, vec3f(0.04));
-            let clearcoatSpecular = (D_cc * G_cc * F_cc) * clearcoat;
-            directLight = directLight * (1.0 - clearcoat * F_cc.x) + clearcoatSpecular * radiance * dotNL_cc;
-        }
-
-        Lo += directLight;
     }
 }
 
@@ -562,7 +566,7 @@ let envBRDF = textureSampleLevel(u_brdfLUT, globalSampler, vec2f(max(dotNV, 0.0)
 
 // Multi-scattering IBL (Fdez-Aguera 2019, JCGT 8(1)): compensates single-scattering energy loss on rough surfaces.
 // @invariant PBR-ENERGY-CONSERVATION
-let FssEss = kS_ambient * envBRDF.x + F90 * envBRDF.y;
+let FssEss = F0 * envBRDF.x + F90 * envBRDF.y;
 let Ess = envBRDF.x + envBRDF.y;
 let Ems = max(1.0 - Ess, 0.0);
 let Favg = F0 + (vec3f(F90) - F0) * (1.0 / 21.0);

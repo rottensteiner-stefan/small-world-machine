@@ -222,114 +222,26 @@ export class BoundingBox implements BoundingVolumeShape {
     const maxY = this.max.y;
     const maxZ = this.max.z;
 
-    // Translation component
-    let newMinX = e[12]!;
-    let newMaxX = e[12]!;
-    let newMinY = e[13]!;
-    let newMaxY = e[13]!;
-    let newMinZ = e[14]!;
-    let newMaxZ = e[14]!;
+    // Arvo's algorithm: branchless center-extent transform
+    const cx = (minX + maxX) * 0.5;
+    const cy = (minY + maxY) * 0.5;
+    const cz = (minZ + maxZ) * 0.5;
 
-    // X column contribution
-    let a = e[0]! * minX;
-    let b = e[0]! * maxX;
-    if (a < b) {
-      newMinX += a;
-      newMaxX += b;
-    } else {
-      newMinX += b;
-      newMaxX += a;
-    }
+    const ex = (maxX - minX) * 0.5;
+    const ey = (maxY - minY) * 0.5;
+    const ez = (maxZ - minZ) * 0.5;
 
-    a = e[1]! * minX;
-    b = e[1]! * maxX;
-    if (a < b) {
-      newMinY += a;
-      newMaxY += b;
-    } else {
-      newMinY += b;
-      newMaxY += a;
-    }
+    const newCenterX = e[0]! * cx + e[4]! * cy + e[8]! * cz + e[12]!;
+    const newCenterY = e[1]! * cx + e[5]! * cy + e[9]! * cz + e[13]!;
+    const newCenterZ = e[2]! * cx + e[6]! * cy + e[10]! * cz + e[14]!;
 
-    a = e[2]! * minX;
-    b = e[2]! * maxX;
-    if (a < b) {
-      newMinZ += a;
-      newMaxZ += b;
-    } else {
-      newMinZ += b;
-      newMaxZ += a;
-    }
+    const newExtentX = Math.abs(e[0]!) * ex + Math.abs(e[4]!) * ey + Math.abs(e[8]!) * ez;
+    const newExtentY = Math.abs(e[1]!) * ex + Math.abs(e[5]!) * ey + Math.abs(e[9]!) * ez;
+    const newExtentZ = Math.abs(e[2]!) * ex + Math.abs(e[6]!) * ey + Math.abs(e[10]!) * ez;
 
-    // Y column contribution
-    a = e[4]! * minY;
-    b = e[4]! * maxY;
-    if (a < b) {
-      newMinX += a;
-      newMaxX += b;
-    } else {
-      newMinX += b;
-      newMaxX += a;
-    }
-
-    a = e[5]! * minY;
-    b = e[5]! * maxY;
-    if (a < b) {
-      newMinY += a;
-      newMaxY += b;
-    } else {
-      newMinY += b;
-      newMaxY += a;
-    }
-
-    a = e[6]! * minY;
-    b = e[6]! * maxY;
-    if (a < b) {
-      newMinZ += a;
-      newMaxZ += b;
-    } else {
-      newMinZ += b;
-      newMaxZ += a;
-    }
-
-    // Z column contribution
-    a = e[8]! * minZ;
-    b = e[8]! * maxZ;
-    if (a < b) {
-      newMinX += a;
-      newMaxX += b;
-    } else {
-      newMinX += b;
-      newMaxX += a;
-    }
-
-    a = e[9]! * minZ;
-    b = e[9]! * maxZ;
-    if (a < b) {
-      newMinY += a;
-      newMaxY += b;
-    } else {
-      newMinY += b;
-      newMaxY += a;
-    }
-
-    a = e[10]! * minZ;
-    b = e[10]! * maxZ;
-    if (a < b) {
-      newMinZ += a;
-      newMaxZ += b;
-    } else {
-      newMinZ += b;
-      newMaxZ += a;
-    }
-
-    this.min.set(newMinX, newMinY, newMinZ);
-    this.max.set(newMaxX, newMaxY, newMaxZ);
-    this.center.set(
-      (newMinX + newMaxX) * 0.5,
-      (newMinY + newMaxY) * 0.5,
-      (newMinZ + newMaxZ) * 0.5,
-    );
+    this.center.set(newCenterX, newCenterY, newCenterZ);
+    this.min.set(newCenterX - newExtentX, newCenterY - newExtentY, newCenterZ - newExtentZ);
+    this.max.set(newCenterX + newExtentX, newCenterY + newExtentY, newCenterZ + newExtentZ);
   }
 
   /** @inheritdoc */

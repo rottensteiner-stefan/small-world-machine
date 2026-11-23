@@ -1,10 +1,10 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 
 /** Target choices for the LookAt surveillance spotlight. */
 export type TrackingTarget = "ship" | "crystal" | "companion" | "origin";
@@ -113,10 +113,10 @@ const SLIDERS: readonly SliderConfig[] = [
 ];
 
 /**
- * Behavior Lab inspector for Showcase 20.
+ * Behavior Lab settings panel for Showcase 20.
  */
 export class BehaviorLabHud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _root: HTMLElement;
   private readonly _settings: BehaviorLabSettings;
   private readonly _onChange: (settings: BehaviorLabSettings) => void;
@@ -128,7 +128,7 @@ export class BehaviorLabHud {
     this._settings = { ...initialSettings };
     this._onChange = onChange;
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "behavior-lab-hud",
       title: "Behavior Lab",
       icon: "🕹️",
@@ -173,7 +173,7 @@ export class BehaviorLabHud {
           "🔦 Searchlight",
           "LookAt · Spotlight",
           hudSwitch("sw_spotlight", "Searchlight enabled") +
-            `<div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
+            `<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin:6px 0 8px 0;">
               <span style="font-size:11px;color:#94a3b8;">Tracking target (LookAt):</span>
               <div class="preset-group two-col" id="spotlightTargetGroup">
                 <button class="btn-preset active" data-target="ship">🚀 Ship</button>
@@ -194,7 +194,7 @@ export class BehaviorLabHud {
             hudSlider("sl_bloomInt", "Bloom strength", 0.0, 5.0, 0.1),
         )}
 
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>I</kbd> / <kbd>H</kbd> Toggle panel · <kbd>Drag</kbd> Orbit camera · <kbd>Wheel</kbd> Zoom
         </div>
       `,

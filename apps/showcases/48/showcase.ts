@@ -50,7 +50,7 @@ const DEFAULT_CLIP: string = "Survey";
  *
  * Loads the official Khronos Fox (pure core glTF 2.0) and drives its 24-joint rig through the
  * engine's `AnimationMixer` on every renderer tier, including the engine-new WebGL1 joint-matrix
- * path (`USE_SKINNING`). The HUD (ShowcaseDrawer + perf footer) switches between the model's three
+ * path (`USE_SKINNING`). The HUD (ShowcaseSettingsPanel + perf footer) switches between the model's three
  * clips, scales playback tempo, and shows a live skinning readout.
  */
 export class Showcase extends AbstractShowcase {

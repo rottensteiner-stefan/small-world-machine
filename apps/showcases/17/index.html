@@ -26,7 +26,7 @@
         user-select: none;
         z-index: 999;
       }
-      .hud-header {
+      .settings-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -34,7 +34,7 @@
         background: rgba(255, 255, 255, 0.04);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       }
-      .hud-title {
+      .settings-title {
         font-weight: 700;
         font-size: 13px;
         display: flex;
@@ -42,7 +42,7 @@
         gap: 6px;
         color: #f8fafc;
       }
-      .hud-badge {
+      .settings-badge {
         font-size: 10px;
         background: rgba(176, 0, 255, 0.2);
         color: #d884ff;
@@ -50,13 +50,13 @@
         border-radius: 4px;
         border: 1px solid rgba(176, 0, 255, 0.35);
       }
-      .hud-body {
+      .settings-body {
         padding: 12px 14px;
         display: flex;
         flex-direction: column;
         gap: 10px;
       }
-      .hud-section {
+      .settings-section {
         background: rgba(0, 0, 0, 0.25);
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 8px;
@@ -116,14 +116,14 @@
     <showcase-layout title="ThreadPool (Web Workers)" prev="../28/index.html" next="../18/index.html"><p>Web Workers (ThreadPool) vs main-thread blocking.</p></showcase-layout>
 
     <div class="ui-panel">
-      <div class="hud-header">
-        <div class="hud-title">
+      <div class="settings-header">
+        <div class="settings-title">
           <span>⚡</span> Multithreading Test
         </div>
-        <span class="hud-badge">ThreadPool</span>
+        <span class="settings-badge">ThreadPool</span>
       </div>
-      <div class="hud-body">
-        <div class="hud-section">
+      <div class="settings-body">
+        <div class="settings-section">
           <p>
             Watch the spinning cubes. Clicking the Main Thread button will completely freeze the browser
             (0 FPS) while calculating 5,000,000 primes.
@@ -132,7 +132,7 @@
             the engine running butter-smooth.
           </p>
         </div>
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">⚡ Execution Tasks</div>
           <button id="btnMainThread" class="btn-preset">Run Heavy Task (Main Thread)</button>
           <button id="btnWorkerThread" class="btn-preset" style="margin-top:6px;">Run Heavy Task (Worker Pool)</button>

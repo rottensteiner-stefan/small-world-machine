@@ -48,6 +48,7 @@ export class GPUFallbackResources {
    * `queue.submit()`, once nothing can reference the stale buffers anymore. */
   private _buffersPendingDestroy: GPUBuffer[] = [];
   private _texturesPendingDestroy: GPUTexture[] = [];
+  private _staticTextures: GPUTexture[] = [];
 
   constructor(device: GPUDevice) {
     this._device = device;
@@ -148,6 +149,7 @@ export class GPUFallbackResources {
           GPUTextureUsage.COPY_DST |
           GPUTextureUsage.RENDER_ATTACHMENT,
       });
+      this._staticTextures.push(t);
       this._device.queue.writeTexture(
         { texture: t },
         new Uint8Array(col),
@@ -165,6 +167,7 @@ export class GPUFallbackResources {
       format: "depth32float",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this._staticTextures.push(dummyDepth);
     this._dummyDepthTexView = dummyDepth.createView();
 
     const createCube = (col: number[]): GPUTextureView => {
@@ -176,6 +179,7 @@ export class GPUFallbackResources {
           GPUTextureUsage.COPY_DST |
           GPUTextureUsage.RENDER_ATTACHMENT,
       });
+      this._staticTextures.push(cube);
       for (let i = 0; i < 6; i++) {
         this._device.queue.writeTexture(
           { texture: cube, origin: [0, 0, i] },
@@ -196,6 +200,7 @@ export class GPUFallbackResources {
       format: "depth32float",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this._staticTextures.push(dummyDirShadow);
     this._dummyDirShadowTexView = dummyDirShadow.createView({ dimension: "2d-array" });
     this._defaultDirShadowTexView = this._dummyDirShadowTexView;
 
@@ -204,6 +209,7 @@ export class GPUFallbackResources {
       format: "depth32float",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this._staticTextures.push(dummySpotShadow);
     this._dummySpotShadowTexView = dummySpotShadow.createView({ dimension: "2d-array" });
     this._defaultSpotShadowTexView = this._dummySpotShadowTexView;
 
@@ -224,6 +230,7 @@ export class GPUFallbackResources {
       format: "rgba32float",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    this._staticTextures.push(dummyEvsm);
     this._dummyEVSMTexView = dummyEvsm.createView({ dimension: "2d-array" });
     this._defaultEVSMTexView = this._dummyEVSMTexView;
 
@@ -324,9 +331,14 @@ export class GPUFallbackResources {
     this._dummyNormalBuffer?.destroy();
     this._dummyUvBuffer?.destroy();
     this._dummyTangentBuffer?.destroy();
+    this._dummyJointsBuffer?.destroy();
+    this._dummyWeightsBuffer?.destroy();
+    this._dummyColorBuffer?.destroy();
     for (const b of this._buffersPendingDestroy) b.destroy();
     this._buffersPendingDestroy.length = 0;
     for (const t of this._texturesPendingDestroy) t.destroy();
     this._texturesPendingDestroy.length = 0;
+    for (const t of this._staticTextures) t.destroy();
+    this._staticTextures.length = 0;
   }
 }

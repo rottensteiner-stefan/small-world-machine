@@ -1,10 +1,10 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 
 /** Sliders the panel exposes; values are clamped and applied by the showcase. */
 export type DecalLabSlider =
@@ -47,11 +47,11 @@ const SLIDERS: readonly { name: DecalLabSlider; id: string }[] = [
 const BUMP_LABELS = ["None", "Tilt", "Stripes"] as const;
 
 /**
- * Decal Probe Lab panel of showcase 40 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Decal Probe Lab panel of showcase 40 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; decal, floor, light and post state stay in the showcase (query-param contract intact).
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
 
   constructor(private readonly _actions: HudActions) {
     const bumpButtons = BUMP_LABELS.map(
@@ -59,7 +59,7 @@ export class Hud {
         `<button id="st40BtnBump${i}" class="btn-preset" title="${label} floor normal map (Key ${i + 1})">${i + 1} · ${label}</button>`,
     ).join("");
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "showcase-hud",
       title: "Decal Probe Lab",
       icon: "🏷",
@@ -99,10 +99,10 @@ export class Hud {
               `💡 Ambient occlusion only reacts to real geometry. Post-processing stays clean here: tone mapping + HBAO only.`,
             ),
         )}
-        <div class="hud-section">
+        <div class="settings-section">
           <button id="st40BtnReset" class="btn-preset" style="width:100%;" title="Golden reference state (Key 0)">0 · Reset to Reference</button>
         </div>
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>Drag</kbd> orbit · <kbd>Wheel</kbd> zoom · <kbd>R</kbd> camera reset · <kbd>0</kbd> reference · <kbd>I</kbd> panel
         </div>
       `,

@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
 export type PatternMode = "alternating" | "single" | "multi";
 
@@ -21,11 +21,11 @@ export interface HudActions {
 const COUNT_PRESETS = [400, 1600, 3600, 6400];
 
 /**
- * Instancing Benchmark Lab panel of showcase 44 on the shared {@link ShowcaseDrawer}. Owns only
+ * Instancing Benchmark Lab panel of showcase 44 on the shared {@link ShowcaseSettingsPanel}. Owns only
  * its controls; scene state and the draw counter stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
   private readonly _style: HTMLStyleElement;
@@ -59,24 +59,24 @@ export class Hud {
     document.head.appendChild(style);
     this._style = style;
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "showcase-hud",
       title: "Instancing Benchmark Lab",
       icon: "⚡",
       footerIcon: "⚙",
       body: `
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>📊 Live Performance Monitor</span><span style="font-size:9px;color:#64748b;">Real GL calls</span></div>
           <pre id="benchLiveReadout">Initializing counters...</pre>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>⚙️ Instancing technique</span><span style="font-size:9px;color:#64748b;">ADR 0046 / Space</span></div>
           <button id="btnToggleInstancing" class="btn-preset" title="Toggle auto-instancing (key: Space)"></button>
           <div class="hud-note">💡 <b>A/B comparison:</b> Toggle to compare 2 instanced draws against hundreds to thousands of per-object draw calls.</div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>🔢 Object density</span><span style="font-size:9px;color:#64748b;">Grid size</span></div>
           <div class="preset-group four-col" style="margin-bottom:8px;">
             <button id="btnCount400" class="btn-preset" title="400 Cubes (20×20)">400</button>
@@ -84,14 +84,14 @@ export class Hud {
             <button id="btnCount3600" class="btn-preset" title="3,600 Cubes (60×60)">3.6k</button>
             <button id="btnCount6400" class="btn-preset" title="6,400 Cubes (80×80)">6.4k</button>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slCount">Object count</label>
             <input id="slCount" type="range" min="100" max="10000" step="100" />
             <span id="valCount" class="val-label"></span>
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>📐 Geometry pattern</span><span style="font-size:9px;color:#64748b;">Keys 1–3</span></div>
           <div class="preset-group three-col">
             <button id="btnPatternAlt" class="btn-preset" title="Alternating A/B: stress test for geometry grouping (key 1)">1 · A/B Mix</button>
@@ -101,13 +101,13 @@ export class Hud {
           <div class="hud-note">With <b>A/B Mix</b> geometries alternate in insertion order. Naive instancing fails completely here — only A2 groups them!</div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title"><span>🌊 Dynamic stress test</span><span style="font-size:9px;color:#64748b;">Key W</span></div>
           <button id="btnToggleWave" class="btn-preset" style="width:100%;" title="Animate sine wave (key W)"><span>🌊</span> Sine Wave: <b>OFF</b></button>
           <div class="hud-note">Forces continuous matrix recomputation and instance-buffer uploads every frame.</div>
         </div>
 
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>Space</kbd> Instancing · <kbd>W</kbd> Wave · <kbd>1–3</kbd> Muster · <kbd>Drag</kbd> Orbit · <kbd>R</kbd> Reset · <kbd>I</kbd> HUD
         </div>
       `,

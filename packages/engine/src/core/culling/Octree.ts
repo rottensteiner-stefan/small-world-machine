@@ -119,46 +119,37 @@ export class OctreeNode {
     // the existing 8, leaving two overlapping generations of children under one parent.
     if (0 < this.children.length) return;
 
-    const min: Vector3D = this.bounds.min;
-    const max: Vector3D = this.bounds.max;
-    const center: Vector3D = MathPool.acquireVector().copyFrom(min).add(max).scale(0.5);
+    const minX = this.bounds.min.x,
+      minY = this.bounds.min.y,
+      minZ = this.bounds.min.z;
+    const maxX = this.bounds.max.x,
+      maxY = this.bounds.max.y,
+      maxZ = this.bounds.max.z;
+    const midX = (minX + maxX) * 0.5;
+    const midY = (minY + maxY) * 0.5;
+    const midZ = (minZ + maxZ) * 0.5;
 
-    const dims: number[][] = [
-      [min.x, center.x],
-      [center.x, max.x],
-      [min.y, center.y],
-      [center.y, max.y],
-      [min.z, center.z],
-      [center.z, max.z],
-    ];
+    const vMin = MathPool.acquireVector();
+    const vMax = MathPool.acquireVector();
+    const nextDepth = this._depth + 1;
+    const options = { maxDepth: this._maxDepth, maxObjects: this._maxObjects };
 
-    for (let x: number = 0; x < 2; x++) {
-      for (let y: number = 0; y < 2; y++) {
-        for (let z: number = 0; z < 2; z++) {
-          const childMinX = dims[0]?.[x] ?? 0;
-          const childMinY = dims[2]?.[y] ?? 0;
-          const childMinZ = dims[4]?.[z] ?? 0;
-          const childMaxX = dims[1]?.[x] ?? 0;
-          const childMaxY = dims[3]?.[y] ?? 0;
-          const childMaxZ = dims[5]?.[z] ?? 0;
+    for (let i = 0; i < 8; i++) {
+      const cMinX = (i & 1) === 0 ? minX : midX;
+      const cMaxX = (i & 1) === 0 ? midX : maxX;
+      const cMinY = (i & 2) === 0 ? minY : midY;
+      const cMaxY = (i & 2) === 0 ? midY : maxY;
+      const cMinZ = (i & 4) === 0 ? minZ : midZ;
+      const cMaxZ = (i & 4) === 0 ? midZ : maxZ;
 
-          const childMin = MathPool.acquireVector().set(childMinX, childMinY, childMinZ);
-          const childMax = MathPool.acquireVector().set(childMaxX, childMaxY, childMaxZ);
+      vMin.set(cMinX, cMinY, cMinZ);
+      vMax.set(cMaxX, cMaxY, cMaxZ);
 
-          this.children.push(
-            OctreeNode.acquire(childMin, childMax, this._depth + 1, {
-              maxDepth: this._maxDepth,
-              maxObjects: this._maxObjects,
-            }),
-          );
-
-          MathPool.releaseVector(childMin);
-          MathPool.releaseVector(childMax);
-        }
-      }
+      this.children.push(OctreeNode.acquire(vMin, vMax, nextDepth, options));
     }
 
-    MathPool.releaseVector(center);
+    MathPool.releaseVector(vMin);
+    MathPool.releaseVector(vMax);
 
     // Process objects from the back to avoid shifting or creating new arrays
     for (let i = this.objects.length - 1; i >= 0; i--) {

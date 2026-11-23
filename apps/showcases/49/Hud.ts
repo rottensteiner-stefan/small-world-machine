@@ -1,5 +1,5 @@
-import { hudNote, hudSection, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+import { hudNote, hudSection, ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 
 /** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
 export interface UnlitLabState {
@@ -21,11 +21,11 @@ export interface UnlitLabActions {
 }
 
 /**
- * Unlit Reference Lab panel of showcase 49 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Unlit Reference Lab panel of showcase 49 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; the model, lights and material mode stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
@@ -54,7 +54,7 @@ export class Hud {
     `;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "unlit-lab-hud",
       title: "Unlit Reference Lab",
       icon: "🧱",

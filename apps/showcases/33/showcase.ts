@@ -126,7 +126,7 @@ export class Showcase extends AbstractShowcase {
       }
     }
 
-    // Live-tuning HUD (ShowcaseDrawer pattern)
+    // Live-tuning HUD (ShowcaseSettingsPanel pattern)
     this._createLiveTuningUI();
   }
 
@@ -141,7 +141,7 @@ export class Showcase extends AbstractShowcase {
     super.destroy();
   }
 
-  /** Creates the live-tuning HUD panel (ShowcaseDrawer pattern). */
+  /** Creates the live-tuning HUD panel (ShowcaseSettingsPanel pattern). */
   private _createLiveTuningUI(): void {
     const hudActions: HudActions = {
       setParam: (param: HzbParam, value: number): void => {

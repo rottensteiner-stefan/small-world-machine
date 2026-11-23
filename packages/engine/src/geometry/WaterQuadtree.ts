@@ -287,7 +287,6 @@ export class WaterQuadtree {
   private readonly _nodeChild1: Int32Array;
   private readonly _nodeChild2: Int32Array;
   private readonly _nodeChild3: Int32Array;
-  private readonly _leafQueue: Int32Array;
   private _nodeCount: number = 0;
 
   private _originX: number = 0;
@@ -332,7 +331,6 @@ export class WaterQuadtree {
     this._nodeChild1 = new Int32Array(this._maxNodes);
     this._nodeChild2 = new Int32Array(this._maxNodes);
     this._nodeChild3 = new Int32Array(this._maxNodes);
-    this._leafQueue = new Int32Array(this._maxNodes);
 
     this._tilePool = new Array<Object3D>(this._maxLeaves);
     for (let i = 0; i < this._maxLeaves; i++) {
@@ -404,51 +402,55 @@ export class WaterQuadtree {
 
     this._subdivideTopDown(0, camX, camY, camZ);
 
-    // 2. Collect leaves & enforce 2:1 quadtree balance invariant via work queue.
-    let queueLen = 0;
-    for (let i = 0; i < this._nodeCount; i++) {
-      if (this._nodeIsLeaf[i] === 1) {
-        this._leafQueue[queueLen++] = i;
-      }
-    }
-
+    // 2. Enforce 2:1 quadtree balance invariant: no two adjacent leaf cells differ by > 1 level.
+    // Probes both halves of all 4 cardinal edges and iterates until convergence to eliminate T-junction cracks.
     const minX = this._originX - this.worldSize * 0.5;
     const maxX = this._originX + this.worldSize * 0.5;
     const minZ = this._originZ - this.worldSize * 0.5;
     const maxZ = this._originZ + this.worldSize * 0.5;
 
-    let head = 0;
-    while (head < queueLen) {
-      const nodeIdx = this._leafQueue[head++]!;
-      if (this._nodeIsLeaf[nodeIdx] !== 1) continue;
+    let changed = true;
+    let balancePass = 0;
+    while (changed && balancePass < this.maxLevel) {
+      changed = false;
+      balancePass++;
+      for (let i = 0; i < this._nodeCount; i++) {
+        if (this._nodeIsLeaf[i] !== 1) continue;
+        const level = this._nodeLevel[i]!;
+        if (level >= this.maxLevel || this._nodeCount + 4 > this._maxNodes) continue;
 
-      const level = this._nodeLevel[nodeIdx]!;
-      const cx = this._nodeCx[nodeIdx]!;
-      const cz = this._nodeCz[nodeIdx]!;
-      const half = this._nodeSize[nodeIdx]! * 0.5;
-      const probeDist = half + this._finestCellHalf() * 0.5;
+        const cx = this._nodeCx[i]!;
+        const cz = this._nodeCz[i]!;
+        const half = this._nodeSize[i]! * 0.5;
+        const probeDist = half + this._finestCellHalf() * 0.5;
+        const quarter = half * 0.5;
 
-      // Check all 4 cardinal neighbors; if any neighbor leaf is > 1 level finer, split this node.
-      let needsSplit = false;
-      if (level < this.maxLevel && this._nodeCount + 4 <= this._maxNodes) {
-        for (let dir = 0; dir < 4; dir++) {
-          const px = dir === 1 ? cx + probeDist : dir === 3 ? cx - probeDist : cx;
-          const pz = dir === 0 ? cz - probeDist : dir === 2 ? cz + probeDist : cz;
-          if (px <= minX || px >= maxX || pz <= minZ || pz >= maxZ) continue;
-          const neighbor = this._findLeafAt(px, pz);
-          if (neighbor >= 0 && this._nodeLevel[neighbor]! > level + 1) {
-            needsSplit = true;
-            break;
+        // Check both halves of each of the 4 cardinal edges (8 probe points total)
+        // North (cz - probeDist): (cx - quarter), (cx + quarter)
+        // East  (cx + probeDist): (cz - quarter), (cz + quarter)
+        // South (cz + probeDist): (cx - quarter), (cx + quarter)
+        // West  (cx - probeDist): (cz - quarter), (cz + quarter)
+        let needsSplit = false;
+        for (let edge = 0; edge < 4; edge++) {
+          for (let side = -1; side <= 1; side += 2) {
+            const px =
+              edge === 1 ? cx + probeDist : edge === 3 ? cx - probeDist : cx + side * quarter;
+            const pz =
+              edge === 0 ? cz - probeDist : edge === 2 ? cz + probeDist : cz + side * quarter;
+            if (px <= minX || px >= maxX || pz <= minZ || pz >= maxZ) continue;
+            const neighbor = this._findLeafAt(px, pz);
+            if (neighbor >= 0 && this._nodeLevel[neighbor]! > level + 1) {
+              needsSplit = true;
+              break;
+            }
           }
+          if (needsSplit) break;
         }
-      }
 
-      if (needsSplit) {
-        this._splitNode(nodeIdx);
-        this._leafQueue[queueLen++] = this._nodeChild0[nodeIdx]!;
-        this._leafQueue[queueLen++] = this._nodeChild1[nodeIdx]!;
-        this._leafQueue[queueLen++] = this._nodeChild2[nodeIdx]!;
-        this._leafQueue[queueLen++] = this._nodeChild3[nodeIdx]!;
+        if (needsSplit) {
+          this._splitNode(i);
+          changed = true;
+        }
       }
     }
 

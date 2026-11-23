@@ -1,5 +1,5 @@
-import { hudNote, hudSection, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+import { hudNote, hudSection, ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 
 export type LookKey = "NEUTRAL" | "SUNNY_MEADOW" | "FOREST_SHADE" | "OVERCAST";
 export type SunKey = "noon" | "backlight" | "overcast";
@@ -47,9 +47,9 @@ const SUN_LABELS: Record<SunKey, string> = {
   overcast: "Overcast Sky",
 };
 
-/** Foliage Look Lab panel of showcase 52 on the shared {@link ShowcaseDrawer}. */
+/** Foliage Look Lab panel of showcase 52 on the shared {@link ShowcaseSettingsPanel}. */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
 
@@ -66,7 +66,7 @@ export class Hud {
         `<button id="btnSun_${key}" class="btn-preset" title="Key L cycles">${SUN_LABELS[key]}</button>`,
     ).join("");
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "look-lab-hud",
       title: "Foliage Look Lab",
       icon: "🌿",

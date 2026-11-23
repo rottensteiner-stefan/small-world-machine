@@ -223,35 +223,35 @@
   <body>
     <showcase-layout title="📺 Surveillance Video Wall" prev="../24/index.html" next="../40/index.html"><p>Synchronized feeds with post-processing passes.</p></showcase-layout>
 
-    <aside id="surveillance-inspector" class="swm-inspector-drawer">
+    <aside id="surveillance-inspector" class="swm-settings-drawer">
       <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title">
+      <div class="settings-header">
+        <div class="settings-title">
           <span>📹</span> Surveillance Control
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="hud-badge">Video Wall</span>
-          <button id="surveillanceHudClose" class="hud-close-btn" title="Close Inspector">✕</button>
+          <span class="settings-badge">Video Wall</span>
+          <button id="surveillanceHudClose" class="settings-close-btn" title="Close Showcase Settings">✕</button>
         </div>
       </div>
-      <div class="hud-body">
-        <div class="hud-section">
+      <div class="settings-body">
+        <div class="settings-section">
           <div class="section-title">📹 Camera & Sweep</div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="swSweep">Camera Sweep</label>
-            <label class="hud-switch">
+            <label class="settings-switch">
               <input type="checkbox" id="swSweep" checked>
-              <span class="hud-switch-slider"></span>
+              <span class="settings-switch-slider"></span>
             </label>
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <label for="sliderSpeed">Sweep Speed</label>
               <span class="val-label" id="valSpeed">100%</span>
             </div>
             <input type="range" id="sliderSpeed" min="0" max="200" value="100" />
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <label>Camera Angle</label>
             <div class="preset-group">
               <button class="btn-preset active" id="btn-angle-high" data-angle="high">High</button>
@@ -261,20 +261,20 @@
           </div>
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">💡 Atmosphere & Security</div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <label>Light Mode</label>
             <div class="preset-group">
               <button class="btn-preset active" id="btn-light-swing" data-light="swing">Swing</button>
               <button class="btn-preset" id="btn-light-flicker" data-light="flicker">Flicker</button>
             </div>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="swSirens">Alarm Sirens</label>
-            <label class="hud-switch">
+            <label class="settings-switch">
               <input type="checkbox" id="swSirens" checked>
-              <span class="hud-switch-slider"></span>
+              <span class="settings-switch-slider"></span>
             </label>
           </div>
         </div>

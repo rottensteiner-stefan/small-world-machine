@@ -1,10 +1,10 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 import {
   CAMERA_POOL_IDS,
   PARTICLE_VARIANTS,
@@ -74,11 +74,11 @@ interface SliderSpec {
 const percent = (value: number): string => `${Math.round(value * 100)} %`;
 
 /**
- * Particle Lab panel of showcase 46 on the shared {@link ShowcaseDrawer}. Owns only its controls
+ * Particle Lab panel of showcase 46 on the shared {@link ShowcaseSettingsPanel}. Owns only its controls
  * and the settings object; the showcase reads the settings and applies them.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
   private readonly _root: HTMLElement;
   private readonly _readout: HTMLElement;
@@ -117,13 +117,13 @@ export class Hud {
         `<button class="btn-preset" data-pool="${p}" title="Camera pool ${p}">${p === "overview" ? "🌐" : p === "closeup" ? "🎯" : "📐"} ${p}</button>`,
     ).join("");
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "particle-lab-hud",
       title: "Particle Lab",
       icon: "🧪",
       toggleKeys: ["KeyI"],
       body: `
-        <div class="hud-section"><pre id="particleLabReadout"></pre></div>
+        <div class="settings-section"><pre id="particleLabReadout"></pre></div>
         ${hudSection(
           "🧨 Effect variant",
           "1–6 · F",
@@ -144,7 +144,7 @@ export class Hud {
           `<div class="preset-group five-col">${times}</div>
            <button id="particleLabPause" class="btn-preset" style="width:100%;margin-top:6px;" title="Freeze (P)"></button>`,
         )}
-        <div class="hud-section hud-keys">
+        <div class="settings-section hud-keys">
           <kbd>1–6</kbd>/<kbd>F</kbd> Variant · <kbd>7–9</kbd> Camera · <kbd>P</kbd> Pause · <kbd>T</kbd> Speed · <kbd>R</kbd> Camera reset · <kbd>I</kbd> Panel · <kbd>WASD</kbd>/<kbd>Mouse</kbd> Fly
         </div>
       `,

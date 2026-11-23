@@ -1,5 +1,5 @@
-import { hudNote, hudSection, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+import { hudNote, hudSection, ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 
 export type CameraPresetKey = "wide" | "hangar" | "crown" | "waterline" | "trench";
 export type AtmosphereKey = "storm" | "twilight" | "redAlert";
@@ -118,7 +118,7 @@ const OCEAN_SLIDER_SPECS: readonly OceanSliderSpec[] = [
 
 /** Controls and telemetry drawer for Showcase 53 (Dark Fortress). */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _readout: HTMLElement;
   private readonly _oceanSliders: readonly OceanSliderBinding[];
   private _hovering: boolean = false;
@@ -136,7 +136,7 @@ export class Hud {
         `<button id="btnAtmo_${key}" class="btn-preset" title="Key L cycles">${ATMOSPHERE_LABELS[key]}</button>`,
     ).join("");
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "fortress-hud",
       title: "Dark Fortress",
       icon: "🏰",
@@ -172,27 +172,27 @@ export class Hud {
             <button id="btnOceanGeom_radial" class="btn-preset" title="Concentric radial grid snapped to camera">Radial Polar Grid</button>
             <button id="btnOceanGeom_quadtree" class="btn-preset" title="CDLOD hierarchical quadtree ocean">CDLOD Quadtree</button>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slWaveScale">Wave Scale</label>
             <input type="range" id="slWaveScale" min="0" max="2.2" step="0.05" value="1.05" />
             <span class="val-label" id="valWaveScale">1.05</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slWindSpeed">Wind Speed</label>
             <input type="range" id="slWindSpeed" min="0.2" max="2.4" step="0.05" value="1.28" />
             <span class="val-label" id="valWindSpeed">1.28</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slChoppiness">Choppiness</label>
             <input type="range" id="slChoppiness" min="0" max="2.0" step="0.05" value="1.15" />
             <span class="val-label" id="valChoppiness">1.15</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slCaustics">Caustics</label>
             <input type="range" id="slCaustics" min="0" max="1.5" step="0.05" value="0.52" />
             <span class="val-label" id="valCaustics">0.52</span>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="slFoamCoverage">Foam Coverage</label>
             <input type="range" id="slFoamCoverage" min="0" max="1.0" step="0.02" value="0.36" />
             <span class="val-label" id="valFoamCoverage">0.36</span>

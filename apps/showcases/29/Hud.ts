@@ -1,4 +1,4 @@
-import { ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
 
 /** Lighting parameters driven by a single slider. */
 export type SponzaParam =
@@ -44,9 +44,9 @@ const PRESET_IDS: Record<SponzaPreset, string> = {
 // Only what differs from shared.css: denser rows and buttons, plain checkboxes and the
 // tool-theme accent on the footer button.
 const STYLE = `
-  #sponzaTuningHud .hud-body { gap: 12px; }
-  #sponzaTuningHud .hud-row { margin-bottom: 6px; }
-  #sponzaTuningHud .hud-row:last-child { margin-bottom: 0; }
+  #sponzaTuningHud .settings-body { gap: 12px; }
+  #sponzaTuningHud .settings-row { margin-bottom: 6px; }
+  #sponzaTuningHud .settings-row:last-child { margin-bottom: 0; }
   #sponzaTuningHud input[type="checkbox"] {
     accent-color: #b000ff;
     cursor: pointer;
@@ -54,8 +54,8 @@ const STYLE = `
     height: 15px;
   }
   #sponzaTuningHud .btn-preset { padding: 6px 4px; }
-  .swm-inspector-btn:hover,
-  .swm-inspector-btn.active {
+  .swm-settings-toggle:hover,
+  .swm-settings-toggle.active {
     border-color: var(--tool-accent, #b000ff);
     color: var(--tool-accent, #b000ff);
   }
@@ -63,7 +63,7 @@ const STYLE = `
 
 const BODY = `
   <!-- Preset Row -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">⚡ Instant Presets</div>
     <div class="preset-group three-col">
       <button class="btn-preset active" id="btnPresetCrytek">🏛️ Crytek</button>
@@ -73,24 +73,24 @@ const BODY = `
   </div>
 
   <!-- Sunlight (Chiaroscuro) -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">☀️ Sunlight & Angle</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Sun Intensity</label>
       <input type="range" id="slSunIntensity" min="0" max="10" step="0.1" value="5.5" />
       <span class="val-label" id="valSunIntensity">5.5</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Sun Angle X</label>
       <input type="range" id="slSunX" min="-1" max="1" step="0.02" value="-0.45" />
       <span class="val-label" id="valSunX">-0.45</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Sun Altitude Y</label>
       <input type="range" id="slSunY" min="-1" max="-0.2" step="0.02" value="-0.75" />
       <span class="val-label" id="valSunY">-0.75</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Sun Angle Z</label>
       <input type="range" id="slSunZ" min="-1" max="1" step="0.02" value="-0.45" />
       <span class="val-label" id="valSunZ">-0.45</span>
@@ -98,57 +98,57 @@ const BODY = `
   </div>
 
   <!-- Ambient & Shadow Walkway Depth -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🌑 Ambient Fill & Shadows</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Walkway Ambient</label>
       <input type="range" id="slAmbient" min="0.0" max="1.6" step="0.02" value="0.25" />
       <span class="val-label" id="valAmbient">0.25</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>HBAO Occlusion</label>
       <input type="range" id="slHbao" min="0.0" max="3.0" step="0.05" value="1.50" />
       <span class="val-label" id="valHbao">1.50</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Enable HBAO [H]</label>
       <input type="checkbox" id="chkHbao" checked />
     </div>
   </div>
 
   <!-- Arch Soffit GI Bounce -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">✨ Arch Soffit Bounce (GI)</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Bounce Intensity</label>
       <input type="range" id="slBounce" min="0" max="60" step="1" value="32" />
       <span class="val-label" id="valBounce">32</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Enable GI [G]</label>
       <input type="checkbox" id="chkGI" checked />
     </div>
   </div>
 
   <!-- Post-Processing -->
-  <div class="hud-section">
+  <div class="settings-section">
     <div class="section-title">🎬 ACES Post-Processing</div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Exposure</label>
       <input type="range" id="slExposure" min="0.3" max="2.5" step="0.05" value="1.05" />
       <span class="val-label" id="valExposure">1.05</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Bloom Flare [B]</label>
       <input type="range" id="slBloom" min="0.0" max="1.5" step="0.05" value="0.40" />
       <span class="val-label" id="valBloom">0.40</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>Vignette Framing</label>
       <input type="range" id="slVignette" min="0.0" max="0.8" step="0.02" value="0.35" />
       <span class="val-label" id="valVignette">0.35</span>
     </div>
-    <div class="hud-row">
+    <div class="settings-row">
       <label>God Rays [V]</label>
       <input type="checkbox" id="chkGodRays" />
     </div>
@@ -159,11 +159,11 @@ const formatValue = (value: number): string =>
   Number.isInteger(value) ? value.toString() : value.toFixed(2);
 
 /**
- * Sponza Lighting Lab panel of showcase 29 on the shared {@link ShowcaseDrawer}. Owns the controls
+ * Sponza Lighting Lab panel of showcase 29 on the shared {@link ShowcaseSettingsPanel}. Owns the controls
  * and their sync; every change goes to the {@link HudActions}.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _style: HTMLStyleElement;
 
   constructor(private readonly _host: HudActions) {
@@ -174,7 +174,7 @@ export class Hud {
     style.textContent = STYLE;
     document.head.appendChild(style);
 
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "sponzaTuningHud",
       title: "Sponza Lighting Lab",
       icon: "🏛️",

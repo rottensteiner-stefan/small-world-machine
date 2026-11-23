@@ -1,5 +1,10 @@
-import { hudNote, hudSection, hudSlider, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+import {
+  hudNote,
+  hudSection,
+  hudSlider,
+  ShowcaseSettingsPanel,
+} from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 import { bindRange } from "../shared/hudBindings.js";
 import { CANDLE_COUNT, LIGHT_SCENES } from "./lighting.js";
 import type { LightSceneId, RoomLightState } from "./lighting.js";
@@ -19,11 +24,11 @@ const fireLabel = (v: number): string =>
   v <= 0.05 ? "Glut" : v < 0.35 ? "schwach" : v < 0.75 ? "ruhig" : "lodernd";
 
 /**
- * "Room Lights" panel of showcase 37 on the shared {@link ShowcaseDrawer}: dimmers per light group,
+ * "Room Lights" panel of showcase 37 on the shared {@link ShowcaseSettingsPanel}: dimmers per light group,
  * candle controls, the hearth strength and the lighting scenes. Owns only the controls.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
 
   constructor(
     engine: FrameTelemetrySource,
@@ -33,7 +38,7 @@ export class Hud {
       (s, i) =>
         `<button class="btn-preset" data-scene="${s.id}" title="Shift+${i + 1}">${s.label}</button>`,
     ).join("");
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "swm37-room-hud",
       title: "Room Lights",
       icon: "💡",
@@ -61,7 +66,7 @@ export class Hud {
             <button id="swm37BlowOut" class="btn-preset" title="Next lit candle (3)">Auspusten</button>
             <button id="swm37LightAll" class="btn-preset" title="Light every candle (3 when all are out)">Light all</button>
           </div>
-          <div class="hud-row"><label>Brennend</label><span id="swm37CandleCount" class="val-label"></span></div>`,
+          <div class="settings-row"><label>Brennend</label><span id="swm37CandleCount" class="val-label"></span></div>`,
         )}
         ${hudNote(
           "Fireplace: <b>[</b> / <b>]</b> like brush size — from embers to a blazing fire. Size, light, color temperature, and sparks follow the strength; at 0 only the ember bed glows. Blown-out candles leave a wisp of smoke.",

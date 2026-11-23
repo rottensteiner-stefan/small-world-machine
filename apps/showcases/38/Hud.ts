@@ -1,4 +1,4 @@
-import { ShowcaseDrawer, hudSwitch } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel, hudSwitch } from "../shared/ShowcaseSettingsPanel.js";
 
 export enum TimeOfDay {
   GOLDEN_HOUR = "Golden Hour (Morning)",
@@ -25,11 +25,11 @@ export interface HudActions {
 const PRESET_LABELS = ["Siq Gorge", "Plaza", "Portico", "Sanctum", "Shrine"];
 
 /**
- * Petra panel of showcase 38 on the shared {@link ShowcaseDrawer}. Owns only its controls; the
+ * Petra panel of showcase 38 on the shared {@link ShowcaseSettingsPanel}. Owns only its controls; the
  * scene state stays in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _timeOfDay: HTMLSelectElement;
   private readonly _flicker: HTMLInputElement;
   private readonly _audio: HTMLInputElement;
@@ -38,7 +38,7 @@ export class Hud {
     const presets = PRESET_LABELS.map(
       (label, i) => `<button class="btn-preset" data-cam="${i}">${label}</button>`,
     ).join("");
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       // GoldenCapture hides the panel by this id.
       id: "petra-hud",
       title: "Al-Khazneh — Petra",
@@ -47,9 +47,9 @@ export class Hud {
       footerIcon: "⚙",
       buttonId: "petraInspectorBtn",
       body: `
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">⚙️ Atmosphere & Audio</div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="selTimeOfDay">Time of Day</label>
             <select id="selTimeOfDay">
               <option value="${TimeOfDay.GOLDEN_HOUR}">Golden Hour</option>
@@ -61,7 +61,7 @@ export class Hud {
           ${hudSwitch("swAudio", "Canyon Wind Audio")}
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">📍 Camera Viewpoint</div>
           <div class="preset-group">${presets}</div>
         </div>

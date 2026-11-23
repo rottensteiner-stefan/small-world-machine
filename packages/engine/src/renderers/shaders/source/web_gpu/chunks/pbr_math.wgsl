@@ -156,7 +156,8 @@ fn specularAnisotropic(T: vec3f, B: vec3f, V: vec3f, L: vec3f, H: vec3f, dotNL: 
     let D = a2 * w2 * w2 / 3.14159265359;
     let ggxV = dotNL * length(vec3f(at * dot(T, V), ab * dot(B, V), dotNV));
     let ggxL = dotNV * length(vec3f(at * dot(T, L), ab * dot(B, L), dotNL));
-    return D * clamp(0.5 / max(ggxV + ggxL, 1e-5), 0.0, 1.0);
+    let Vis = 0.5 / max(ggxV + ggxL, 1e-5);
+    return D * max(Vis, 0.0);
 }
 
 // Bent normal for the specular IBL lookup (Khronos single-sample recommendation): the reflection centre

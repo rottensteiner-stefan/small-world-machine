@@ -328,7 +328,7 @@ vec3 Lo = vec3(0.0);
                 backlightShadow = evalPCSSDir(atlasUVBl, cellMinBl, cellMaxBl, blCoords.z, bias, cascadeIndex);
             }
         }
-        if (cascadeIndex < numCascades - 1) {
+        if ((blendToNext > 0.0 || !blInRange) && cascadeIndex < numCascades - 1) {
             int nextBl = cascadeIndex + 1;
             vec4 blSpaceB = u_cascadeMatrices[nextBl] * vec4(v_worldPos + L * u_matParam1.w, 1.0);
             vec3 blCoordsB = blSpaceB.xyz / blSpaceB.w * 0.5 + 0.5;
@@ -431,99 +431,10 @@ for(int k = 0; k < CLUSTER_MAX_LIGHTS; k++) {
     
     // If decay is 0, we don't fall off physically, we just do linear/constant
     float attenuation = (decay > 0.0) ? (distanceFalloff * cutoff) : clamp(1.0 - dist / lightDistance, 0.0, 1.0);
-    vec3 radiance = u_pointLights[i].color * attenuation * pointShadowFactor(i, u_pointLights[i].pos, v_worldPos, v_normal);
-
     float dotNL = max(dot(N, L), 0.0);
-    float dotNH = max(dot(N, H), 0.0);
-    float dotVH = max(dot(V, H), 0.0);
+    if (dotNL > 0.0 && attenuation > 0.0) {
+        vec3 radiance = u_pointLights[i].color * attenuation * pointShadowFactor(i, u_pointLights[i].pos, v_worldPos, v_normal);
 
-    float D = D_GGX(dotNH, roughness);
-    float G = G_SchlickGGX(dotNL, dotNV, roughness);
-    vec3 F = F_Schlick90(dotVH, F0, F90);
-
-    vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
-
-    vec3 specular = (D * G * F) / (4.0 * dotNV * dotNL + 0.0001);
-#ifdef USE_ANISOTROPY
-    specular = F * specularAnisotropic(anisoT, anisoB, V, L, H, dotNL, dotNV, dotNH, anisoAlphaT, anisoAlpha);
-#endif
-    vec3 directLight = (kD * diffuseAlbedo / 3.14159265359 + specular) * radiance * dotNL;
-
-#ifdef USE_SHEEN
-    float dotNH_s = max(dot(N, H), 0.0);
-    float D_s = D_Charlie(dotNH_s, sheenRoughness);
-    float V_s = V_Neubelt(dotNL, dotNV);
-    vec3 sheenSpecular = sheenColor * (D_s * V_s);
-    directLight = directLight * sheenEnergyComp + sheenSpecular * radiance * dotNL;
-#endif
-
-#ifdef USE_CLEARCOAT
-    if (clearcoat > 0.0) {
-        float dotNL_cc = max(dot(N_cc, L), 0.0);
-        float dotNH_cc = max(dot(N_cc, H), 0.0);
-        float dotVH_cc = max(dot(V, H), 0.0);
-        float D_cc = D_GGX(dotNH_cc, clearcoatRoughness);
-        float G_cc = G_Kelemen(dotVH_cc);
-        vec3 F_cc = F_Schlick(dotVH_cc, vec3(0.04));
-        vec3 clearcoatSpecular = (D_cc * G_cc * F_cc) * clearcoat;
-        directLight = directLight * (1.0 - clearcoat * F_cc.r) + clearcoatSpecular * radiance * dotNL_cc;
-    }
-#endif
-
-    Lo += directLight;
-}
-
-// -- Spot Lights --
-uvec2 spotCluster = fetchSpotClusterGridEntry(clusterCellIndex);
-for(int k = 0; k < CLUSTER_MAX_LIGHTS; k++) {
-    if (k >= int(spotCluster.y)) break;
-    int i = int(fetchSpotClusterLightIndex(int(spotCluster.x) + k));
-    vec3 lightVec = u_spotLights[i].pos - v_worldPos;
-    float dist = length(lightVec);
-    vec3 L = normalize(lightVec);
-    vec3 H = normalize(V + L);
-
-    vec3 spotDir = normalize(u_spotLights[i].dir);
-    float cosOuter = u_spotLights[i].params.x;
-    float cosInner = u_spotLights[i].params.y;
-    float maxDist = u_spotLights[i].params.z;
-    float decay = u_spotLights[i].params.w;
-
-    float theta = dot(-L, spotDir);
-    float epsilon = max(cosInner - cosOuter, 0.0001);
-    float intensity = clamp((theta - cosOuter) / epsilon, 0.0, 1.0);
-
-    if (intensity > 0.0 && dist < maxDist) {
-        float distanceAttenuation = pow(clamp(1.0 - dist / maxDist, 0.0, 1.0), decay);
-        float attenuation = distanceAttenuation * intensity;
-        
-        // Shadow Calculation
-        // Pre-existing constraint, unrelated to clustering: only the first 4 spot lights (by
-        // scene traversal order) ever get a real shadow slot -- see light_calc.frag.glsl.
-        float shadow = 1.0;
-        if (i < 4 && u_spotShadowInfo[i].z > 0.5) {
-            vec3 projCoords = v_spotLightSpacePos[i].xyz / v_spotLightSpacePos[i].w;
-            projCoords = projCoords * 0.5 + 0.5;
-            if (projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0 && projCoords.z <= 1.0) {
-                float bias = u_spotShadowInfo[i].x;
-                float currentDepth = projCoords.z;
-                shadow = 0.0;
-                vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);
-
-                for(int x = -1; x <= 1; ++x) {
-                    for(int y = -1; y <= 1; ++y) {
-                        vec3 tCoord = vec3(projCoords.xy + vec2(x, y) * texelSize, currentDepth - bias);
-                        shadow += texture(u_spotShadowMap, vec4(tCoord.xy, float(i), tCoord.z));
-                    }
-                }
-                shadow /= 9.0;
-            }
-        }
-
-        vec3 radiance = u_spotLights[i].color * attenuation * shadow;
-
-        float dotNL = max(dot(N, L), 0.0);
         float dotNH = max(dot(N, H), 0.0);
         float dotVH = max(dot(V, H), 0.0);
 
@@ -562,6 +473,99 @@ for(int k = 0; k < CLUSTER_MAX_LIGHTS; k++) {
 #endif
 
         Lo += directLight;
+    }
+}
+
+// -- Spot Lights --
+uvec2 spotCluster = fetchSpotClusterGridEntry(clusterCellIndex);
+for(int k = 0; k < CLUSTER_MAX_LIGHTS; k++) {
+    if (k >= int(spotCluster.y)) break;
+    int i = int(fetchSpotClusterLightIndex(int(spotCluster.x) + k));
+    vec3 lightVec = u_spotLights[i].pos - v_worldPos;
+    float dist = length(lightVec);
+    vec3 L = normalize(lightVec);
+    vec3 H = normalize(V + L);
+
+    vec3 spotDir = normalize(u_spotLights[i].dir);
+    float cosOuter = u_spotLights[i].params.x;
+    float cosInner = u_spotLights[i].params.y;
+    float maxDist = u_spotLights[i].params.z;
+    float decay = u_spotLights[i].params.w;
+
+    float theta = dot(-L, spotDir);
+    float epsilon = max(cosInner - cosOuter, 0.0001);
+    float intensity = clamp((theta - cosOuter) / epsilon, 0.0, 1.0);
+
+    if (intensity > 0.0 && dist < maxDist) {
+        float distanceAttenuation = pow(clamp(1.0 - dist / maxDist, 0.0, 1.0), decay);
+        float attenuation = distanceAttenuation * intensity;
+        
+        float dotNL = max(dot(N, L), 0.0);
+        if (dotNL > 0.0) {
+            // Shadow Calculation
+            // Pre-existing constraint, unrelated to clustering: only the first 4 spot lights (by
+            // scene traversal order) ever get a real shadow slot -- see light_calc.frag.glsl.
+            float shadow = 1.0;
+            if (i < 4 && u_spotShadowInfo[i].z > 0.5) {
+                vec3 projCoords = v_spotLightSpacePos[i].xyz / v_spotLightSpacePos[i].w;
+                projCoords = projCoords * 0.5 + 0.5;
+                if (projCoords.x >= 0.0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0 && projCoords.z <= 1.0) {
+                    float bias = u_spotShadowInfo[i].x;
+                    float currentDepth = projCoords.z;
+                    shadow = 0.0;
+                    vec2 texelSize = 1.0 / vec2(textureSize(u_spotShadowMap, 0).xy);
+
+                    for(int x = -1; x <= 1; ++x) {
+                        for(int y = -1; y <= 1; ++y) {
+                            vec3 tCoord = vec3(projCoords.xy + vec2(x, y) * texelSize, currentDepth - bias);
+                            shadow += texture(u_spotShadowMap, vec4(tCoord.xy, float(i), tCoord.z));
+                        }
+                    }
+                    shadow /= 9.0;
+                }
+            }
+
+            vec3 radiance = u_spotLights[i].color * attenuation * shadow;
+
+            float dotNH = max(dot(N, H), 0.0);
+            float dotVH = max(dot(V, H), 0.0);
+
+            float D = D_GGX(dotNH, roughness);
+            float G = G_SchlickGGX(dotNL, dotNV, roughness);
+            vec3 F = F_Schlick90(dotVH, F0, F90);
+
+            vec3 kS = F;
+            vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+            vec3 specular = (D * G * F) / (4.0 * dotNV * dotNL + 0.0001);
+#ifdef USE_ANISOTROPY
+            specular = F * specularAnisotropic(anisoT, anisoB, V, L, H, dotNL, dotNV, dotNH, anisoAlphaT, anisoAlpha);
+#endif
+            vec3 directLight = (kD * diffuseAlbedo / 3.14159265359 + specular) * radiance * dotNL;
+
+#ifdef USE_SHEEN
+            float dotNH_s = max(dot(N, H), 0.0);
+            float D_s = D_Charlie(dotNH_s, sheenRoughness);
+            float V_s = V_Neubelt(dotNL, dotNV);
+            vec3 sheenSpecular = sheenColor * (D_s * V_s);
+            directLight = directLight * sheenEnergyComp + sheenSpecular * radiance * dotNL;
+#endif
+
+#ifdef USE_CLEARCOAT
+            if (clearcoat > 0.0) {
+                float dotNL_cc = max(dot(N_cc, L), 0.0);
+                float dotNH_cc = max(dot(N_cc, H), 0.0);
+                float dotVH_cc = max(dot(V, H), 0.0);
+                float D_cc = D_GGX(dotNH_cc, clearcoatRoughness);
+                float G_cc = G_Kelemen(dotVH_cc);
+                vec3 F_cc = F_Schlick(dotVH_cc, vec3(0.04));
+                vec3 clearcoatSpecular = (D_cc * G_cc * F_cc) * clearcoat;
+                directLight = directLight * (1.0 - clearcoat * F_cc.r) + clearcoatSpecular * radiance * dotNL_cc;
+            }
+#endif
+
+            Lo += directLight;
+        }
     }
 }
 
@@ -676,7 +680,7 @@ vec2 envBRDF = texture(u_brdfLUT, vec2(max(dotNV, 0.0), roughness)).rg;
 
 // Multi-scattering IBL (Fdez-Aguera 2019, JCGT 8(1)): compensates single-scattering energy loss on rough surfaces.
 // @invariant PBR-ENERGY-CONSERVATION
-vec3 FssEss = kS_ambient * envBRDF.x + F90 * envBRDF.y;
+vec3 FssEss = F0 * envBRDF.x + F90 * envBRDF.y;
 float Ess = envBRDF.x + envBRDF.y;
 float Ems = max(1.0 - Ess, 0.0);
 vec3 Favg = F0 + (vec3(F90) - F0) * (1.0 / 21.0);

@@ -331,6 +331,14 @@ export class PhysicsSystem {
 
     MathPool.releaseVector(deltaP);
 
+    for (let i = 0; i < bodies.length; i++) {
+      const obj = bodies[i]!;
+      const rb = obj.rigidBody!;
+      if (!rb.isSleeping && rb.inverseMass > 0) {
+        rb.updateInertiaWorld(obj.rotation);
+      }
+    }
+
     this._resolveCollisions(bodies, allColliders, allJoints, dt);
 
     // Sleep evaluation at the end of substep (after integration and collision resolution)

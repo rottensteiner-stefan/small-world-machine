@@ -89,6 +89,8 @@ export class WebGL2ShadowManager {
   private _evsmFarClear: [number, number, number, number] = [0, 0, 0, 0];
   private _evsmAtlasFbo: WebGLFramebuffer | null = null;
   private _evsmAtlasTexture: WebGLTexture | null = null;
+  private _evsmAtlasWidth = 0;
+  private _evsmAtlasHeight = 0;
   private _evsmDummyTexture: WebGLTexture | null = null;
   private _evsmSupported = false;
   private _evsmSupportChecked = false;
@@ -568,7 +570,14 @@ export class WebGL2ShadowManager {
     atlasWidth: number,
     atlasHeight: number,
   ): boolean {
-    if (this._evsmAtlasTexture && this._evsmAtlasFbo) return true;
+    if (
+      this._evsmAtlasTexture &&
+      this._evsmAtlasFbo &&
+      this._evsmAtlasWidth === atlasWidth &&
+      this._evsmAtlasHeight === atlasHeight
+    ) {
+      return true;
+    }
     if (this._evsmAtlasTexture) {
       gl.deleteTexture(this._evsmAtlasTexture);
       this._evsmAtlasTexture = null;
@@ -609,6 +618,8 @@ export class WebGL2ShadowManager {
     }
     this._evsmAtlasTexture = tex;
     this._evsmAtlasFbo = fbo;
+    this._evsmAtlasWidth = atlasWidth;
+    this._evsmAtlasHeight = atlasHeight;
     return true;
   }
 
@@ -670,8 +681,8 @@ export class WebGL2ShadowManager {
       0,
     );
 
-    gl.depthMask(true);
-    gl.depthFunc(gl.LESS);
+    gl.depthMask(false);
+    gl.depthFunc(gl.LEQUAL);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
     gl.enable(gl.CULL_FACE);
@@ -692,7 +703,7 @@ export class WebGL2ShadowManager {
         this._evsmFarClear[2],
         this._evsmFarClear[3],
       );
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.clear(gl.COLOR_BUFFER_BIT);
       gl.disable(gl.SCISSOR_TEST);
 
       host.updateGlobalUBO(cascadeCam.viewProjectionMatrix, cascadeCam.position, this._emptyLights);

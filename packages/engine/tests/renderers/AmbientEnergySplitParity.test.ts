@@ -56,7 +56,7 @@ describe("ambient energy split parity (G04)", () => {
       /vec3 iblIrradiance = sRGBToLinear\(texture\(u_irradianceMap, N\)\.rgb\) \* u_envIntensity;/,
     );
     expect(gl2).toMatch(/vec3 irradiance = iblIrradiance \+ hemiAmbient;/);
-    expect(gl2).toMatch(/vec3 FssEss = kS_ambient \* envBRDF\.x \+ F90 \* envBRDF\.y;/);
+    expect(gl2).toMatch(/vec3 FssEss = F0 \* envBRDF\.x \+ F90 \* envBRDF\.y;/);
 
     const wgpu = code(WGPU_PBR);
     expect(wgpu).toMatch(
@@ -68,6 +68,6 @@ describe("ambient energy split parity (G04)", () => {
     expect(wgpu).toMatch(/let irradiance = iblIrradiance \+ hemiAmbient;/);
     expect(wgpu).toContain("let diffuseAmbient = irradiance * diffuseAlbedo;");
     expect(wgpu).not.toContain("diffuseAmbient = kD_ambient * irradiance * diffuseAlbedo;");
-    expect(wgpu).toMatch(/let FssEss = kS_ambient \* envBRDF\.x \+ F90 \* envBRDF\.y;/);
+    expect(wgpu).toMatch(/let FssEss = F0 \* envBRDF\.x \+ F90 \* envBRDF\.y;/);
   });
 });

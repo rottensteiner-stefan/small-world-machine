@@ -563,6 +563,7 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
   // MUST alias `_paramBlock` (only that one is uploaded): a separate array silently dropped every
   // u32 word -- segmentBase/cullMode/hzb flags -- so shadow culls counted into segment 0.
   private readonly _paramBlockU32: Uint32Array = new Uint32Array(this._paramBlock.buffer);
+  private readonly _dynamicOffset1 = new Uint32Array(1);
   /** Frame N-1 ZO-corrected main view-projection (16 floats, uploaded into `CullParams.prevVp` at
    *  every view prepare). Lagged one frame inside `prepareMainView` -- the HZB pyramid the field
    *  lane samples at the frame head was built from THIS matrix, so `fieldHzbVisible` must project
@@ -1218,7 +1219,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     if (this._maxBucketCount === 0 || this._instanceCount === 0) return;
 
     if (bindGlobal) rp.setBindGroup(0, host.globalBindGroup);
-    rp.setBindGroup(3, host.viewBindGroup, [viewOffset]);
+    this._dynamicOffset1[0] = viewOffset;
+    rp.setBindGroup(3, host.viewBindGroup, this._dynamicOffset1);
 
     const targetFormat = host.currentColorTargetFormat;
     const viewBase = viewIndex * MAX_LOD_BUCKETS;
@@ -1229,7 +1231,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       rp.setPipeline(this._getDrawPipeline(variant, targetFormat));
       this._bindGeometry(rp, entry, streams);
       const segment = viewBase + b;
-      rp.setBindGroup(2, gpu.drawBg, [segment * CULL_PARAM_BLOCK_BYTES]);
+      this._dynamicOffset1[0] = segment * CULL_PARAM_BLOCK_BYTES;
+      rp.setBindGroup(2, gpu.drawBg, this._dynamicOffset1);
       rp.drawIndexedIndirect(gpu.indirectArgs, segment * INDIRECT_SEGMENT_HEADER_BYTES);
     }
   }
@@ -1254,7 +1257,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
     if (this._maxBucketCount === 0 || this._instanceCount === 0) return;
 
     if (bindGlobal) rp.setBindGroup(0, host.globalBindGroup);
-    rp.setBindGroup(3, host.viewBindGroup, [viewOffset]);
+    this._dynamicOffset1[0] = viewOffset;
+    rp.setBindGroup(3, host.viewBindGroup, this._dynamicOffset1);
 
     const targetFormat = host.currentColorTargetFormat;
     for (let b = 0; b < this._maxBucketCount; b++) {
@@ -1263,7 +1267,8 @@ export class InstanceFieldSystem implements InstanceFieldRuntimeApi {
       if (!entry || !streams || entry.indexCount === 0) continue;
       rp.setPipeline(this._getDrawPipeline(variant, targetFormat));
       this._bindGeometry(rp, entry, streams);
-      rp.setBindGroup(2, p2.drawBg, [b * CULL_PARAM_BLOCK_BYTES]);
+      this._dynamicOffset1[0] = b * CULL_PARAM_BLOCK_BYTES;
+      rp.setBindGroup(2, p2.drawBg, this._dynamicOffset1);
       rp.drawIndexedIndirect(p2.indirectArgs, b * INDIRECT_SEGMENT_HEADER_BYTES);
     }
   }

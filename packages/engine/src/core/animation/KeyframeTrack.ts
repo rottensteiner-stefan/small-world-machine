@@ -20,7 +20,7 @@ export class KeyframeTrack {
   private _tempQuatB: Quaternion = new Quaternion();
   private _tempVecA: Vector3D = new Vector3D();
   private _tempVecB: Vector3D = new Vector3D();
-  private _segment = { i0: 0, i1: 0, alpha: null as number | null };
+  private _segment = { i0: 0, i1: 0, alpha: -1 };
   private _lastIndex: number = 0;
 
   constructor(
@@ -46,7 +46,7 @@ export class KeyframeTrack {
    */
   public sampleQuaternion(time: number): Quaternion {
     this._findSegment(time, this._segment);
-    if (this._segment.alpha === null) {
+    if (this._segment.alpha < 0) {
       this._readQuaternion(this._segment.i0, this._tempQuatA);
       return this._tempQuatA;
     }
@@ -70,7 +70,7 @@ export class KeyframeTrack {
    */
   public sampleVector(time: number): Vector3D {
     this._findSegment(time, this._segment);
-    if (this._segment.alpha === null) {
+    if (this._segment.alpha < 0) {
       this._readVector(this._segment.i0, this._tempVecA);
       return this._tempVecA;
     }
@@ -107,7 +107,7 @@ export class KeyframeTrack {
     const { i0, i1, alpha } = this._segment;
     const values = this.values;
 
-    if (alpha === null) {
+    if (alpha < 0) {
       const offset =
         this.interpolation === "CUBICSPLINE" ? (i0 * 3 + 1) * targetCount : i0 * targetCount;
       if (offset + count > values.length) {
@@ -166,27 +166,27 @@ export class KeyframeTrack {
    * should read `out.i0` directly without blending. `out` is a reused scratch object; the result is
    * only valid until the next `_findSegment` call on this track.
    */
-  private _findSegment(time: number, out: { i0: number; i1: number; alpha: number | null }): void {
+  private _findSegment(time: number, out: { i0: number; i1: number; alpha: number }): void {
     const times = this.times;
     const len = times.length;
     if (0 === len) {
       out.i0 = 0;
       out.i1 = 0;
-      out.alpha = null;
+      out.alpha = -1;
       return;
     }
     const lastIdx = len - 1;
     if (lastIdx <= 0 || time <= times[0]!) {
       out.i0 = 0;
       out.i1 = 0;
-      out.alpha = null;
+      out.alpha = -1;
       this._lastIndex = 0;
       return;
     }
     if (time >= times[lastIdx]!) {
       out.i0 = lastIdx;
       out.i1 = lastIdx;
-      out.alpha = null;
+      out.alpha = -1;
       this._lastIndex = lastIdx;
       return;
     }
@@ -223,7 +223,7 @@ export class KeyframeTrack {
     if (this.interpolation === "STEP") {
       out.i0 = i0;
       out.i1 = i1;
-      out.alpha = null;
+      out.alpha = -1;
       return;
     }
 

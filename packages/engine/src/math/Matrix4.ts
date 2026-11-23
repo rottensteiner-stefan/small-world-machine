@@ -402,6 +402,116 @@ export class Matrix4 {
     te[15] = r44;
   }
 
+  /**
+   * Fast affine 4x4 matrix multiplication assuming bottom row [0, 0, 0, 1] for both matrices.
+   * Cuts multiplications from 64 to 36 (1.78x speedup) on the scene graph transform hot-path.
+   */
+  public static multiplyAffine(a: Matrix4, b: Matrix4, result: Matrix4): void {
+    const ae = a.data;
+    const be = b.data;
+    const te = result.data;
+
+    const a11 = ae[0]!,
+      a12 = ae[4]!,
+      a13 = ae[8]!,
+      a14 = ae[12]!;
+    const a21 = ae[1]!,
+      a22 = ae[5]!,
+      a23 = ae[9]!,
+      a24 = ae[13]!;
+    const a31 = ae[2]!,
+      a32 = ae[6]!,
+      a33 = ae[10]!,
+      a34 = ae[14]!;
+
+    const b11 = be[0]!,
+      b12 = be[4]!,
+      b13 = be[8]!,
+      b14 = be[12]!;
+    const b21 = be[1]!,
+      b22 = be[5]!,
+      b23 = be[9]!,
+      b24 = be[13]!;
+    const b31 = be[2]!,
+      b32 = be[6]!,
+      b33 = be[10]!,
+      b34 = be[14]!;
+
+    te[0] = a11 * b11 + a12 * b21 + a13 * b31;
+    te[4] = a11 * b12 + a12 * b22 + a13 * b32;
+    te[8] = a11 * b13 + a12 * b23 + a13 * b33;
+    te[12] = a11 * b14 + a12 * b24 + a13 * b34 + a14;
+
+    te[1] = a21 * b11 + a22 * b21 + a23 * b31;
+    te[5] = a21 * b12 + a22 * b22 + a23 * b32;
+    te[9] = a21 * b13 + a22 * b23 + a23 * b33;
+    te[13] = a21 * b14 + a22 * b24 + a23 * b34 + a24;
+
+    te[2] = a31 * b11 + a32 * b21 + a33 * b31;
+    te[6] = a31 * b12 + a32 * b22 + a33 * b32;
+    te[10] = a31 * b13 + a32 * b23 + a33 * b33;
+    te[14] = a31 * b14 + a32 * b24 + a33 * b34 + a34;
+
+    te[3] = 0;
+    te[7] = 0;
+    te[11] = 0;
+    te[15] = 1;
+  }
+
+  /**
+   * Fast rigid body / camera matrix inversion: transpose 3x3 rotation, t' = -R^T * t.
+   */
+  public static invertRigid(src: Matrix4, target: Matrix4): void {
+    const s = src.data;
+    const t = target.data;
+
+    const r00 = s[0]!,
+      r01 = s[4]!,
+      r02 = s[8]!;
+    const r10 = s[1]!,
+      r11 = s[5]!,
+      r12 = s[9]!;
+    const r20 = s[2]!,
+      r21 = s[6]!,
+      r22 = s[10]!;
+    const tx = s[12]!,
+      ty = s[13]!,
+      tz = s[14]!;
+
+    t[0] = r00;
+    t[4] = r10;
+    t[8] = r20;
+    t[1] = r01;
+    t[5] = r11;
+    t[9] = r21;
+    t[2] = r02;
+    t[6] = r12;
+    t[10] = r22;
+
+    t[12] = -(r00 * tx + r10 * ty + r20 * tz);
+    t[13] = -(r01 * tx + r11 * ty + r21 * tz);
+    t[14] = -(r02 * tx + r12 * ty + r22 * tz);
+
+    t[3] = 0;
+    t[7] = 0;
+    t[11] = 0;
+    t[15] = 1;
+  }
+
+  /**
+   * Transforms a 3D point by an affine 4x4 matrix without allocations.
+   */
+  public static transformPoint(m: Matrix4, v: Vector3D, out: Vector3D): Vector3D {
+    const e = m.data;
+    const x = v.x,
+      y = v.y,
+      z = v.z;
+    out.x = e[0]! * x + e[4]! * y + e[8]! * z + e[12]!;
+    out.y = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
+    out.z = e[2]! * x + e[6]! * y + e[10]! * z + e[14]!;
+    return out;
+  }
+
   public static perspective(
     fov: number,
     aspect: number,

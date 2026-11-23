@@ -56,9 +56,32 @@ fn lightCoverage(worldPos: vec3f, radius: f32, dims: vec3u) -> array<vec2f, 3> {
     var rangeX = vec2f(0.0, f32(dims.x) - 1.0);
     var rangeY = vec2f(0.0, f32(dims.y) - 1.0);
 
-    // If the sphere is strictly in front of the camera plane (viewZ > radius),
-    // compute exact analytical screen-space tangent bounds:
-    if (clip.w > 0.0001 && viewZ > radius && global.projScale.x > 0.0 && global.projScale.y > 0.0) {
+    let isOrtho = abs(global.vp[0][3]) < 1e-6 && abs(global.vp[1][3]) < 1e-6 && abs(global.vp[2][3]) < 1e-6;
+    if (isOrtho) {
+        let radiusNdcX = radius * max(global.projScale.x, 1e-6);
+        let radiusNdcY = radius * max(global.projScale.y, 1e-6);
+        let ndcXMin = clip.x - radiusNdcX;
+        let ndcXMax = clip.x + radiusNdcX;
+        let ndcYMin = clip.y - radiusNdcY;
+        let ndcYMax = clip.y + radiusNdcY;
+
+        let pxX0 = (ndcXMin * 0.5 + 0.5) * global.resolution.x;
+        let pxX1 = (ndcXMax * 0.5 + 0.5) * global.resolution.x;
+        let pxY0 = (0.5 - ndcYMax * 0.5) * global.resolution.y;
+        let pxY1 = (0.5 - ndcYMin * 0.5) * global.resolution.y;
+
+        let rawMinX = floor(pxX0 / global.tileSizePx.x);
+        let rawMaxX = floor(pxX1 / global.tileSizePx.x);
+        let rawMinY = floor(pxY0 / global.tileSizePx.y);
+        let rawMaxY = floor(pxY1 / global.tileSizePx.y);
+
+        if (rawMaxX < 0.0 || rawMinX >= f32(dims.x) || rawMaxY < 0.0 || rawMinY >= f32(dims.y)) {
+            return array<vec2f, 3>(vec2f(1.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 0.0));
+        }
+
+        rangeX = clamp(vec2f(rawMinX, rawMaxX), vec2f(0.0), vec2f(f32(dims.x) - 1.0));
+        rangeY = clamp(vec2f(rawMinY, rawMaxY), vec2f(0.0), vec2f(f32(dims.y) - 1.0));
+    } else if (clip.w > 0.0001 && viewZ > radius && global.projScale.x > 0.0 && global.projScale.y > 0.0) {
         let tanX = (clip.x / clip.w) / global.projScale.x;
         let tanY = (clip.y / clip.w) / global.projScale.y;
         let vz = viewZ;
@@ -101,12 +124,19 @@ fn lightCoverage(worldPos: vec3f, radius: f32, dims: vec3u) -> array<vec2f, 3> {
     return array<vec2f, 3>(rangeX, rangeY, rangeZ);
 }
 
+struct LightCoverage {
+    rangeX: vec2f,
+    rangeY: vec2f,
+    rangeZ: vec2f,
+}
+
+var<workgroup> s_pointCoverage: array<LightCoverage, 64>;
+var<workgroup> s_spotCoverage: array<LightCoverage, 64>;
+
 @compute @workgroup_size(4, 4, 4)
-fn cullLights(@builtin(global_invocation_id) gid: vec3u) {
+fn cullLights(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_index) lid: u32) {
     let dims = vec3u(u32(global.clusterDims.x), u32(global.clusterDims.y), u32(global.clusterDims.z));
-    if (gid.x >= dims.x || gid.y >= dims.y || gid.z >= dims.z) {
-        return;
-    }
+    let inBounds = gid.x < dims.x && gid.y < dims.y && gid.z < dims.z;
 
     let cellIndex = gid.x + dims.x * (gid.y + dims.y * gid.z);
     let maxPerCluster = u32(global.clusterDims.w);
@@ -116,33 +146,63 @@ fn cullLights(@builtin(global_invocation_id) gid: vec3u) {
 
     var pointCount = 0u;
     let numPointLights = u32(global.numPointLights);
-    for (var i = 0u; i < numPointLights; i++) {
-        if (pointCount >= maxPerCluster) {
-            break;
+    for (var batch = 0u; batch < numPointLights; batch += 64u) {
+        let lightIdx = batch + lid;
+        if (lightIdx < numPointLights) {
+            let cov = lightCoverage(pLights[lightIdx].pos.xyz, max(pLights[lightIdx].pos.w, 0.001), dims);
+            s_pointCoverage[lid] = LightCoverage(cov[0], cov[1], cov[2]);
         }
-        let coverage = lightCoverage(pLights[i].pos.xyz, max(pLights[i].pos.w, 0.001), dims);
-        if (cellF.x >= coverage[0].x && cellF.x <= coverage[0].y &&
-            cellF.y >= coverage[1].x && cellF.y <= coverage[1].y &&
-            cellF.z >= coverage[2].x && cellF.z <= coverage[2].y) {
-            pointClusterIndices[pointOffset + pointCount] = i;
-            pointCount++;
+        workgroupBarrier();
+
+        if (inBounds) {
+            let countInBatch = min(64u, numPointLights - batch);
+            for (var i = 0u; i < countInBatch; i++) {
+                if (pointCount >= maxPerCluster) {
+                    break;
+                }
+                let cov = s_pointCoverage[i];
+                if (cellF.x >= cov.rangeX.x && cellF.x <= cov.rangeX.y &&
+                    cellF.y >= cov.rangeY.x && cellF.y <= cov.rangeY.y &&
+                    cellF.z >= cov.rangeZ.x && cellF.z <= cov.rangeZ.y) {
+                    pointClusterIndices[pointOffset + pointCount] = batch + i;
+                    pointCount++;
+                }
+            }
         }
+        workgroupBarrier();
     }
-    pointClusterGrid[cellIndex] = vec2u(pointOffset, pointCount);
+    if (inBounds) {
+        pointClusterGrid[cellIndex] = vec2u(pointOffset, pointCount);
+    }
 
     var spotCount = 0u;
     let numSpotLights = u32(global.numSpotLights);
-    for (var i = 0u; i < numSpotLights; i++) {
-        if (spotCount >= maxPerCluster) {
-            break;
+    for (var batch = 0u; batch < numSpotLights; batch += 64u) {
+        let lightIdx = batch + lid;
+        if (lightIdx < numSpotLights) {
+            let cov = lightCoverage(sLights[lightIdx].pos.xyz, max(sLights[lightIdx].params.z, 0.001), dims);
+            s_spotCoverage[lid] = LightCoverage(cov[0], cov[1], cov[2]);
         }
-        let coverage = lightCoverage(sLights[i].pos.xyz, max(sLights[i].params.z, 0.001), dims);
-        if (cellF.x >= coverage[0].x && cellF.x <= coverage[0].y &&
-            cellF.y >= coverage[1].x && cellF.y <= coverage[1].y &&
-            cellF.z >= coverage[2].x && cellF.z <= coverage[2].y) {
-            spotClusterIndices[spotOffset + spotCount] = i;
-            spotCount++;
+        workgroupBarrier();
+
+        if (inBounds) {
+            let countInBatch = min(64u, numSpotLights - batch);
+            for (var i = 0u; i < countInBatch; i++) {
+                if (spotCount >= maxPerCluster) {
+                    break;
+                }
+                let cov = s_spotCoverage[i];
+                if (cellF.x >= cov.rangeX.x && cellF.x <= cov.rangeX.y &&
+                    cellF.y >= cov.rangeY.x && cellF.y <= cov.rangeY.y &&
+                    cellF.z >= cov.rangeZ.x && cellF.z <= cov.rangeZ.y) {
+                    spotClusterIndices[spotOffset + spotCount] = batch + i;
+                    spotCount++;
+                }
+            }
         }
+        workgroupBarrier();
     }
-    spotClusterGrid[cellIndex] = vec2u(spotOffset, spotCount);
+    if (inBounds) {
+        spotClusterGrid[cellIndex] = vec2u(spotOffset, spotCount);
+    }
 }

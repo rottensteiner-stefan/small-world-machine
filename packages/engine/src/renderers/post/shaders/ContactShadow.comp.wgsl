@@ -18,8 +18,9 @@ fn linearizeDepth(d: f32) -> f32 {
 }
 
 fn reconstructViewPos(uv: vec2f, linearZ: f32) -> vec3f {
-    let ndc = uv * 2.0 - 1.0;
-    return vec3f(ndc.x * linearZ / u.projScaleX, ndc.y * linearZ / u.projScaleY, -linearZ);
+    let ndcX = uv.x * 2.0 - 1.0;
+    let ndcY = 1.0 - uv.y * 2.0;
+    return vec3f(ndcX * linearZ / u.projScaleX, ndcY * linearZ / u.projScaleY, -linearZ);
 }
 
 fn projectViewToScreen(viewPos: vec3f) -> vec3f {
@@ -29,7 +30,7 @@ fn projectViewToScreen(viewPos: vec3f) -> vec3f {
     }
     let ndcX = (viewPos.x * u.projScaleX) / linearZ;
     let ndcY = (viewPos.y * u.projScaleY) / linearZ;
-    let uv = vec2f(ndcX * 0.5 + 0.5, ndcY * 0.5 + 0.5);
+    let uv = vec2f(ndcX * 0.5 + 0.5, 0.5 - ndcY * 0.5);
     return vec3f(uv, linearZ);
 }
 

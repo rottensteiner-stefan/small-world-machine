@@ -27,7 +27,7 @@
         user-select: none;
         z-index: 1000;
       }
-      .hud-header {
+      .settings-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -35,7 +35,7 @@
         background: rgba(255, 255, 255, 0.04);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       }
-      .hud-title {
+      .settings-title {
         font-weight: 700;
         font-size: 13px;
         display: flex;
@@ -43,7 +43,7 @@
         gap: 6px;
         color: #f8fafc;
       }
-      .hud-badge {
+      .settings-badge {
         font-size: 10px;
         background: rgba(176, 0, 255, 0.2);
         color: #d884ff;
@@ -51,13 +51,13 @@
         border-radius: 4px;
         border: 1px solid rgba(176, 0, 255, 0.35);
       }
-      .hud-body {
+      .settings-body {
         padding: 12px 14px;
         display: flex;
         flex-direction: column;
         gap: 10px;
       }
-      .hud-section {
+      .settings-section {
         background: rgba(0, 0, 0, 0.25);
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 8px;
@@ -117,14 +117,14 @@
     <showcase-layout title="Procedural Terrain (Multithreaded)" prev="../17/index.html" next="../33/index.html"><p>High-poly terrain generation on a worker thread.</p></showcase-layout>
 
     <div class="ui-panel">
-      <div class="hud-header">
-        <div class="hud-title">
+      <div class="settings-header">
+        <div class="settings-title">
           <span>⛰️</span> Terrain Generator
         </div>
-        <span class="hud-badge">Worker Pool</span>
+        <span class="settings-badge">Worker Pool</span>
       </div>
-      <div class="hud-body">
-        <div class="hud-section">
+      <div class="settings-body">
+        <div class="settings-section">
           <div class="section-title">⚡ Generation Mode</div>
           <div class="preset-group">
             <button id="btnMainThread" class="btn-preset">Main Thread</button>

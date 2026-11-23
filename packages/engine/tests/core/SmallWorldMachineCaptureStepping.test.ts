@@ -31,6 +31,8 @@ let origAudioContext: unknown;
 // removed" guard keeps running instead of auto-destroying.
 function attachTestRuntime(app: TestSmallWorldMachine): void {
   const canvas = document.createElement("canvas");
+  canvas.width = 320;
+  canvas.height = 200;
   document.body.appendChild(canvas);
   Object.defineProperty(canvas, "clientWidth", { configurable: true, value: 320 });
   Object.defineProperty(canvas, "clientHeight", { configurable: true, value: 200 });

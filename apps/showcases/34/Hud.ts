@@ -1,11 +1,11 @@
 import {
-  ShowcaseDrawer,
+  ShowcaseSettingsPanel,
   type FrameTelemetrySource,
   hudNote,
   hudSection,
   hudSlider,
   hudSwitch,
-} from "../shared/ShowcaseDrawer.js";
+} from "../shared/ShowcaseSettingsPanel.js";
 
 export type MoodPreset = "day" | "golden" | "foggy" | "dusk";
 
@@ -52,12 +52,12 @@ const SLIDERS: readonly SliderConfig[] = [
 ];
 
 /**
- * Control panel for Showcase 34 ("Billboard Grove") built on {@link ShowcaseDrawer}.
+ * Control panel for Showcase 34 ("Billboard Grove") built on {@link ShowcaseSettingsPanel}.
  * Exposes real-time controls for tree counts, visibility toggles, lighting moods,
  * fog parameters, camera presets, and 360-degree auto-orbit.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _swImposters: HTMLInputElement;
   private readonly _slTreeCount: HTMLInputElement;
   private readonly _swRealTrees: HTMLInputElement;
@@ -71,7 +71,7 @@ export class Hud {
   private readonly _camButtons: NodeListOf<HTMLButtonElement>;
 
   constructor(callbacks: HudActions, engine?: FrameTelemetrySource) {
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "billboard-grove-hud",
       title: "Billboard Grove",
       icon: "🌲",
@@ -96,7 +96,7 @@ export class Hud {
           "☀️ Atmosphere & light",
           "",
           `
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="selMood">Mood</label>
             <select id="selMood">
               <option value="day">☀️ Sunny day</option>

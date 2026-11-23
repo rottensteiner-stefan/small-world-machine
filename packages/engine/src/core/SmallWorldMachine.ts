@@ -482,13 +482,15 @@ export abstract class SmallWorldMachine {
     // enabled and the canvas has a real size, and reset to 0 otherwise so toggling TAA off
     // doesn't leave a stale offset baked into the camera.
     const taaNode = this.renderer.postProcessing.taaElement;
-    if (taaNode && taaNode.enabled && 0 < this.canvas.clientWidth && 0 < this.canvas.clientHeight) {
+    const targetWidth = this.canvas.width;
+    const targetHeight = this.canvas.height;
+    if (taaNode && taaNode.enabled && 0 < targetWidth && 0 < targetHeight) {
       this._taaFrameIndex = (this._taaFrameIndex % 16) + 1;
-      const jitterScale = 1.0; // in texels
+      const jitterScale = 1.0; // in physical texels
       this.camera.jitterX =
-        ((halton(this._taaFrameIndex, 2) - 0.5) * 2.0 * jitterScale) / this.canvas.clientWidth;
+        ((halton(this._taaFrameIndex, 2) - 0.5) * 2.0 * jitterScale) / targetWidth;
       this.camera.jitterY =
-        ((halton(this._taaFrameIndex, 3) - 0.5) * 2.0 * jitterScale) / this.canvas.clientHeight;
+        ((halton(this._taaFrameIndex, 3) - 0.5) * 2.0 * jitterScale) / targetHeight;
     } else {
       this.camera.jitterX = 0;
       this.camera.jitterY = 0;

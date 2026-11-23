@@ -520,7 +520,7 @@ export class Object3D implements Collidable {
       if (undefined === this.parent) {
         this.worldMatrix.data.set(this.localMatrix.data);
       } else {
-        Matrix4.multiply(this.parent.worldMatrix, this.localMatrix, this.worldMatrix);
+        Matrix4.multiplyAffine(this.parent.worldMatrix, this.localMatrix, this.worldMatrix);
       }
       this.matrixWorldNeedsUpdate = false;
       force = true;

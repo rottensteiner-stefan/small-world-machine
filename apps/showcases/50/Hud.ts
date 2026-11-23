@@ -1,5 +1,5 @@
-import { hudNote, hudSection, ShowcaseDrawer } from "../shared/ShowcaseDrawer.js";
-import type { FrameTelemetrySource } from "../shared/ShowcaseDrawer.js";
+import { hudNote, hudSection, ShowcaseSettingsPanel } from "../shared/ShowcaseSettingsPanel.js";
+import type { FrameTelemetrySource } from "../shared/ShowcaseSettingsPanel.js";
 
 /** What the panel reflects; read from the showcase on every {@link Hud.sync}. */
 export interface ChessLabState {
@@ -24,11 +24,11 @@ export interface ChessLabActions {
 }
 
 /**
- * Interactive Chess Lab panel of showcase 50 on the shared {@link ShowcaseDrawer}. Owns only the
+ * Interactive Chess Lab panel of showcase 50 on the shared {@link ShowcaseSettingsPanel}. Owns only the
  * controls; the model, drag controller and board live in the showcase / `ChessSet`.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
   private readonly _readout: HTMLElement;
   private _hovering: boolean = false;
 
@@ -37,7 +37,7 @@ export class Hud {
     private readonly _actions: ChessLabActions,
     fullQuality: boolean,
   ) {
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       id: "swm50-chess-hud",
       title: "Interactive Chess Lab",
       icon: "♞",
@@ -53,9 +53,9 @@ export class Hud {
             <button id="swm50ResetBoard" class="btn-preset" title="Return every piece to its home square (Shift+R)">⟲ Reset Board</button>
             <button id="swm50ResetView" class="btn-preset" title="Reset the camera to the reference view (Key R)">Reset View</button>
           </div>
-          <div class="hud-row">
+          <div class="settings-row">
             <label for="swm50GridSnap">Grid Snap</label>
-            <label class="hud-switch"><input type="checkbox" id="swm50GridSnap" checked><span class="hud-switch-slider"></span></label>
+            <label class="settings-switch"><input type="checkbox" id="swm50GridSnap" checked><span class="settings-switch-slider"></span></label>
           </div>
           <div class="hud-note">💡 Grab any piece and place it on the board. Snap locks onto the 8×8 square lattice derived from the model's own piece positions — no hardcoded board constants.</div>`,
         )}

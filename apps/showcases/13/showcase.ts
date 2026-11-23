@@ -15,7 +15,7 @@ import {
   Vector3D,
 } from "@small-world-machine/engine";
 import { Hud, type HelmetSlider, type HudState, type LightingPresetId } from "./Hud.js";
-import { isTypingTarget } from "../shared/ShowcaseDrawer.js";
+import { isTypingTarget } from "../shared/ShowcaseSettingsPanel.js";
 
 interface LightingPresetConfig {
   spotIntensity: number;

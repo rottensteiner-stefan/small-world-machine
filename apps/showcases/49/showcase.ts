@@ -45,7 +45,7 @@ type MaterialMode = "authored" | "lit" | "unlit";
  *
  * Loads the official Khronos `KHR_materials_unlit` test asset (two unlit cubes) and renders it via
  * the engine's `StandardMaterial.unlit` path (`USE_UNLIT` shader variant, all three renderer
- * tiers). The HUD (ShowcaseDrawer + perf footer) flips every material between its imported unlit
+ * tiers). The HUD (ShowcaseSettingsPanel + perf footer) flips every material between its imported unlit
  * state and a forced-lit PBR state to demonstrate that unlit output is strictly base-color,
  * independent of scene lights and IBL.
  */

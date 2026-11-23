@@ -53,6 +53,101 @@ export class RigidBody {
   /** Precalculated inverse principal inertia components (1/Ix, 1/Iy, 1/Iz). */
   public inverseInertiaTensor: Vector3D = new Vector3D(1, 1, 1);
 
+  /**
+   * Cached world-space inverse inertia tensor (symmetric 3x3: I00, I11, I22, I01, I02, I12).
+   * Evaluated once per physics step so constraint and PGS contact solving eliminates trigonometric
+   * and quaternion-vector product overhead.
+   */
+  public readonly invInertiaWorld: Float64Array = new Float64Array(6);
+  public invInertiaWorldValid: boolean = false;
+  private _cachedRotX: number = NaN;
+  private _cachedRotY: number = NaN;
+  private _cachedRotZ: number = NaN;
+
+  public updateInertiaWorld(rotation: Vector3D): void {
+    if (
+      this.invInertiaWorldValid &&
+      this._cachedRotX === rotation.x &&
+      this._cachedRotY === rotation.y &&
+      this._cachedRotZ === rotation.z
+    ) {
+      return;
+    }
+    this._cachedRotX = rotation.x;
+    this._cachedRotY = rotation.y;
+    this._cachedRotZ = rotation.z;
+
+    const ix = this.inverseInertiaTensor.x;
+    const iy = this.inverseInertiaTensor.y;
+    const iz = this.inverseInertiaTensor.z;
+    if (this._inverseMass <= 0 || (ix === 0 && iy === 0 && iz === 0)) {
+      this.invInertiaWorld.fill(0);
+      this.invInertiaWorldValid = true;
+      return;
+    }
+    if ((rotation.x === 0 && rotation.y === 0 && rotation.z === 0) || (ix === iy && iy === iz)) {
+      this.invInertiaWorld[0] = ix;
+      this.invInertiaWorld[1] = iy;
+      this.invInertiaWorld[2] = iz;
+      this.invInertiaWorld[3] = 0;
+      this.invInertiaWorld[4] = 0;
+      this.invInertiaWorld[5] = 0;
+      this.invInertiaWorldValid = true;
+      return;
+    }
+
+    // Convert YXZ Euler angles to unit quaternion
+    const rx = rotation.x * 0.5;
+    const ry = rotation.y * 0.5;
+    const rz = rotation.z * 0.5;
+    const cx = Math.cos(rx),
+      sx = Math.sin(rx);
+    const cy = Math.cos(ry),
+      sy = Math.sin(ry);
+    const cz = Math.cos(rz),
+      sz = Math.sin(rz);
+
+    const qx = cy * sx * cz + sy * cx * sz;
+    const qy = sy * cx * cz - cy * sx * sz;
+    const qz = cy * cx * sz - sy * sx * cz;
+    const qw = cy * cx * cz + sy * sx * sz;
+
+    // Rotation matrix elements from unit quaternion
+    const x2 = qx + qx,
+      y2 = qy + qy,
+      z2 = qz + qz;
+    const xx = qx * x2,
+      xy = qx * y2,
+      xz = qx * z2;
+    const yy = qy * y2,
+      yz = qy * z2,
+      zz = qz * z2;
+    const wx = qw * x2,
+      wy = qw * y2,
+      wz = qw * z2;
+
+    const r00 = 1 - (yy + zz);
+    const r01 = xy - wz;
+    const r02 = xz + wy;
+
+    const r10 = xy + wz;
+    const r11 = 1 - (xx + zz);
+    const r12 = yz - wx;
+
+    const r20 = xz - wy;
+    const r21 = yz + wx;
+    const r22 = 1 - (xx + yy);
+
+    // Symmetric world inverse inertia tensor: I_w = R * I_diag * R^T
+    this.invInertiaWorld[0] = ix * r00 * r00 + iy * r01 * r01 + iz * r02 * r02; // I00
+    this.invInertiaWorld[1] = ix * r10 * r10 + iy * r11 * r11 + iz * r12 * r12; // I11
+    this.invInertiaWorld[2] = ix * r20 * r20 + iy * r21 * r21 + iz * r22 * r22; // I22
+    this.invInertiaWorld[3] = ix * r00 * r10 + iy * r01 * r11 + iz * r02 * r12; // I01 = I10
+    this.invInertiaWorld[4] = ix * r00 * r20 + iy * r01 * r21 + iz * r02 * r22; // I02 = I20
+    this.invInertiaWorld[5] = ix * r10 * r20 + iy * r11 * r21 + iz * r12 * r22; // I12 = I21
+    this.invInertiaWorldValid = true;
+  }
+
   private readonly _math = sharedRigidBodyMath;
 
   private _inertia: number;

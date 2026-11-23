@@ -1,4 +1,4 @@
-import { ShowcaseDrawer, hudSwitch } from "../shared/ShowcaseDrawer.js";
+import { ShowcaseSettingsPanel, hudSwitch } from "../shared/ShowcaseSettingsPanel.js";
 import { bindRange } from "../shared/hudBindings.js";
 
 /** Scene state the panel mirrors. */
@@ -33,7 +33,7 @@ const PRESET_LABELS = ["Nave", "Altar", "Portal", "Carved Room"];
 
 function sliderRow(id: string, valueId: string, label: string, range: string, top: number): string {
   return `
-    <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:${top}px;">
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:${top}px;">
       <div style="display:flex;justify-content:space-between;font-size:12px;">
         <label for="${id}">${label}</label>
         <span id="${valueId}"></span>
@@ -43,17 +43,17 @@ function sliderRow(id: string, valueId: string, label: string, range: string, to
 }
 
 /**
- * Atmospheric Sanctum panel of showcase 39 on the shared {@link ShowcaseDrawer}. Owns only its
+ * Atmospheric Sanctum panel of showcase 39 on the shared {@link ShowcaseSettingsPanel}. Owns only its
  * controls; fog, sun and camera state stay in the showcase.
  */
 export class Hud {
-  private readonly _drawer: ShowcaseDrawer;
+  private readonly _drawer: ShowcaseSettingsPanel;
 
   constructor(callbacks: HudActions) {
     const presets = PRESET_LABELS.map(
       (label, i) => `<button class="btn-preset" data-cam="${i}">${label}</button>`,
     ).join("");
-    this._drawer = new ShowcaseDrawer({
+    this._drawer = new ShowcaseSettingsPanel({
       // GoldenCapture hides the panel by this id.
       id: "showcase-hud",
       title: "Atmospheric Sanctum",
@@ -62,7 +62,7 @@ export class Hud {
       footerIcon: "⚙",
       buttonId: "sanctumInspectorBtn",
       body: `
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">🌫️ Volumetric Fog & Mist</div>
           ${hudSwitch("swFog", "Volumetric Fog")}
           ${hudSwitch("swCarver", "Interior Carving")}
@@ -73,23 +73,23 @@ export class Hud {
           ${sliderRow("rngAsymmetry", "valAsymmetry", "Mie Asymmetry (g)", 'min="0.0" max="0.85" step="0.01"', 4)}
         </div>
 
-        <div class="hud-section">
+        <div class="settings-section">
           <div class="section-title">☀️ Sun & Navigation</div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
             <label>Sun Alignment</label>
             <div class="preset-group">
               <button class="btn-preset" id="btnSunNoon">High Noon</button>
               <button class="btn-preset" id="btnSunGolden">Golden Hour</button>
             </div>
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
             <label>Camera Mode [V]</label>
             <div class="preset-group">
               <button class="btn-preset" id="btnCamFly">Free-Fly (WASD)</button>
               <button class="btn-preset" id="btnCamOrbit">Orbit Mode</button>
             </div>
           </div>
-          <div class="hud-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
+          <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:6px;">
             <label>Camera Viewpoint</label>
             <div class="preset-group">${presets}</div>
           </div>

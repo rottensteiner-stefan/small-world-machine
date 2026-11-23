@@ -1058,10 +1058,10 @@ function setupUIControls(): void {
   // Footer toggle button
   const toggleBtn = document.createElement("button");
   toggleBtn.id = "surveillanceInspectorBtn";
-  toggleBtn.className = "swm-inspector-btn";
+  toggleBtn.className = "swm-settings-toggle";
   toggleBtn.innerHTML = "<span>⚙</span>";
-  toggleBtn.title = "Settings (Toggle)";
-  toggleBtn.setAttribute("aria-label", "Toggle Inspector");
+  toggleBtn.title = "Showcase Settings (Toggle)";
+  toggleBtn.setAttribute("aria-label", "Toggle Showcase Settings");
 
   const toggleInspector = (force?: boolean): void => {
     if (!drawer) return;

@@ -4,7 +4,7 @@ export interface FrameTelemetrySource {
 }
 
 /**
- * Options for {@link ShowcaseDrawer}.
+ * Options for {@link ShowcaseSettingsPanel}.
  */
 /** Minimal Compute Pressure API surface (not yet in the TS DOM lib). */
 interface PressureRecordLike {
@@ -18,14 +18,14 @@ type PressureObserverCtor = new (
   callback: (records: readonly PressureRecordLike[]) => void,
 ) => PressureObserverLike;
 
-export interface ShowcaseDrawerOptions {
+export interface ShowcaseSettingsPanelOptions {
   /** DOM id of the drawer element (also scopes per-showcase CSS, e.g. `#fire-lab-hud .foo`). */
   id: string;
-  /** Header title. */
-  title: string;
-  /** Emoji shown in the header and on the footer toggle button. */
-  icon: string;
-  /** Inner HTML of the drawer body; can be replaced later with {@link ShowcaseDrawer.setBody}. */
+  /** Header title. Defaults to `"Showcase Settings"`. */
+  title?: string | undefined;
+  /** Emoji shown in the header and on the footer toggle button. Defaults to `"⚙"`. */
+  icon?: string | undefined;
+  /** Inner HTML of the drawer body; can be replaced later with {@link ShowcaseSettingsPanel.setBody}. */
   body?: string | undefined;
   /** Whether the drawer starts open. Defaults to true. */
   open?: boolean | undefined;
@@ -71,19 +71,22 @@ const SHIELDED_EVENTS = [
 const PASSIVE_EVENTS = new Set(["wheel", "touchstart", "touchmove"]);
 
 /** Layout helpers every showcase panel re-declared locally; injected once per page. */
-const SHARED_STYLE_ID = "swm-showcase-drawer-style";
+const SHARED_STYLE_ID = "swm-showcase-settings-style";
 const SHARED_STYLE = `
-  .swm-inspector-drawer .preset-group.two-col { grid-template-columns: repeat(2, 1fr); }
-  .swm-inspector-drawer .preset-group.three-col { grid-template-columns: repeat(3, 1fr); }
-  .swm-inspector-drawer .preset-group.four-col { grid-template-columns: repeat(4, 1fr); }
-  .swm-inspector-drawer .preset-group.five-col { grid-template-columns: repeat(5, 1fr); }
-  .swm-inspector-drawer .hud-note { font-size: 10px; line-height: 1.4; color: #94a3b8; margin-top: 6px; }
-  .swm-inspector-drawer .hud-keys { font-size: 10px; line-height: 1.7; color: #94a3b8; }
-  .swm-inspector-drawer .hud-keys kbd {
+  .swm-settings-drawer .preset-group.two-col { grid-template-columns: repeat(2, 1fr); }
+  .swm-settings-drawer .preset-group.three-col { grid-template-columns: repeat(3, 1fr); }
+  .swm-settings-drawer .preset-group.four-col { grid-template-columns: repeat(4, 1fr); }
+  .swm-settings-drawer .preset-group.five-col { grid-template-columns: repeat(5, 1fr); }
+  .swm-settings-drawer .hud-note,
+  .swm-settings-drawer .settings-note { font-size: 10px; line-height: 1.4; color: #94a3b8; margin-top: 6px; }
+  .swm-settings-drawer .hud-keys,
+  .swm-settings-drawer .settings-keys { font-size: 10px; line-height: 1.7; color: #94a3b8; }
+  .swm-settings-drawer .hud-keys kbd,
+  .swm-settings-drawer .settings-keys kbd {
     font-family: var(--font-mono, "JetBrains Mono", monospace);
     border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 3px; padding: 0 4px;
   }
-  .swm-inspector-drawer .hud-perf-footer {
+  .swm-settings-drawer .hud-perf-footer {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -96,13 +99,13 @@ const SHARED_STYLE = `
     flex-shrink: 0;
     user-select: none;
   }
-  .swm-inspector-drawer .hud-perf-meta {
+  .swm-settings-drawer .hud-perf-meta {
     display: flex;
     align-items: center;
     gap: 6px;
     white-space: nowrap;
   }
-  .swm-inspector-drawer .hud-perf-indicator {
+  .swm-settings-drawer .hud-perf-indicator {
     width: 7px;
     height: 7px;
     border-radius: 50%;
@@ -111,41 +114,41 @@ const SHARED_STYLE = `
     flex-shrink: 0;
     transition: background 0.25s, box-shadow 0.25s;
   }
-  .swm-inspector-drawer .hud-perf-indicator.warn {
+  .swm-settings-drawer .hud-perf-indicator.warn {
     background: #eab308;
     box-shadow: 0 0 6px rgba(234, 179, 8, 0.6);
   }
-  .swm-inspector-drawer .hud-perf-indicator.alert {
+  .swm-settings-drawer .hud-perf-indicator.alert {
     background: #ef4444;
     box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
   }
-  .swm-inspector-drawer .hud-perf-fps {
+  .swm-settings-drawer .hud-perf-fps {
     color: #f8fafc;
     font-weight: 600;
   }
-  .swm-inspector-drawer .hud-perf-time {
+  .swm-settings-drawer .hud-perf-time {
     color: #cbd5e1;
   }
-  .swm-inspector-drawer .hud-perf-reserve {
+  .swm-settings-drawer .hud-perf-reserve {
     color: #38bdf8;
     font-weight: 500;
   }
-  .swm-inspector-drawer .hud-perf-pressure { font-weight: 500; margin-left: auto; }
-  .swm-inspector-drawer .hud-perf-pressure.nominal { color: #22c55e; }
-  .swm-inspector-drawer .hud-perf-pressure.fair { color: #38bdf8; }
-  .swm-inspector-drawer .hud-perf-pressure.serious { color: #eab308; }
-  .swm-inspector-drawer .hud-perf-pressure.critical { color: #ef4444; }
-  .swm-inspector-drawer .hud-perf-sep {
+  .swm-settings-drawer .hud-perf-pressure { font-weight: 500; margin-left: auto; }
+  .swm-settings-drawer .hud-perf-pressure.nominal { color: #22c55e; }
+  .swm-settings-drawer .hud-perf-pressure.fair { color: #38bdf8; }
+  .swm-settings-drawer .hud-perf-pressure.serious { color: #eab308; }
+  .swm-settings-drawer .hud-perf-pressure.critical { color: #ef4444; }
+  .swm-settings-drawer .hud-perf-sep {
     color: rgba(148, 163, 184, 0.4);
   }
-  .swm-inspector-drawer .hud-perf-bar {
+  .swm-settings-drawer .hud-perf-bar {
     width: 100%;
     height: 3px;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
     overflow: hidden;
   }
-  .swm-inspector-drawer .hud-perf-bar-fill {
+  .swm-settings-drawer .hud-perf-bar-fill {
     height: 100%;
     width: 100%;
     background: linear-gradient(90deg, #22c55e, #38bdf8);
@@ -155,12 +158,12 @@ const SHARED_STYLE = `
 `;
 
 /**
- * The standard showcase side panel (`swm-inspector-drawer` from shared.css): header with title
+ * The standard showcase settings side panel (`swm-settings-drawer` from shared.css): header with title
  * and close button, a body for the showcase's own controls, a footer toggle button, I/H
  * shortcut handling and shielding so clicks and drags inside the panel never move the camera.
  * Each showcase's `Hud.ts` composes one of these and owns only its content and wiring.
  */
-export class ShowcaseDrawer {
+export class ShowcaseSettingsPanel {
   /** The drawer element. */
   public readonly root: HTMLElement;
   /** Container for the showcase's controls. */
@@ -185,25 +188,27 @@ export class ShowcaseDrawer {
   /** Compute Pressure observer of this drawer (absent where the browser lacks the API). */
   private _pressureObserver: PressureObserverLike | undefined = undefined;
 
-  constructor(options: ShowcaseDrawerOptions) {
+  constructor(options: ShowcaseSettingsPanelOptions) {
+    const title = options.title ?? "Showcase Settings";
+    const icon = options.icon ?? "⚙";
     this._toggleKeys = options.toggleKeys ?? ["KeyI", "KeyH"];
     this._onToggle = options.onToggle;
     const keyHint = this._toggleKeys.map((code) => code.replace("Key", "")).join(" / ");
-    ShowcaseDrawer._injectSharedStyle();
+    ShowcaseSettingsPanel._injectSharedStyle();
     document.getElementById(options.id)?.remove();
 
     const root = document.createElement("aside");
     root.id = options.id;
-    root.className = "swm-inspector-drawer";
+    root.className = "swm-settings-drawer";
     root.innerHTML = `
       <div class="bottom-sheet-grabber"></div>
-      <div class="hud-header">
-        <div class="hud-title"><span>${options.icon}</span> ${options.title}</div>
+      <div class="settings-header">
+        <div class="settings-title"><span>${icon}</span> ${title}</div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <button class="hud-close-btn" title="Close panel (${keyHint})">✕</button>
+          <button class="settings-close-btn" title="Close panel (${keyHint})">✕</button>
         </div>
       </div>
-      <div class="hud-body"></div>
+      <div class="settings-body"></div>
       ${
         options.showPerf !== false
           ? `
@@ -233,8 +238,8 @@ export class ShowcaseDrawer {
     }
     document.body.appendChild(root);
     this.root = root;
-    this.body = root.querySelector(".hud-body") as HTMLElement;
-    (root.querySelector(".hud-close-btn") as HTMLButtonElement).onclick = (): void =>
+    this.body = root.querySelector(".settings-body") as HTMLElement;
+    (root.querySelector(".settings-close-btn") as HTMLButtonElement).onclick = (): void =>
       this.toggle(false);
 
     if (options.showPerf !== false) {
@@ -248,13 +253,13 @@ export class ShowcaseDrawer {
     }
 
     const button = document.createElement("button");
-    button.className = "swm-inspector-btn";
+    button.className = "swm-settings-toggle";
     if (options.buttonId) {
       button.id = options.buttonId;
     }
-    button.innerHTML = `<span>${options.footerIcon ?? options.icon}</span>`;
-    button.title = `${options.title} (${keyHint})`;
-    button.setAttribute("aria-label", `Toggle ${options.title}`);
+    button.innerHTML = `<span>${options.footerIcon ?? icon}</span>`;
+    button.title = `${title} (${keyHint})`;
+    button.setAttribute("aria-label", `Toggle ${title}`);
     button.onclick = (): void => this.toggle();
     this.toggleButton = button;
     this._mountInFooter(button);
@@ -465,6 +470,8 @@ export class ShowcaseDrawer {
   }
 }
 
+export { ShowcaseSettingsPanel as ShowcaseSettingsDrawer };
+
 /** True while the user types into a form field, so single-letter shortcuts must not fire. */
 export function isTypingTarget(): boolean {
   const tag = document.activeElement?.tagName;
@@ -474,7 +481,7 @@ export function isTypingTarget(): boolean {
 /** Section with the standard title row (`hint` is the small right-aligned shortcut text). */
 export function hudSection(title: string, hint: string, content: string): string {
   return `
-    <div class="hud-section">
+    <div class="settings-section">
       <div class="section-title"><span>${title}</span><span style="font-size:9px;color:#64748b;">${hint}</span></div>
       ${content}
     </div>`;
@@ -483,9 +490,9 @@ export function hudSection(title: string, hint: string, content: string): string
 /** Labelled on/off switch row. */
 export function hudSwitch(id: string, label: string): string {
   return `
-    <div class="hud-row">
+    <div class="settings-row">
       <label for="${id}">${label}</label>
-      <label class="hud-switch"><input type="checkbox" id="${id}"><span class="hud-switch-slider"></span></label>
+      <label class="settings-switch"><input type="checkbox" id="${id}"><span class="settings-switch-slider"></span></label>
     </div>`;
 }
 
@@ -498,7 +505,7 @@ export function hudSlider(
   step: number,
 ): string {
   return `
-    <div class="hud-row">
+    <div class="settings-row">
       <label for="${id}">${label}</label>
       <input id="${id}" type="range" min="${min}" max="${max}" step="${step}" />
       <span id="${id}_val" class="val-label"></span>
@@ -509,3 +516,10 @@ export function hudSlider(
 export function hudNote(html: string): string {
   return `<div class="hud-note">${html}</div>`;
 }
+
+export {
+  hudSection as settingsSection,
+  hudSwitch as settingsSwitch,
+  hudSlider as settingsSlider,
+  hudNote as settingsNote,
+};
