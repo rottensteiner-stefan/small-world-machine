@@ -99,14 +99,9 @@ describe("Level Schema & Level Manifest Validation", () => {
         expect(levelData.schemaVersion).toBe(LEVEL_SCHEMA_VERSION);
       });
 
-      it("its own $schema pointer resolves to public/schemas/level.schema.json", () => {
+      it("declares the canonical $schema URI matching level.schema.json $id", () => {
         levelData = JSON.parse(rawContent) as LevelDescriptor;
-        expect(levelData.$schema).toBeDefined();
-        const resolved = path.resolve(path.dirname(levelPath), levelData.$schema!);
-        expect(fs.existsSync(resolved), `$schema does not resolve: ${levelData.$schema}`).toBe(
-          true,
-        );
-        expect(resolved).toBe(schemaPath);
+        expect(levelData.$schema).toBe(schemaJson["$id"]);
       });
 
       it("references existing kit props in public/assets/kits/", () => {

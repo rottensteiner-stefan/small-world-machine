@@ -74,10 +74,14 @@ const kitsRootDir = path.resolve(process.cwd(), "public/assets/kits");
 const schemasDir = path.resolve(process.cwd(), "public/schemas");
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const kitSchema = JSON.parse(fs.readFileSync(path.join(schemasDir, "kit.schema.json"), "utf-8"));
+const kitsIndexSchema = JSON.parse(
+  fs.readFileSync(path.join(schemasDir, "kits-index.schema.json"), "utf-8"),
+);
 const propMetaSchema = JSON.parse(
   fs.readFileSync(path.join(schemasDir, "prop-meta.schema.json"), "utf-8"),
 );
 const validateKit: ValidateFunction = ajv.compile(kitSchema);
+const validateKitsIndex: ValidateFunction = ajv.compile(kitsIndexSchema);
 const validatePropMeta: ValidateFunction = ajv.compile(propMetaSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -174,6 +178,17 @@ const kitNames = fs
   .sort();
 
 describe("Asset Kits & Metadata Standards (ADR 0011)", () => {
+  it("validates public/assets/kits/index.json (and optional index.local.json) against kits-index.schema.json", () => {
+    const expectedSchemaId = (kitsIndexSchema as { $id: string }).$id;
+    for (const fileName of ["index.json", "index.local.json"]) {
+      const indexPath = path.join(kitsRootDir, fileName);
+      if (fileName === "index.local.json" && !fs.existsSync(indexPath)) continue;
+      const indexData = JSON.parse(fs.readFileSync(indexPath, "utf-8")) as { $schema?: string };
+      expect(validateKitsIndex(indexData), formatAjvErrors(validateKitsIndex)).toBe(true);
+      expect(indexData.$schema, `${fileName} has incorrect $schema`).toBe(expectedSchemaId);
+    }
+  });
+
   it("finds at least one kit to validate", () => {
     expect(kitNames.length).toBeGreaterThan(0);
   });
@@ -189,14 +204,11 @@ describe("Asset Kits & Metadata Standards (ADR 0011)", () => {
       expect(valid, formatAjvErrors(validateKit)).toBe(true);
     });
 
-    it("its own $schema pointer resolves to the real schema file (not expressible in the schema itself)", () => {
+    it("declares the canonical $schema URI matching kit.schema.json $id", () => {
       const raw = JSON.parse(fs.readFileSync(path.join(kitDir, "kit.json"), "utf-8")) as {
         $schema?: string;
       };
-      expect(raw.$schema).toBeDefined();
-      const resolved = path.resolve(kitDir, raw.$schema!);
-      expect(fs.existsSync(resolved), `$schema does not resolve: ${raw.$schema}`).toBe(true);
-      expect(resolved).toBe(path.join(schemasDir, "kit.schema.json"));
+      expect(raw.$schema).toBe((kitSchema as { $id: string }).$id);
     });
 
     it("has a manifest whose id matches its directory name", () => {
@@ -255,6 +267,21 @@ describe("Asset Kits & Metadata Standards (ADR 0011)", () => {
         const budget = tierBudgetFor(lMax);
         const legacy = GRANDFATHERED_BASELINES[item.id];
 
+        // Rigged hero characters follow prop-meta.schema.json's 25,000-tri budget rather than
+        // static environment-prop Tiers T1-T4.
+        if (item.category === "characters") {
+          const characterMaxTris = 25000;
+          expect(
+            realTris,
+            `${item.id}: Character ${realTris} Tris über Budget ${characterMaxTris} (prop-meta.schema.json)`,
+          ).toBeLessThanOrEqual(characterMaxTris);
+          expect(
+            fileBytes,
+            `${item.id}: GLB ${fileBytes}B über Max ${MAX_GLB_BYTES}B`,
+          ).toBeLessThanOrEqual(MAX_GLB_BYTES);
+          continue;
+        }
+
         // Grandfathered Bestand: Baseline nicht überschreiten (Regression verhindern).
         if (legacy) {
           expect(
@@ -296,19 +323,13 @@ describe("Asset Kits & Metadata Standards (ADR 0011)", () => {
       }
     });
 
-    it("every item's meta.json $schema pointer resolves to the real schema file", () => {
+    it("every item's meta.json declares the canonical $schema URI matching prop-meta.schema.json $id", () => {
+      const expectedSchemaId = (propMetaSchema as { $id: string }).$id;
       for (const item of manifest.items ?? []) {
-        const metaDir = path.dirname(path.join(kitDir, item.meta));
         const raw = JSON.parse(fs.readFileSync(path.join(kitDir, item.meta), "utf-8")) as {
           $schema?: string;
         };
-        expect(raw.$schema, `${item.meta} has no $schema`).toBeDefined();
-        const resolved = path.resolve(metaDir, raw.$schema!);
-        expect(
-          fs.existsSync(resolved),
-          `${item.meta}: $schema does not resolve: ${raw.$schema}`,
-        ).toBe(true);
-        expect(resolved).toBe(path.join(schemasDir, "prop-meta.schema.json"));
+        expect(raw.$schema, `${item.meta} has incorrect $schema`).toBe(expectedSchemaId);
       }
     });
 

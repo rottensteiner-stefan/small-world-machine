@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../public/schemas/app.schema.json",
+  "$schema": "https://small-world-machine.dev/schemas/app.schema.json",
   "id": "light-cycle-arena",
   "name": "Light Cycle Arena",
   "version": "0.1.0",

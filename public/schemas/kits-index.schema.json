@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://small-world-machine.dev/schemas/kits-index.schema.json",
+  "title": "Small World Machine Asset Kits Index",
+  "description": "Schema for public/assets/kits/index.json listing published kit IDs.",
+  "type": "object",
+  "required": ["kits"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "kits": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "uniqueItems": true
+    }
+  }
+}

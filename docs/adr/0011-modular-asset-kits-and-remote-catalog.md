@@ -1,12 +1,13 @@
 # Modulare Asset-Kits & Out-of-Tree-Asset-Bibliotheks-Architektur
 
-> **Stand-Hinweis (2026-10-21):** Phase 1 umgesetzt, Phase 2 teilweise (siehe Status-Block unten). Der Katalog-Index `public/assets/kits/index.json` (`{ "kits": [...] }`) ist hier nicht erwähnt; sein `$schema` verweist auf `schemas/kits-index.schema.json`, das (noch) nicht existiert.
+> **Stand-Hinweis (2026-11-24):** Phase 1 umgesetzt, Phase 2 teilweise (siehe Status-Block unten). Alle Schema-Referenzen (`$schema` in `kit.json`, `meta.json`, `index.json`) verwenden einheitlich die kanonischen `$id`-URIs (`https://small-world-machine.dev/schemas/*.schema.json`) mit lokalem IDE-Schema-Catalog (`.vscode/settings.json`, `.idea/jsonSchemas.xml`); `public/schemas/kits-index.schema.json` existiert nun ebenfalls.
 
 ## Kontext & Problem
 
 Während das Small-World-Machine-Ökosystem um reichhaltigere Diorama-Szenen, Charaktere, Animationen und 3D-Requisiten wächst (etwa die per Tripo3D generierten Industrie-Schott-Wandlampen, Holzkisten, Wellblech-Ölfässer, polygonalen Schutthaufen und humanoiden Biped-Rigs), wächst das Volumen binärer Assets rasant.
 
 Große Binär-Assets (`.glb`-Modelle, 2K/4K-PBR-Texturkarten, Skelett-Bewegungsclips, Audio) direkt in das Git-Repository des Kern-Engines einzuchecken, verursacht grundlegende Probleme:
+
 1. **Repository-Aufblähung:** Git verfolgt binäre Delta-Historien ineffizient. Die Größe des `.git`-Repositorys wächst monoton und verlangsamt `git clone`, CI-Builds und `npm install` für Entwickler, die nur die TypeScript-Rendering-/Mathe-Laufzeit benötigen.
 2. **Kopplung von Engine & Inhalt:** Beispiel-Assets und app-spezifische Requisiten verheddern sich mit den Kernmodulen der Engine.
 3. **Auffindbarkeit & Wiederverwendbarkeit:** Assets, die für eine App erstellt wurden (z. B. ein Spiel), sind schwer zu durchsuchen, zu betrachten und in anderen Apps oder Werkzeugen (wie `MaterialStudio` oder `Maker`) wiederzuverwenden.
@@ -19,9 +20,10 @@ Wir etablieren einen 3-phasigen Architekturstandard für modulare Asset-Kits und
 
 **Namensfrage geklärt (2026-09-17):** Der Dateiname für das Kit-Manifest ist `kit.json` --
 verbindlich, keine Abweichung mehr zulässig. Erwogen und verworfen:
+
 - `package.json` -- kollidiert mit npm; selbst wenn der aktuelle Workspace-Glob
   (`packages/*`, `apps/*`) `public/assets/kits/*` nicht erfasst, durchsuchen IDEs und andere
-  Tools den Baum nach *jeder* Datei mit diesem Namen, nicht nur nach Workspace-Mitgliedern.
+  Tools den Baum nach _jeder_ Datei mit diesem Namen, nicht nur nach Workspace-Mitgliedern.
 - `manifest.json` -- keine harte Kollision (kein PWA-Manifest, kein Vite-Build-Manifest im
   Projekt referenziert), aber der Name ist im Web-Kontext stark mit PWA-/Browser-Extension-
   Manifesten assoziiert -- unnötige Verwechslungsgefahr ohne echten Zugewinn.
@@ -38,29 +40,36 @@ prüft -- nicht mehr nur `industrial/` wie zuvor):
 - **`kit.json`** (ein pro Kit, Feldreihenfolge wie unten):
   ```jsonc
   {
-    "id": "bunker",                // == Verzeichnisname, keine Ausnahme
-    "name": "Bunker Architectural Kit",  // Anzeigename, kein separates displayName
-    "version": "1.0.0",            // SemVer
+    "id": "bunker", // == Verzeichnisname, keine Ausnahme
+    "name": "Bunker Architectural Kit", // Anzeigename, kein separates displayName
+    "version": "1.0.0", // SemVer
     "description": "...",
-    "items": [                     // 3D-Requisiten mit model.glb; leeres Array zulässig
+    "items": [
+      // 3D-Requisiten mit model.glb; leeres Array zulässig
       {
-        "id": "bunker/blast_door",   // IMMER "<kit-id>/<slug>", auch in meta.json gespiegelt
+        "id": "bunker/blast_door", // IMMER "<kit-id>/<slug>", auch in meta.json gespiegelt
         "name": "Heavy Double Blast Door",
         "category": "doors",
-        "path": "props/bunker_blast_door/model.glb",     // relativ zum Kit-Root, nicht zum Item
+        "path": "props/bunker_blast_door/model.glb", // relativ zum Kit-Root, nicht zum Item
         "preview": "props/bunker_blast_door/preview.jpg", // .jpg ratifiziert, nicht .webp
-        "meta": "props/bunker_blast_door/meta.json"       // Pflichtfeld -- jedes Item verweist auf sein meta.json
-      }
+        "meta": "props/bunker_blast_door/meta.json", // Pflichtfeld -- jedes Item verweist auf sein meta.json
+      },
     ],
-    "textures": [                  // optional: reine PBR-Materialien ohne eigenes meta.json
-      { "id": "bunker/concrete_board", "name": "...", "category": "walls",
-        "maps": ["albedo.png", "normal.png", "roughness.png", "ao.png"] }
+    "textures": [
+      // optional: reine PBR-Materialien ohne eigenes meta.json
+      {
+        "id": "bunker/concrete_board",
+        "name": "...",
+        "category": "walls",
+        "maps": ["albedo.png", "normal.png", "roughness.png", "ao.png"],
+      },
     ],
-    "decals": [                    // optional: einzelne PNG-Sticker ohne eigenes meta.json
-      { "id": "bunker/sign_room1", "name": "...", "file": "sign_room1.png" }
+    "decals": [
+      // optional: einzelne PNG-Sticker ohne eigenes meta.json
+      { "id": "bunker/sign_room1", "name": "...", "file": "sign_room1.png" },
     ],
     "author": "Small World Machine Studio",
-    "license": "CC0-1.0"
+    "license": "CC0-1.0",
   }
   ```
 - **`meta.json`** (eines pro `items`-Eintrag, neben dessen `model.glb`): `id` (== das `items[].id`
@@ -88,12 +97,15 @@ Validierungstest nicht erkennen konnte.
 `"$id"` von der Form `https://small-world-machine.dev/schemas/<name>.schema.json` tragen; sobald
 `public/` unter dieser Domain ausgeliefert wird, referenziert die `$id` exakt den Pfad, unter dem
 die Datei tatsächlich liegt, statt eine URL zu behaupten, die nirgendwo real bedient wird. Jede
-echte `kit.json`/`meta.json` trägt ein `"$schema"`-Feld (relativer Pfad zu `public/schemas/`), das
-auf die passende Datei zeigt -- IDEs mit JSON-Schema-Unterstützung (VSCode, WebStorm/PhpStorm)
-validieren und autovervollständigen damit schon beim Tippen, nicht erst beim Testlauf.
+echte `kit.json`/`meta.json` (wie auch `index.json`) trägt ein `"$schema"`-Feld mit genau dieser
+kanonischen `$id`-URI (`https://small-world-machine.dev/schemas/<name>.schema.json`, analog zu
+XML-Namespace/Catalog-URIs), statt fragiler relativer Pfade (`../../../../schemas/...`); lokale
+IDE-Mappings in `.vscode/settings.json` und `.idea/jsonSchemas.xml` lösen diese URIs offline direkt
+auf `public/schemas/*.schema.json` auf, sodass VSCode und JetBrains IDEs schon beim Tippen
+validieren und autovervollständigen.
 [`AssetKitValidation.test.ts`](../../packages/engine/tests/loaders/AssetKitValidation.test.ts)
 kompiliert beide Schemas per [Ajv](https://ajv.js.org/) und validiert jede reale Datei dagegen.
-Ein JSON Schema prüft nur die *Form* eines einzelnen Dokuments (Pflichtfelder, Typen, Patterns);
+Ein JSON Schema prüft nur die _Form_ eines einzelnen Dokuments (Pflichtfelder, Typen, Patterns);
 es sieht nicht über Dateigrenzen hinweg. Cross-File-Prüfungen -- `id` gleich Verzeichnisname,
 `item.meta` verweist auf eine wirklich existierende Datei, `meta.kit` gleich der eigenen
 `kit.json`-`id` -- bleiben deshalb als eigene Assertions im selben Test bestehen, nicht als
@@ -110,17 +122,18 @@ Pauschale Polycounts (z. B. flache 12.000 Tris für alle Modelle) sind grafiktec
 
 Alle Kit-Props folgen daher verbindlich dem **4-Tier-Budget-Rezept** nach Objektgröße (Bounding Box / Volumen) und Relevanz:
 
-| Tier | Kategorie & Beispiele | Bounding-Box ($L_\text{max}$) | Ziel-Budget (Tris) | Standard-Textur |
-| :--- | :--- | :---: | :---: | :---: |
-| **Tier 1: Clutter / Kleinteile** | Teller, Besteck, Tassen, Schalter, Notizen | $\le 0{,}35\,\text{m}$ | **$800 – 1.500$** | $512 \times 512$ |
-| **Tier 2: Medium Props** | Stiefel, Kerosinlampe, Hocker, Eimer, Wandregal | $0{,}35 – 1{,}0\,\text{m}$ | **$2.500 – 4.500$** | $1024 \times 1024$ |
-| **Tier 3: Möbel / Großobjekte** | Schreibtisch, Hochbett, Terminal, Schrank, Fässer | $1{,}0 – 2{,}5\,\text{m}$ | **$6.000 – 10.000$** | $1024 / 2048$ |
-| **Tier 4: Hero / Architektur** | Bunkertore, Schutthaufen, Schleusen, Fahrzeuge | $> 2{,}5\,\text{m}$ | **$10.000 – 16.000$** | $2048 \times 2048$ |
+| Tier                             | Kategorie & Beispiele                             | Bounding-Box ($L_\text{max}$) |  Ziel-Budget (Tris)   |  Standard-Textur   |
+| :------------------------------- | :------------------------------------------------ | :---------------------------: | :-------------------: | :----------------: |
+| **Tier 1: Clutter / Kleinteile** | Teller, Besteck, Tassen, Schalter, Notizen        |    $\le 0{,}35\,\text{m}$     |   **$800 – 1.500$**   |  $512 \times 512$  |
+| **Tier 2: Medium Props**         | Stiefel, Kerosinlampe, Hocker, Eimer, Wandregal   |  $0{,}35 – 1{,}0\,\text{m}$   |  **$2.500 – 4.500$**  | $1024 \times 1024$ |
+| **Tier 3: Möbel / Großobjekte**  | Schreibtisch, Hochbett, Terminal, Schrank, Fässer |   $1{,}0 – 2{,}5\,\text{m}$   | **$6.000 – 10.000$**  |   $1024 / 2048$    |
+| **Tier 4: Hero / Architektur**   | Bunkertore, Schutthaufen, Schleusen, Fahrzeuge    |      $> 2{,}5\,\text{m}$      | **$10.000 – 16.000$** | $2048 \times 2048$ |
 
 - **Pipeline-Doktrin:** Die Budgets werden **Upstream bei der Modellerstellung / im Tripo-Export / DCC-Remeshing** (`face_limit` / `decimate`) verbindlich festgelegt, um sicherzustellen, dass Textur-Bakes, UV-Seams und Vertex-Normalen sauber erhalten bleiben. Post-Hoc-Dezimierung ohne UV-Re-Bake ist unzulässig.
 - **Status (2026-10-07):** Festgelegt als verbindlicher Standard für alle neuen Kit- und Prop-Erstellungen. Bestehende Original-Assets wurden unverändert beibehalten.
 
 ### 2. Phase 2: Out-of-Tree-Repository & CDN-Distribution
+
 - **Dediziertes Asset-Repository (`small-world-machine-assets`):** Binäre Produktions-Assets, rohe DCC-Dateien und Kit-Bündel werden in einem dedizierten Repository oder Git-LFS-Speicher untergebracht.
 - **CDN-Distribution:** Assets werden auf ein schnelles CDN veröffentlicht (über GitHub Releases, jsDelivr oder Cloudflare), sodass Szenen Standard-Assets über Remote-URIs referenzieren können, ohne den lokalen Datenträger aufzublähen.
 
@@ -131,6 +144,7 @@ umgesetzt ist: das dedizierte Out-of-Tree-Repository `small-world-machine-assets
 Distribution (Remote-URIs) und damit der eigentliche entfernte Katalog-Ingest.
 
 ### 3. Phase 3: Laufzeit-Katalog-Ingest & CLI-Tooling
+
 - **`GltfLoader`-Katalog-Auflösung:** `GltfLoader` um Katalog-Alias-Auflösung erweitern:
   ```typescript
   // Löst zum lokalen Cache oder CDN-Fallback auf:
@@ -149,7 +163,7 @@ existiert inzwischen, siehe ADR 0034, mit `map to-json|from-json` und `kit valid
 ## Konsequenzen
 
 - **Leichtgewichtiger Kern-Engine:** Das Kern-Repository von `small-world-machine` bleibt schlank, schnell zu klonen und frei von schwerem binärem Ballast.
-- **Modularität:** Ersteller können in sich geschlossene, thematische Asset-Pakete veröffentlichen und konsumieren (z. B. *Graphic Noir Sewer Kit*, *Industrial Bunker Kit*, *Character Starter Kit*).
+- **Modularität:** Ersteller können in sich geschlossene, thematische Asset-Pakete veröffentlichen und konsumieren (z. B. _Graphic Noir Sewer Kit_, _Industrial Bunker Kit_, _Character Starter Kit_).
 - **Tooling-Kompatibilität:** `Maker` (Nachfolger von `GadgetInspector`, siehe ADR 0010),
   `MaterialStudio` und künftige In-Game-Szeneneditoren können Asset-Auswahl-Paletten dynamisch
   direkt aus Kit-Manifesten befüllen.

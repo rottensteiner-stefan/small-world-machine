@@ -6,5 +6,27 @@
   },
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.preferences.includePackageJsonAutoImports": "on",
-  "files.eol": "\n"
+  "files.eol": "\n",
+  "json.schemas": [
+    {
+      "fileMatch": ["public/assets/kits/*/kit.json"],
+      "url": "./public/schemas/kit.schema.json"
+    },
+    {
+      "fileMatch": ["public/assets/kits/**/meta.json"],
+      "url": "./public/schemas/prop-meta.schema.json"
+    },
+    {
+      "fileMatch": ["public/assets/kits/index.json", "public/assets/kits/index.local.json"],
+      "url": "./public/schemas/kits-index.schema.json"
+    },
+    {
+      "fileMatch": ["apps/**/*.level.json"],
+      "url": "./public/schemas/level.schema.json"
+    },
+    {
+      "fileMatch": ["apps/**/app.json"],
+      "url": "./public/schemas/app.schema.json"
+    }
+  ]
 }

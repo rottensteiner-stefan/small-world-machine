@@ -93,12 +93,9 @@ describe("Application Manifests & Schema Validation (ADR 0041 Stufe 1)", () => {
       expect(raw.schemaVersion).toBe(APP_SCHEMA_VERSION);
     });
 
-    it("resolves its $schema pointer to public/schemas/app.schema.json", () => {
+    it("declares the canonical $schema URI matching app.schema.json $id", () => {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as AppManifest;
-      expect(manifest.$schema).toBeDefined();
-      const resolved = path.resolve(appDir, manifest.$schema!);
-      expect(fs.existsSync(resolved), `$schema does not resolve: ${manifest.$schema}`).toBe(true);
-      expect(resolved).toBe(appSchemaPath);
+      expect(manifest.$schema).toBe((appSchema as { $id: string }).$id);
     });
 
     it("resolves entry, code.module, kits, and levels to real files", () => {

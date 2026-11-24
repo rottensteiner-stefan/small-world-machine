@@ -763,6 +763,24 @@ export function lintGlbModel(
           message: `GLB size ${fileBytes}B exceeds grandfathered baseline of ${legacy.bytes}B`,
         });
       }
+    } else if (meta.category === "characters") {
+      const characterMaxTris = 25000;
+      if (realTris > characterMaxTris) {
+        issues.push({
+          rule: "polycount-budget",
+          severity: "error",
+          assetId,
+          message: `Character ${realTris} tris exceeds maximum hero budget of ${characterMaxTris} tris (prop-meta.schema.json)`,
+        });
+      }
+      if (fileBytes > MAX_GLB_BYTES) {
+        issues.push({
+          rule: "polycount-budget",
+          severity: "error",
+          assetId,
+          message: `GLB size ${fileBytes}B exceeds maximum reference limit of ${MAX_GLB_BYTES}B (3MB)`,
+        });
+      }
     } else {
       if (realTris > budget.maxTris) {
         issues.push({
@@ -1053,10 +1071,19 @@ export interface LintAssetsSummary {
   issues: AssetLintIssue[];
 }
 
+export interface LintAssetsOptions {
+  /** Scan every kit directory/symlink under public/assets/kits/** instead of only index.json tracked kits. */
+  all?: boolean;
+}
+
 /**
- * Runs the asset linter across specified target paths or public/assets/kits/**.
+ * Runs the asset linter across specified target paths, tracked `index.json` kits (default),
+ * or all kits/symlinks under `public/assets/kits/**` when `options.all` is true.
  */
-export function lintAssets(targetPaths?: string[]): LintAssetsSummary {
+export function lintAssets(
+  targetPaths?: string[],
+  options: LintAssetsOptions = {},
+): LintAssetsSummary {
   const root = path.resolve(process.cwd());
   const kitsRootDir = path.join(root, "public/assets/kits");
   const allIssues: AssetLintIssue[] = [];
@@ -1083,12 +1110,17 @@ export function lintAssets(targetPaths?: string[]): LintAssetsSummary {
           const kitIssues = lintKit(fullPath);
           allIssues.push(...kitIssues);
         } else {
-          // Check if it's kits parent dir
-          const entries = fs.readdirSync(fullPath, { withFileTypes: true });
-          for (const e of entries) {
-            if (e.isDirectory() && fs.existsSync(path.join(fullPath, e.name, "kit.json"))) {
+          // Check if it's kits parent dir (also follow symlinked kits via statSync)
+          const entries = fs.readdirSync(fullPath);
+          for (const entryName of entries) {
+            const candidate = path.join(fullPath, entryName);
+            if (
+              fs.existsSync(candidate) &&
+              fs.statSync(candidate).isDirectory() &&
+              fs.existsSync(path.join(candidate, "kit.json"))
+            ) {
               scannedKits++;
-              const kitIssues = lintKit(path.join(fullPath, e.name));
+              const kitIssues = lintKit(candidate);
               allIssues.push(...kitIssues);
             }
           }
@@ -1105,13 +1137,31 @@ export function lintAssets(targetPaths?: string[]): LintAssetsSummary {
         allIssues.push(...issues);
       }
     }
-  } else {
-    // Default: scan all kits in public/assets/kits/**
-    if (fs.existsSync(kitsRootDir)) {
-      const entries = fs.readdirSync(kitsRootDir, { withFileTypes: true });
-      for (const e of entries) {
-        const kitDir = path.join(kitsRootDir, e.name);
-        if (e.isDirectory() && fs.existsSync(path.join(kitDir, "kit.json"))) {
+  } else if (fs.existsSync(kitsRootDir)) {
+    const indexPath = path.join(kitsRootDir, "index.json");
+    if (!options.all && fs.existsSync(indexPath)) {
+      const indexJson = JSON.parse(fs.readFileSync(indexPath, "utf8")) as { kits?: string[] };
+      for (const kitName of indexJson.kits ?? []) {
+        const kitDir = path.join(kitsRootDir, kitName);
+        if (
+          fs.existsSync(kitDir) &&
+          fs.statSync(kitDir).isDirectory() &&
+          fs.existsSync(path.join(kitDir, "kit.json"))
+        ) {
+          scannedKits++;
+          const kitIssues = lintKit(kitDir);
+          allIssues.push(...kitIssues);
+        }
+      }
+    } else {
+      const entries = fs.readdirSync(kitsRootDir);
+      for (const entryName of entries) {
+        const kitDir = path.join(kitsRootDir, entryName);
+        if (
+          fs.existsSync(kitDir) &&
+          fs.statSync(kitDir).isDirectory() &&
+          fs.existsSync(path.join(kitDir, "kit.json"))
+        ) {
           scannedKits++;
           const kitIssues = lintKit(kitDir);
           allIssues.push(...kitIssues);
@@ -1138,6 +1188,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const args = process.argv.slice(2);
   const isHelp = args.includes("-h") || args.includes("--help");
   const isVerbose = args.includes("-v") || args.includes("--verbose");
+  const isAll = args.includes("-a") || args.includes("--all");
   const targetPaths = args.filter((a) => !a.startsWith("-"));
 
   if (isHelp) {
@@ -1145,7 +1196,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 Asset Linter CLI (Small World Machine)
 Usage: npm run lint:assets [-- [options] [paths...]]
 
-Checks all modular models and kits under public/assets/kits/** against 7 core rules:
+Checks tracked kits (public/assets/kits/index.json) or specified paths/all kits (--all) against 7 core rules:
   1. Geometrie-Vollständigkeit: POSITION (VEC3), NORMAL (VEC3), TEXCOORD_0 (VEC2), TANGENT (VEC4).
   2. Degenerierte Dreiecke: No zero-area triangles, collinear vertices, duplicate indices, or NaN/Inf.
   3. Root-Transform-Konformität: Root nodes must have identity transforms (no unbaked translation/rotation/scale).
@@ -1155,6 +1206,7 @@ Checks all modular models and kits under public/assets/kits/** against 7 core ru
   7. Textur-Slot- und Namensverträge: Texture slot matching via TextureSlotMatcher & WebP format contracts.
 
 Options:
+  -a, --all        Scan all kits (including local/symlinked kits in public/assets/kits/)
   -v, --verbose    Print detailed asset checks and stats
   -h, --help       Show this help message
 `);
@@ -1162,7 +1214,7 @@ Options:
   }
 
   console.log("==> Running Small World Machine Asset Linter (7 core checks)...");
-  const summary = lintAssets(targetPaths.length > 0 ? targetPaths : undefined);
+  const summary = lintAssets(targetPaths.length > 0 ? targetPaths : undefined, { all: isAll });
 
   if (isVerbose) {
     console.log(`Scanned ${summary.scannedKits} kits, ${summary.scannedItems} standalone items.`);

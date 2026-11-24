@@ -1,4 +1,4 @@
 {
-  "$schema": "../../schemas/kits-index.schema.json",
+  "$schema": "https://small-world-machine.dev/schemas/kits-index.schema.json",
   "kits": ["industrial"]
 }
