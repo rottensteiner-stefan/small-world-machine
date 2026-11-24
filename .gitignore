@@ -51,6 +51,11 @@ docs/.vitepress/cache/
 # Showcase 9 local character override (dev only, never committed)
 /apps/showcases/9/assets/local/
 
+# Local-only kit symlinks and local index (dev only, never committed)
+/public/assets/kits/*
+!/public/assets/kits/industrial/
+!/public/assets/kits/index.json
+
 # Originals / DCC sources never go into git (engine ADR 0058); durable copy in Google Drive
 # "Small-World-Machine/<repo>/..." with MANIFEST.txt. raw/ is local staging only.
 raw/

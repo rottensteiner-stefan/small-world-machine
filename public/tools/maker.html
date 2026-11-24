@@ -248,6 +248,9 @@
       .maker-viewport {
         position: relative;
         background: var(--tool-bg);
+        overflow: hidden;
+        height: 100%;
+        min-height: 0;
       }
       .maker-marquee-box {
         position: absolute;
@@ -258,8 +261,8 @@
         z-index: 10;
       }
       #MakerCanvas {
-        width: 100%;
-        height: 100%;
+        width: 100% !important;
+        height: 100% !important;
         display: block;
       }
       #maker-properties {

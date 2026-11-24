@@ -519,29 +519,43 @@ export class ContentDrawer {
       const index = (await this._kitRegistry.assetManager.loadJson(
         `${this._kitRegistry.basePath}index.json`,
       )) as { kits?: string[] };
-      const kitIds = index.kits ?? [];
+      let kitIds = index.kits ?? [];
+
+      try {
+        const localIndex = (await this._kitRegistry.assetManager.loadJson(
+          `${this._kitRegistry.basePath}index.local.json`,
+        )) as { kits?: string[] };
+        if (localIndex?.kits) {
+          kitIds = Array.from(new Set([...kitIds, ...localIndex.kits]));
+        }
+      } catch {
+        // Optional local dev index not present in production/CI
+      }
 
       for (const kitId of kitIds) {
         try {
           const manifest = await this._kitRegistry.getKitManifest(kitId);
-          const kitName = manifest.name.split(" ")[0] ?? kitId;
-          const kitFolder = `Kits/${kitName}`;
+          const isCharacterKit = kitId === "characters";
+          const kitName = isCharacterKit ? "Characters" : (manifest.name?.split(" ")[0] ?? kitId);
+          const kitFolder = isCharacterKit ? "Characters" : `Kits/${kitName}`;
 
           // Props
           if (manifest.items) {
             for (const item of manifest.items) {
+              const subFolder =
+                isCharacterKit || item.category === "characters" ? "Figures" : "Props";
               this._assets.push({
                 id: item.id,
                 name: item.name,
                 type: "prop",
                 category: item.category,
                 kitId,
-                folderPath: `${kitFolder}/Props`,
+                folderPath: `${kitFolder}/${subFolder}`,
                 previewUrl: `${this._kitRegistry.basePath}${kitId}/${item.preview}`,
                 raw: item,
               });
             }
-            this._folders.add(`${kitFolder}/Props`);
+            this._folders.add(`${kitFolder}/${isCharacterKit ? "Figures" : "Props"}`);
           }
 
           // PBR Textures
@@ -585,7 +599,9 @@ export class ContentDrawer {
             this._folders.add(`${kitFolder}/Decals`);
           }
 
-          this._folders.add("Kits");
+          if (!isCharacterKit) {
+            this._folders.add("Kits");
+          }
           this._folders.add(kitFolder);
         } catch (err) {
           console.warn(`[ContentDrawer] Error loading manifest for '${kitId}':`, err);

@@ -361,20 +361,38 @@ export class MakerApp extends SmallWorldMachine {
   protected override async setupScene(): Promise<void> {
     const grid = this._editorGrid;
     grid.geometry = new Grid({ size: 40, divisions: 40 }).getGeometryData();
-    grid.material = new WireframeMaterial(new Color(0.3, 0.3, 0.35));
+    grid.material = new WireframeMaterial(new Color(0.24, 0.26, 0.32));
     grid.isVisible = true;
     this.scene.add(grid);
 
-    this.scene.add(new DirectionalLight({ name: "SunLight", intensity: 1.0 }));
-    this.scene.add(new AmbientLight({ name: "Fill", intensity: 0.4 }));
+    this.renderer.setClearColor(new Color(0.125, 0.13, 0.155, 1.0));
+
+    const sun = new DirectionalLight({
+      name: "SunLight",
+      color: new Color(1.0, 0.985, 0.96),
+      intensity: 1.6,
+      direction: new Vector3D(-0.7, -1.2, -0.6).normalize(),
+      castShadow: true,
+      shadowResolution: 2048,
+      shadowBias: 0.002,
+    });
+    sun.position.set(6, 10, 6);
+    this.scene.add(sun);
+
+    const fill = new AmbientLight({
+      name: "Fill",
+      color: new Color(0.72, 0.77, 0.88),
+      intensity: 0.75,
+    });
+    this.scene.add(fill);
 
     this.scene.add(this._gizmo.root);
     this.scene.add(this._lightGizmos.root);
     this.scene.add(this._stageZoneGizmos.root);
 
     this.camera.setStrategy(CameraStrategyType.MANUAL);
-    this.camera.position.set(8, 6, 8);
-    this._orbit.target.set(0, 0, 0);
+    this.camera.position.set(6, 4, 6);
+    this._orbit.target.set(0, 0.5, 0);
 
     this._marqueeEl = document.createElement("div");
     this._marqueeEl.className = "maker-marquee-box";
