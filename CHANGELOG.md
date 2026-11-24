@@ -2,6 +2,16 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.129.2] - 2026-11-24
+
+### "Speak clearly, if you speak at all; carve every word before you let it fall." - Oliver Wendell Holmes
+
+- **Architecture & Bugfixes:**
+  - _Asset kit index schema & symlinked kit linting (`kits-index.schema.json`, `lint-assets.ts`, `AssetKitValidation.test.ts`):_ added `public/schemas/kits-index.schema.json`, enforced `25,000`-tri/`3 MB` hero budgets for `characters` kit props, and defaulted `lintAssets()` to tracked `index.json` kits (with `--all` scanning symlinked local kits) alongside `$schema` validation across `industrial` kit metadata and `light-cycle-arena/app.json`.
+
+- **Housekeeping & Docs:**
+  - _Domain glossary restructuring (`CONTEXT.md`):_ converted all 89 engine domain entries under `## Language` to alphabetically sorted `###` headings and removed the duplicate process/governance block in favor of direct pointers to [ADR 0047](docs/adr/0047-whack-a-mole-doktrin.md) and `docs/guides/architecture.md` §6; synced `ADR 0011` and `docs/guides/scene-assembly.md` for asset-kit authoring.
+
 ## [0.129.1] - 2026-11-24
 
 ### "Good design is thorough down to the last detail." - Dieter Rams
