@@ -1,9 +1,10 @@
 let luma = dot(srgb, vec3f(0.2126, 0.7152, 0.0722));
 
-// Hard comic-contrast S-curve: deep crushed ink blacks, crisp white highlights
-let highContrast = smoothstep(0.06, 0.88, luma);
-let ink = pow(highContrast, 1.35);
-let noirBase = vec3f(ink * 1.05, ink * 1.02, ink * 0.98);
+// Graphic-Noir comic contrast: deep ink shadows at the lowest toe without crushing midtones to void
+let toe = smoothstep(0.02, 0.80, luma);
+let lift = pow(clamp(luma * 1.12, 0.0, 1.0), 0.84);
+let ink = mix(toe, lift, 0.42);
+let noirBase = vec3f(ink * 1.04, ink * 1.01, ink * 0.96);
 
 // Selective Color Isolation (Amber Lantern, Crimson Blood, Emerald Toxins)
 // 1. Crimson / Red (Blood, Warning Signs)

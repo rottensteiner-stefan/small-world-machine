@@ -142,7 +142,10 @@ struct ViewUniforms {
 }
 
 struct Out {
-    @builtin(position) pos: vec4f,
+    // `@invariant`: DepthPrePassGPU (DepthMaterial) and MainRenderPass must compute bit-identical
+    // clip positions across pipelines so `depthCompare: "less-equal"` never rejects fragments due
+    // to cross-shader FMA/DCE differences (e.g. skinned meshes on WebGPU/Metal).
+    @builtin(position) @invariant pos: vec4f,
     @location(0) wp: vec3f,
     @location(1) n: vec3f,
     @location(2) uv: vec2f,

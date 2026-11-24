@@ -248,4 +248,21 @@ describe("ShaderValidation & Contract Suite", () => {
       });
     });
   });
+
+  describe("DepthPrePass Clip-Position Invariance (WGSL)", () => {
+    it("marks @builtin(position) as @invariant in WGSL vertex Out structs so DepthPrePassGPU matches MainRenderPass", () => {
+      const registry = testShaderRegistry;
+      for (const { name, instance } of materials) {
+        const wgslRef = instance.getShaderDefinition().sources.wgsl;
+        if (!wgslRef) continue;
+        const wgsl = registry.assemble(wgslRef, "wgsl");
+        const outStruct = wgsl.match(/struct\s+Out\s*\{([\s\S]*?)\}/);
+        if (!outStruct) continue;
+        expect(
+          outStruct[1],
+          `${name} WGSL struct Out must declare @invariant on @builtin(position)`,
+        ).toMatch(/@builtin\(position\)\s*@invariant\b|@invariant\s*@builtin\(position\)/);
+      }
+    });
+  });
 });

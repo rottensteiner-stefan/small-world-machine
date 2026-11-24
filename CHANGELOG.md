@@ -2,6 +2,14 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.129.1] - 2026-11-24
+
+### "Good design is thorough down to the last detail." - Dieter Rams
+
+- **Architecture & Bugfixes:**
+  - _WebGPU DepthPrePass clip-position invariance (`structs.wgsl`, `ShaderValidation.test.ts`):_ added `@invariant` to `@builtin(position)` in `struct Out` so `DepthPrePassGPU` (`DepthMaterial`) and `MainRenderPass` compute bit-identical clip positions across pipelines on Metal/WebGPU, eliminating skinned-mesh torso and facial Z-fighting; guarded across all WGSL materials via `DepthPrePass Clip-Position Invariance (WGSL)`.
+  - _Graphic-Noir midtone curve parity (`filter_noir.glsl`, `filter_noir.wgsl`):_ replaced the shadow-crushing `pow(smoothstep(0.06, 0.88, luma), 1.35)` ramp with a calibrated toe/lift blend (`mix(smoothstep(0.02, 0.80, luma), pow(clamp(luma * 1.12, 0.0, 1.0), 0.84), 0.42)`) across GLSL and WGSL so deep ink shadows preserve readable dark cloth and midtone detail.
+
 ## [0.129.0] - 2026-11-24
 
 ### "The laws of nature are but the mathematical thoughts of God." - Euclid
