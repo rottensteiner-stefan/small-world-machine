@@ -58,6 +58,7 @@ import { ProjectBinding } from "./ProjectBinding.js";
 import type { GizmoMode, GizmoAxis } from "./TransformGizmo.js";
 import { TransformGizmo } from "./TransformGizmo.js";
 import { LightGizmoManager } from "./LightGizmoManager.js";
+import { MakerApi } from "./MakerApi.js";
 import { StageZoneGizmoManager } from "./StageZoneGizmoManager.js";
 import { resolveStageProjection, projectRayToUv } from "./StageProjectionResolver.js";
 import { BackgroundImportPanel } from "./BackgroundImportPanel.js";
@@ -250,6 +251,9 @@ export class MakerApp extends SmallWorldMachine {
     this._modeRouter.navigate(modeId);
   }
 
+  /** Public scripting & developer API (also mounted on `window.maker`). */
+  public readonly api = new MakerApi(this);
+
   private readonly _kitRegistry = new KitRegistry();
   private _contentDrawer!: ContentDrawer;
 
@@ -347,8 +351,9 @@ export class MakerApp extends SmallWorldMachine {
   }
 
   /** Editor-only scene children: hidden in the hierarchy and never written to `scene.gltf`. */
-  private _isEditorHelper(obj: Object3D): boolean {
+  public isEditorHelper(obj: Object3D): boolean {
     return (
+      obj === this._editorGrid ||
       this._highlightMeshes.includes(obj) ||
       obj === this._gizmo.root ||
       this._lightGizmos.isHelperMesh(obj) ||
@@ -427,7 +432,7 @@ export class MakerApp extends SmallWorldMachine {
       },
     });
     this._project.excludeFromSave = (obj): boolean =>
-      obj === this._editorGrid || this._isEditorHelper(obj);
+      obj === this._editorGrid || this.isEditorHelper(obj);
 
     this._hierarchyPanel = new HierarchyPanel(
       this._makerOptions.hierarchyContainer,
@@ -440,7 +445,7 @@ export class MakerApp extends SmallWorldMachine {
         onReparent: (obj, newParent): void => this.reparent(obj, newParent),
         onRename: (obj, newName): void => this.renameObject(obj, newName),
       },
-      (obj) => this._isEditorHelper(obj),
+      (obj) => this.isEditorHelper(obj),
     );
     new ObjectPalette(this._makerOptions.paletteContainer, {
       createObject: (factory): void => this.addObject(factory()),
@@ -544,6 +549,10 @@ export class MakerApp extends SmallWorldMachine {
       kitRegistry: this._kitRegistry,
       callbacks: {
         loadKitProp: async (kitPropId, worldPos): Promise<Object3D | undefined> => {
+          if (kitPropId === "characters:lineup") {
+            const lineup = await this.api.loadCharacterLineup();
+            return lineup[0];
+          }
           try {
             const instance = await this._kitRegistry.loadProp(kitPropId);
             if (worldPos) {
@@ -878,8 +887,8 @@ export class MakerApp extends SmallWorldMachine {
   }
 
   private _applySelectionChange(): void {
-    this._propertyPanel.setSelection(this._primary, Math.max(0, this._selection.size - 1));
-    this._hierarchyPanel.setSelected(this._selection);
+    this._propertyPanel?.setSelection(this._primary, Math.max(0, this._selection.size - 1));
+    this._hierarchyPanel?.setSelected(this._selection);
     this._gizmo.attachTo(this._primary);
     this._syncHighlight();
   }

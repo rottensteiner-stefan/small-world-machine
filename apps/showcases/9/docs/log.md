@@ -215,3 +215,7 @@ Zur Ergänzung der bisher rein prozeduralen Squash/Stretch- und Dämpfungsverfor
 
 - Engine now exposes `quality.toneMapping` (`ToneMappingMode`) for the forward pass. Showcase 9 sets `ToneMappingMode.NONE` and drops the tone-mapping-only post chain from the previous entry (no extra fullscreen pass, WebGL1 now linear too).
 - Verification: dino orange and identical on WebGL1/WebGL2/WebGPU (screenshots with `assets/local/` moved aside).
+
+## 2026-11-26 · Canonical Mixamo Rig & Locomotion Clip Alignment
+
+- Normalized `assets/character.glb` (`1.000 m`, `Y = 0` flat soles, `+Z` forward) and all 7 locomotion clips (`idle`, `running`, `jump`, `crouch`, `crouch-walk`, `crawl`, `slide`) to the canonical Mixamo bone local coordinate frames (`0.0000°` rest-pose delta), eliminating cross-rig arm/foot angular offsets across both default and `assets/local/character.glb` characters.

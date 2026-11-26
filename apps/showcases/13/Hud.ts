@@ -73,13 +73,28 @@ export class Hud {
         `<button id="st13Preset_${p.id}" class="btn-preset" title="${p.label} Mood (Key ${i + 1})">${i + 1} · ${p.label}</button>`,
     ).join("");
 
+    const isSpaceGirl =
+      typeof window !== "undefined" &&
+      (new URLSearchParams(window.location.search).get("model") === "spacegirl" ||
+        new URLSearchParams(window.location.search).get("model") === "meshy");
+
     this._drawer = new ShowcaseSettingsPanel({
       id: "helmet-inspector-drawer",
-      title: "Damaged Helmet Lab",
-      icon: "🪖",
+      title: isSpaceGirl ? "SpaceGirl Lab (Meshy 4K)" : "Damaged Helmet Lab",
+      icon: isSpaceGirl ? "👧" : "🪖",
       footerIcon: "⚙",
       engine,
       body: [
+        hudSection(
+          "🎭 Model",
+          "",
+          `
+          <div class="preset-group two-col" style="margin-bottom:8px;">
+            <button id="st13Model_helmet" class="btn-preset${!isSpaceGirl ? " active" : ""}">🪖 Damaged Helmet</button>
+            <button id="st13Model_spacegirl" class="btn-preset${isSpaceGirl ? " active" : ""}">👧 SpaceGirl (Meshy 4K)</button>
+          </div>
+        `,
+        ),
         hudSection(
           "💡 Lighting Moods",
           "Keys 1–4",
@@ -156,6 +171,14 @@ export class Hud {
     });
     document.getElementById("st13SwBloom")?.addEventListener("change", () => {
       this._actions.toggleBloom();
+    });
+
+    // Model switch buttons
+    document.getElementById("st13Model_helmet")?.addEventListener("click", () => {
+      window.location.search = "";
+    });
+    document.getElementById("st13Model_spacegirl")?.addEventListener("click", () => {
+      window.location.search = "?model=spacegirl";
     });
 
     // Sliders

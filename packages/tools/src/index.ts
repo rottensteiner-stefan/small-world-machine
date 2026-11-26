@@ -7,6 +7,7 @@ export * from "./Xtractor.js";
 export * from "./MapGenerator.js";
 export { SceneParams } from "@small-world-machine/engine";
 export * from "./maker/MakerApp.js";
+export * from "./maker/MakerApi.js";
 export * from "./maker/PropertyPanel.js";
 export * from "./maker/HierarchyPanel.js";
 export * from "./maker/UndoStack.js";

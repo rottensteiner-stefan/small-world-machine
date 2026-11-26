@@ -1,7 +1,7 @@
 {
   "name": "@small-world-machine/showcases",
   "private": true,
-  "version": "0.129.2",
+  "version": "0.129.3",
   "type": "module",
   "dependencies": {
     "@small-world-machine/engine": "*",

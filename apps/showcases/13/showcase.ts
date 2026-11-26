@@ -234,9 +234,26 @@ export class Showcase extends AbstractShowcase {
 
     // Load the GLTF Model
     try {
-      const gltfLoader = new GltfLoader({ basePath: "./assets/" });
-      const helmet = await gltfLoader.load("DamagedHelmet.glb");
-      helmet.position.set(0, 0, 0);
+      const urlParams =
+        typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const isSpaceGirl =
+        urlParams?.get("model") === "spacegirl" || urlParams?.get("model") === "meshy";
+
+      const gltfLoader = new GltfLoader({ basePath: isSpaceGirl ? "" : "./assets/" });
+      const modelPath = isSpaceGirl
+        ? "/apps/showcases/13/assets/local/character_meshy.glb"
+        : "DamagedHelmet.glb";
+      const helmet = await gltfLoader.load(modelPath);
+
+      if (isSpaceGirl) {
+        // SpaceGirl height is ~1.9m, scale to 0.84 to stand exactly 1.60m tall with feet on pedestal
+        helmet.scale.set(0.84, 0.84, 0.84);
+        helmet.position.set(0, -0.1, 0);
+        this.camera.position.set(0, 0.7, 3.0);
+        this.camera.target.set(0, 0.6, 0);
+      } else {
+        helmet.position.set(0, 0, 0);
+      }
 
       // Recursively configure castShadow and environment map, grab material
       const setupHelmetNode = (node: Object3D): void => {
@@ -252,7 +269,7 @@ export class Showcase extends AbstractShowcase {
       this._helmet = helmet;
       this.scene.add(helmet);
     } catch (e) {
-      console.error("Failed to load DamagedHelmet:", e);
+      console.error("Failed to load model:", e);
     }
 
     // Initialize interactive HUD
@@ -374,7 +391,20 @@ export class Showcase extends AbstractShowcase {
   }
 
   private _flyToCamera(view: keyof typeof CAMERA_PRESETS): void {
-    const target = CAMERA_PRESETS[view];
+    const isSpaceGirl =
+      typeof window !== "undefined" &&
+      (new URLSearchParams(window.location.search).get("model") === "spacegirl" ||
+        new URLSearchParams(window.location.search).get("model") === "meshy");
+
+    const target = isSpaceGirl
+      ? {
+          hero: { pos: new Vector3D(1.8, 1.2, 2.5), target: new Vector3D(0, 0.6, 0) },
+          macro: { pos: new Vector3D(0.6, 1.35, 0.8), target: new Vector3D(0, 1.25, 0) },
+          side: { pos: new Vector3D(2.8, 0.7, 0.0), target: new Vector3D(0, 0.6, 0) },
+          top: { pos: new Vector3D(0.1, 3.5, 0.2), target: new Vector3D(0, 0.6, 0) },
+        }[view]
+      : CAMERA_PRESETS[view];
+
     if (target) {
       this.camera.flyTo({
         position: target.pos,

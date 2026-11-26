@@ -541,6 +541,18 @@ export class ContentDrawer {
 
           // Props
           if (manifest.items) {
+            if (isCharacterKit) {
+              this._assets.push({
+                id: "characters:lineup",
+                name: "👥 All Figures (Lineup)",
+                type: "prop",
+                category: "characters",
+                kitId,
+                folderPath: `${kitFolder}/Figures`,
+                previewUrl: "/favicon.webp",
+                raw: { id: "characters:lineup", name: "👥 All Figures (Lineup)" },
+              });
+            }
             for (const item of manifest.items) {
               const subFolder =
                 isCharacterKit || item.category === "characters" ? "Figures" : "Props";

@@ -52,6 +52,9 @@ docs/.vitepress/cache/
 # Showcase 9 local character override (dev only, never committed)
 /apps/showcases/9/assets/local/
 
+# Showcase 13 local model override (dev only, never committed)
+/apps/showcases/13/assets/local/
+
 # Local-only kit symlinks and local index (dev only, never committed)
 /public/assets/kits/*
 !/public/assets/kits/industrial/

@@ -821,7 +821,21 @@
       });
 
       window.makerApp = app;
-      app.start();
+      window.maker = app.api;
+      await app.start();
+
+      // Check URL query for auto-lineup
+      const urlParams = new URLSearchParams(window.location.search);
+      if (
+        urlParams.get("scene") === "characters" ||
+        urlParams.get("lineup") === "characters" ||
+        urlParams.get("figures") === "true" ||
+        urlParams.get("figures") === "1"
+      ) {
+        app.api
+          .loadCharacterLineup()
+          .catch((err) => console.error("[Maker] Auto-loading character lineup failed:", err));
+      }
 
       const modeLauncher = document.getElementById("makerModeLauncher");
       if (modeLauncher) {

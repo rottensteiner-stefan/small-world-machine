@@ -49,3 +49,6 @@
 - **Ambient Light + IBL:** Engine PBR shaders (`lighting_pbr.wgsl` and WebGL2 `light_calc_pbr.frag.glsl`) now add `ambientColor` to IBL `irradiance` (fixing the double `kD_ambient` scaling in WGSL too) instead of discarding `AmbientLight` whenever `u_irradianceMap` is active. `_toggleEnvMap` and `_resetToReference` also toggle `scene.environmentIntensity` (`1.0` / `0.0`).
 - **glTF 2.0 Extension Benchmark Status:** All seven extensions originally noted as missing on 2026-10-31 are now shipped (`KHR_draco_mesh_compression` + `KHR_texture_basisu` via `@small-world-machine/gltf-extensions/register`; `KHR_texture_transform`, `KHR_materials_iridescence`, `KHR_materials_anisotropy`, `KHR_materials_specular`, `KHR_materials_unlit` built into `GltfMaterialParser` and all three renderer tiers, with extension texture maps supported on WebGL2 + WebGPU and factor fallbacks on WebGL1).
 
+## 2026-11-27 · Optional Local Character Model Switch (`?model=spacegirl`)
+
+- Added HUD model switcher (`Damaged Helmet` vs. `SpaceGirl (Meshy 4K)`) and dedicated full-body camera presets (`hero`, `macro`, `side`, `top`) loading git-ignored `/apps/showcases/13/assets/local/character_meshy.glb` for local high-poly PBR inspection while keeping `DamagedHelmet.glb` as the default benchmark model.

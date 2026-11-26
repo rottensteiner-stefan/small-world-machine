@@ -2,6 +2,20 @@
 
 > Active releases (`0.100.0+`). For earlier releases (`0.8.46 – 0.99.0`), see [docs/CHANGELOG-ARCHIVE.md](docs/CHANGELOG-ARCHIVE.md).
 
+## [0.129.3] - 2026-11-27
+
+### "The human foot is a masterpiece of engineering and a work of art." - Leonardo da Vinci
+
+- **Features:**
+  - _Maker scripting API & character lineup (`@small-world-machine/tools` `0.1.1`, `MakerApi.ts`, `ContentDrawer.ts`, `maker.html`):_ exposed `makerApp.api` (`window.maker`) providing `loadProp()`, dynamic `loadCharacterLineup()` from the `characters` kit manifest, scene selection/focus helpers, a `ContentDrawer` lineup preset, and `?lineup=characters` auto-spawn support.
+  - _Showcase 13 local character inspection (`apps/showcases/13/showcase.ts`, `Hud.ts`):_ added an optional `?model=spacegirl` HUD switcher and full-figure `flyTo` camera presets for inspecting local high-resolution character assets under git-ignored `apps/showcases/13/assets/local/`.
+
+- **Architecture & Bugfixes:**
+  - _Canonical Mixamo rig & Showcase 9 locomotion alignment (`apps/showcases/9/assets/*.glb`):_ normalized `character.glb` (`1.000 m`, `Y = 0` flat soles, `+Z` forward) and all 7 locomotion clips (`idle`, `running`, `jump`, `crouch`, `crouch-walk`, `crawl`, `slide`) onto unified Mixamo local bone coordinate frames (`0.0000` deg rest delta), eliminating cross-rig arm and foot rotation offsets across default and `assets/local/character.glb` rigs.
+
+- **Housekeeping & Docs:**
+  - _Local kit & override gitignore hygiene (`.gitignore`, `AGENTS.md`):_ ignored dev-only local asset overrides (`apps/showcases/13/assets/local/`, non-tracked `public/assets/kits/*`) and refined power-user workflow guidance in `AGENTS.md`.
+
 ## [0.129.2] - 2026-11-24
 
 ### "Speak clearly, if you speak at all; carve every word before you let it fall." - Oliver Wendell Holmes

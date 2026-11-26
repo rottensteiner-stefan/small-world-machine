@@ -1,6 +1,6 @@
 {
   "name": "@small-world-machine/tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Standalone development and diagnostic tools for Small World Machine (Maker world editor, Material Studio, Pixler, Xtractor, Map Generator, Forge window manager).",
   "type": "module",
   "license": "MIT",
